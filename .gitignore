@@ -1,0 +1,8 @@
+node_modules/
+dist/
+test-output/
+*.log
+.DS_Store
+Thumbs.db
+*.apk
+.claude/

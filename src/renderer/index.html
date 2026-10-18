@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>FastBoost</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="titlebar">
+    <img src="../../assets/icon.png" class="titlebar-icon" alt="" />
+    <span class="titlebar-title">FastBoost</span>
+    <span id="admin-badge" class="badge hidden">Administrateur</span>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar" id="nav">
+      <button class="nav-item active" data-page="home"><span class="ico" data-icon="home"></span><span>Accueil</span></button>
+      <button class="nav-item" data-page="protection"><span class="ico" data-icon="shield"></span><span>Protection</span></button>
+      <button class="nav-item" data-page="storage"><span class="ico" data-icon="storage"></span><span>Stockage</span></button>
+      <button class="nav-item" data-page="apps"><span class="ico" data-icon="apps"></span><span>Applications</span></button>
+      <button class="nav-item" data-page="toolbox"><span class="ico" data-icon="toolbox"></span><span>Boîte à outils</span></button>
+      <div class="nav-spacer"></div>
+      <button class="nav-item" data-page="settings"><span class="ico" data-icon="settings"></span><span>Paramètres</span></button>
+    </nav>
+
+    <main class="content" id="content"></main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <div id="modal" class="modal hidden"><div class="modal-box"><h3 id="modal-title"></h3><p id="modal-text"></p><div class="modal-actions"><button class="btn" id="modal-cancel">Annuler</button><button class="btn primary" id="modal-ok">Confirmer</button></div></div></div>
+
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

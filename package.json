@@ -1,0 +1,60 @@
+{
+  "name": "fastboost",
+  "productName": "FastBoost",
+  "version": "1.2.0",
+  "description": "FastBoost : optimisez, nettoyez et protégez votre PC sous Linux et Windows (inspiré de Microsoft PC Manager et CleanMyMac X)",
+  "main": "src/main.js",
+  "homepage": "https://github.com/Finoana-Randri/FastBoost",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Finoana-Randri/FastBoost.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist:win": "electron-builder --win nsis",
+    "dist:linux": "electron-builder --linux AppImage deb",
+    "test:linux": "node scripts/test-linux-services.js"
+  },
+  "author": {
+    "name": "Finoana Randri",
+    "email": "Finoana-Randri@users.noreply.github.com"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  },
+  "build": {
+    "appId": "com.fastboost.app",
+    "productName": "FastBoost",
+    "files": ["src/**/*", "assets/**/*", "package.json"],
+    "directories": { "output": "dist" },
+    "win": {
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "category": "System",
+      "synopsis": "Optimisez, nettoyez et protégez votre PC",
+      "executableName": "fastboost",
+      "maintainer": "Finoana Randri <Finoana-Randri@users.noreply.github.com>",
+      "desktop": {
+        "Name": "FastBoost",
+        "Comment": "Optimisez, nettoyez et protégez votre PC",
+        "Keywords": "boost;nettoyage;cleaner;system;monitor;",
+        "StartupWMClass": "FastBoost"
+      }
+    },
+    "deb": {
+      "depends": ["libgtk-3-0", "libnotify4", "libnss3", "libxss1", "libxtst6", "xdg-utils", "libatspi2.0-0", "libuuid1", "libsecret-1-0", "libgbm1", "libdrm2", "libasound2 | libasound2t64", "policykit-1 | pkexec"]
+    }
+  }
+}

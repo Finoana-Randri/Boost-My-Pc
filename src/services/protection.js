@@ -1,0 +1,129 @@
+// Protection & réseau : Defender, pare-feu, Windows Update (Plugin.SystemUpdate),
+// diagnostic réseau (Plugin.NetworkProblem : Connection, DHCP, DNS, proxy env, WebProxy, Hardware).
+const dns = require('dns').promises;
+const net = require('net');
+const { runPS, runPSJson, asArray } = require('./ps');
+
+async function securityStatus() {
+  const r = await runPSJson(`
+    $mp = $null; try { $mp = Get-MpComputerStatus -ErrorAction Stop } catch {}
+    $fw = @(); try { $fw = Get-NetFirewallProfile -ErrorAction Stop | Select-Object Name, Enabled } catch {}
+    $av = @(); try { $av = Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct -ErrorAction Stop | Select-Object -ExpandProperty displayName } catch {}
+    [pscustomobject]@{
+      defender = if ($mp) { [pscustomobject]@{
+        enabled = $mp.AntivirusEnabled; realtime = $mp.RealTimeProtectionEnabled
+        signatureAge = $mp.AntivirusSignatureAge; signatureVersion = $mp.AntivirusSignatureVersion
+        lastQuickScan = if ($mp.QuickScanEndTime) { $mp.QuickScanEndTime.ToString('s') } else { $null }
+        tamper = $mp.IsTamperProtected } } else { $null }
+      firewall = @($fw | ForEach-Object { [pscustomobject]@{ name = [string]$_.Name; enabled = [bool]$_.Enabled } })
+      antivirus = @($av)
+    } | ConvertTo-Json -Compress -Depth 4
+  `, { timeout: 60000 });
+  return r;
+}
+
+async function quickScan() {
+  // Lance une analyse rapide Defender (peut durer plusieurs minutes)
+  await runPS('Start-MpScan -ScanType QuickScan -ErrorAction Stop', { timeout: 30 * 60000 });
+  return true;
+}
+
+async function updateSignatures() {
+  await runPS('Update-MpSignature -ErrorAction Stop', { timeout: 10 * 60000 });
+  return true;
+}
+
+// Recherche via le COM Microsoft.Update.Session (comme IUpdateSearcher dans SystemUpdate)
+async function checkWindowsUpdates() {
+  const r = await runPSJson(`
+    $s = New-Object -ComObject Microsoft.Update.Session
+    $searcher = $s.CreateUpdateSearcher()
+    $res = $searcher.Search("IsInstalled=0 and IsHidden=0")
+    $list = foreach ($u in $res.Updates) {
+      [pscustomobject]@{ title = $u.Title; size = [int64]$u.MaxDownloadSize; reboot = [bool]$u.RebootRequired
+        category = ($u.Categories | Select-Object -First 1 -ExpandProperty Name); kb = ($u.KBArticleIDs -join ',') }
+    }
+    $pendingReboot = Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired'
+    [pscustomobject]@{ updates = @($list); pendingReboot = $pendingReboot } | ConvertTo-Json -Compress -Depth 4
+  `, { timeout: 5 * 60000 });
+  return { updates: asArray(r?.updates), pendingReboot: !!r?.pendingReboot };
+}
+
+// ---------- Diagnostic réseau ----------
+function tcpPing(host, port = 443, timeout = 3000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const s = net.connect({ host, port, timeout });
+    const done = (ok) => { s.destroy(); resolve(ok ? Date.now() - start : null); };
+    s.on('connect', () => done(true));
+    s.on('timeout', () => done(false));
+    s.on('error', () => done(false));
+  });
+}
+
+async function networkDiagnose() {
+  const info = await runPSJson(`
+    $cfg = Get-NetIPConfiguration -ErrorAction SilentlyContinue | Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' } | Select-Object -First 1
+    $ad = if ($cfg) { $cfg.NetAdapter } else { Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up' | Select-Object -First 1 }
+    $dhcp = if ($cfg) { (Get-NetIPInterface -InterfaceIndex $cfg.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).Dhcp } else { $null }
+    $ssid = $null; try { $ssid = ((netsh wlan show interfaces) -match '^\\s+SSID\\s+:' | Select-Object -First 1) -replace '^\\s+SSID\\s+:\\s*','' } catch {}
+    $ie = Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -ErrorAction SilentlyContinue
+    [pscustomobject]@{
+      adapter = if ($ad) { [string]$ad.InterfaceDescription } else { $null }
+      adapterName = if ($ad) { [string]$ad.Name } else { $null }
+      linkSpeed = if ($ad) { [string]$ad.LinkSpeed } else { $null }
+      ssid = $ssid
+      ipv4 = if ($cfg) { [string]$cfg.IPv4Address.IPAddress } else { $null }
+      gateway = if ($cfg) { [string]$cfg.IPv4DefaultGateway.NextHop } else { $null }
+      dnsServers = if ($cfg) { @($cfg.DNSServer | Where-Object AddressFamily -eq 2 | ForEach-Object { $_.ServerAddresses }) } else { @() }
+      dhcp = [string]$dhcp
+      proxyEnabled = [bool]$ie.ProxyEnable
+      proxyServer = [string]$ie.ProxyServer
+      envProxy = [string]([Environment]::GetEnvironmentVariable('http_proxy','Machine') + [Environment]::GetEnvironmentVariable('https_proxy','Machine') + [Environment]::GetEnvironmentVariable('http_proxy','User') + [Environment]::GetEnvironmentVariable('https_proxy','User'))
+    } | ConvertTo-Json -Compress -Depth 3
+  `, { timeout: 60000 });
+
+  const checks = [];
+  checks.push({ id: 'hardware', name: 'Carte réseau', ok: !!info.adapter, detail: info.adapter ? `${info.adapter}${info.linkSpeed ? ' · ' + info.linkSpeed : ''}${info.ssid ? ' · Wi-Fi « ' + info.ssid + ' »' : ''}` : 'Aucune carte réseau active' });
+  checks.push({ id: 'dhcp', name: 'Adresse IP (DHCP)', ok: !!info.ipv4 && !/^169\.254\./.test(info.ipv4), detail: info.ipv4 ? `${info.ipv4} · DHCP ${info.dhcp === 'Enabled' ? 'activé' : 'désactivé'}` : 'Pas d\'adresse IPv4', fix: 'renewip' });
+
+  const gwLatency = info.gateway ? await pingIcmp(info.gateway) : null;
+  checks.push({ id: 'connection', name: 'Connexion au routeur', ok: gwLatency !== null, detail: info.gateway ? (gwLatency !== null ? `Passerelle ${info.gateway} · ${gwLatency} ms` : `Passerelle ${info.gateway} injoignable`) : 'Aucune passerelle', fix: 'resetwinsock' });
+
+  let dnsOk = false, dnsDetail = '';
+  try { const a = await dns.lookup('www.microsoft.com'); dnsOk = true; dnsDetail = `www.microsoft.com → ${a.address} · Serveurs : ${asArray(info.dnsServers).join(', ') || 'auto'}`; }
+  catch (e) { dnsDetail = `Échec de résolution DNS (${e.code})`; }
+  checks.push({ id: 'dns', name: 'Résolution DNS', ok: dnsOk, detail: dnsDetail, fix: 'flushdns' });
+
+  checks.push({ id: 'proxy', name: 'Proxy Web', ok: !info.proxyEnabled, warn: true, detail: info.proxyEnabled ? `Proxy activé : ${info.proxyServer}` : 'Aucun proxy configuré', fix: 'disableproxy' });
+  checks.push({ id: 'envproxy', name: 'Variables d\'environnement proxy', ok: !info.envProxy, warn: true, detail: info.envProxy ? `http(s)_proxy défini : ${info.envProxy}` : 'Aucune variable proxy' });
+
+  const hosts = ['www.microsoft.com', 'www.bing.com', 'www.google.com'];
+  const lat = await Promise.all(hosts.map((h) => tcpPing(h)));
+  const okLat = lat.filter((x) => x !== null);
+  checks.push({ id: 'internet', name: 'Accès Internet', ok: okLat.length > 0, detail: hosts.map((h, i) => `${h} : ${lat[i] !== null ? lat[i] + ' ms' : 'échec'}`).join(' · ') });
+
+  return { info, checks, latency: okLat.length ? Math.round(okLat.reduce((a, b) => a + b, 0) / okLat.length) : null };
+}
+
+async function pingIcmp(host) {
+  try {
+    const r = await runPS(`$r = Test-Connection -ComputerName '${host.replace(/[^0-9a-zA-Z.:-]/g, '')}' -Count 1 -ErrorAction Stop; if ($r.ResponseTime -ne $null) { $r.ResponseTime } else { $r.Latency }`, { timeout: 10000 });
+    const n = parseInt(r, 10);
+    return Number.isFinite(n) ? n : 0;
+  } catch { return null; }
+}
+
+async function networkFix(id) {
+  switch (id) {
+    case 'flushdns': await runPS('ipconfig /flushdns | Out-Null; Clear-DnsClientCache -ErrorAction SilentlyContinue'); return 'Cache DNS vidé.';
+    case 'renewip': await runPS('ipconfig /release | Out-Null; ipconfig /renew | Out-Null', { timeout: 60000 }); return 'Adresse IP renouvelée.';
+    case 'disableproxy':
+      await runPS(`Set-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0`);
+      return 'Proxy désactivé.';
+    case 'resetwinsock': await runPS('netsh winsock reset | Out-Null'); return 'Winsock réinitialisé (redémarrage recommandé).';
+    default: throw new Error('Réparation inconnue');
+  }
+}
+
+module.exports = { securityStatus, quickScan, updateSignatures, checkWindowsUpdates, networkDiagnose, networkFix };

@@ -1,0 +1,284 @@
+// Processus principal Electron : fenêtre, zone de notification et pont IPC vers les services (Windows & Linux).
+const { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage, dialog } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+
+const { platform, system, cleaner, storage, apps, protection, tools } = require('./services');
+const isLinux = platform === 'linux';
+const { createMenubar } = require('./menubar');
+
+// Sous Wayland natif, une application ne peut pas placer ses fenêtres : on passe par XWayland
+// pour que le mini-panneau s'ouvre bien sous la barre supérieure.
+if (isLinux && process.env.DISPLAY && !app.commandLine.hasSwitch('ozone-platform')) {
+  app.commandLine.appendSwitch('ozone-platform', 'x11');
+}
+
+let win = null;
+let tray = null;
+let menubar = null;
+let quitting = false;
+
+// ---------- Préférences ----------
+const prefsFile = () => path.join(app.getPath('userData'), 'preferences.json');
+const defaultPrefs = { theme: 'system', minimizeToTray: true, startup: false, boostDropCaches: false, alerts: true };
+function loadPrefs() {
+  try { return { ...defaultPrefs, ...JSON.parse(fs.readFileSync(prefsFile(), 'utf8')) }; } catch { return { ...defaultPrefs }; }
+}
+function savePrefs(p) {
+  fs.mkdirSync(path.dirname(prefsFile()), { recursive: true });
+  fs.writeFileSync(prefsFile(), JSON.stringify(p, null, 2));
+}
+let prefs = defaultPrefs;
+
+const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+
+function createWindow() {
+  win = new BrowserWindow({
+    width: 1120,
+    height: 740,
+    minWidth: 900,
+    minHeight: 600,
+    title: 'FastBoost',
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
+    backgroundColor: backgroundColor(),
+    titleBarStyle: 'hidden',
+    titleBarOverlay: titleBarColors(),
+    ...(isLinux ? {} : { backgroundMaterial: 'mica' }),
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.once('ready-to-show', () => {
+    const quiet = process.argv.includes('--hidden') || (menubar && process.argv.includes('--mini'));
+    if (!quiet || !tray) win.show();
+  });
+  win.on('close', (e) => {
+    if (!quitting && prefs.minimizeToTray && tray) { e.preventDefault(); win.hide(); }
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  if (process.argv.includes('--dev')) win.webContents.openDevTools({ mode: 'detach' });
+}
+
+function backgroundColor() {
+  const dark = nativeTheme.shouldUseDarkColors;
+  if (isLinux) return dark ? '#222226' : '#fafafb';
+  return dark ? '#202020' : '#f3f3f3';
+}
+
+function titleBarColors() {
+  const dark = nativeTheme.shouldUseDarkColors;
+  return { color: '#00000000', symbolColor: dark ? '#ffffff' : '#1a1a1a', height: isLinux ? 46 : 40 };
+}
+
+function createTray() {
+  if (!fs.existsSync(iconPath)) return;
+  try {
+    tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: isLinux ? 22 : 16, height: isLinux ? 22 : 16 }));
+  } catch { tray = null; return; } // certains bureaux Linux n'ont pas de zone de notification
+  tray.setToolTip('FastBoost');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Ouvrir FastBoost', click: showWindow },
+    { label: 'Boost', click: () => { showWindow(); win.webContents.send('action', 'boost'); } },
+    { type: 'separator' },
+    { label: 'Quitter', click: () => { quitting = true; app.quit(); } },
+  ]));
+  tray.on('click', showWindow);
+}
+function showWindow() { if (!win) createWindow(); win.show(); win.focus(); }
+
+function applyTheme() {
+  nativeTheme.themeSource = prefs.theme;
+  if (win) { win.setTitleBarOverlay?.(titleBarColors()); win.setBackgroundColor(backgroundColor()); }
+}
+
+// ---------- Lancement au démarrage ----------
+const linuxAutostartFile = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'autostart', 'fastboost.desktop');
+function getStartup() {
+  if (isLinux) return fs.existsSync(linuxAutostartFile);
+  return app.getLoginItemSettings().openAtLogin;
+}
+function setStartup(on) {
+  if (!isLinux) return app.setLoginItemSettings({ openAtLogin: on, args: ['--hidden'] });
+  if (!on) { try { fs.unlinkSync(linuxAutostartFile); } catch {} return; }
+  // AppImage : lancer le fichier AppImage lui-même ; sinon l'exécutable Electron + le dossier de l'app
+  const exec = process.env.APPIMAGE
+    ? `"${process.env.APPIMAGE}" --hidden`
+    : `"${process.execPath}"${process.defaultApp ? ` "${path.resolve(process.argv[1] || '.')}"` : ''} --hidden`;
+  fs.mkdirSync(path.dirname(linuxAutostartFile), { recursive: true });
+  fs.writeFileSync(linuxAutostartFile, `[Desktop Entry]\nType=Application\nName=FastBoost\nExec=${exec}\nIcon=${iconPath}\nX-GNOME-Autostart-enabled=true\n`);
+}
+
+// ---------- Capacités (l'interface s'adapte au système) ----------
+async function capabilities() {
+  const info = await system.getSystemInfo().catch(() => ({}));
+  return {
+    platform,
+    os: info.os,
+    distroId: info.distroId,
+    desktop: info.desktop,
+    isAdmin: await cleaner.isAdmin().catch(() => false),
+    tools: tools.available(),
+    packageManager: isLinux ? require('./services/linux/sh').packageManager() : null,
+    hasFlatpak: isLinux && !!require('./services/linux/sh').which('flatpak'),
+    hasSnap: isLinux && !!require('./services/linux/sh').which('snap'),
+  };
+}
+
+// L'application elle-même (paquet .deb, AppImage ou installation Windows)
+const appDir = path.dirname(process.execPath).toLowerCase();
+function isSelf(a) {
+  if (!a) return false;
+  if (a.pkg === 'fastboost') return true;
+  if (/fastboost\.desktop$/.test(a.desktopFile || '')) return true;
+  if (app.isPackaged && [a.uninstall, a.location].some((s) => s && String(s).toLowerCase().includes(appDir))) return true;
+  return false;
+}
+
+// ---------- IPC ----------
+const progress = (channel) => (data) => win?.webContents.send('progress', { channel, ...data });
+
+function handle(name, fn) {
+  ipcMain.handle(name, async (_e, ...args) => {
+    try { return { ok: true, data: await fn(...args) }; }
+    catch (err) { return { ok: false, error: err.message || String(err) }; }
+  });
+}
+
+function registerIpc() {
+  handle('app:caps', capabilities);
+  handle('system:stats', () => system.getStats());
+  handle('system:disks', () => system.getDisks());
+  handle('system:info', () => system.getSystemInfo());
+  handle('system:boost', () => system.boostMemory({ dropCaches: prefs.boostDropCaches }));
+  handle('system:isAdmin', () => cleaner.isAdmin());
+  handle('system:relaunchAdmin', async () => {
+    if (isLinux) throw new Error('Sous Linux, chaque action système demande votre mot de passe.');
+    const { runPS } = require('./services/ps');
+    const args = process.defaultApp ? [path.resolve(process.argv[1] || '.')] : [];
+    const argList = args.map((a) => `'"${a.replace(/'/g, "''")}"'`).join(',');
+    await runPS(`Start-Process -FilePath '${process.execPath.replace(/'/g, "''")}' ${argList ? '-ArgumentList ' + argList : ''} -Verb RunAs`);
+    quitting = true;
+    app.quit();
+  });
+
+  handle('clean:scan', (scene) => cleaner.scan(scene, progress('clean')));
+  handle('clean:run', (ids) => cleaner.clean(ids, progress('clean')));
+
+  handle('storage:large', (opts) => storage.findLargeFiles(opts, progress('storage')));
+  handle('storage:downloads', () => storage.listDownloads());
+  handle('storage:duplicates', (opts) => storage.findDuplicates(opts, progress('storage')));
+  handle('storage:cancel', () => storage.cancel());
+  handle('storage:pickFolder', async () => {
+    const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+    return r.canceled ? null : r.filePaths[0];
+  });
+
+  // FastBoost ne s'affiche pas dans ses propres listes et ne peut pas se terminer lui-même
+  // (les processus « zygote » de Chromium sous Linux n'apparaissent pas dans getAppMetrics : on filtre aussi par exécutable)
+  const ownPids = () => new Set([process.pid, ...app.getAppMetrics().map((m) => m.pid)]);
+  const ownExe = (() => { try { return fs.realpathSync(process.execPath).toLowerCase(); } catch { return process.execPath.toLowerCase(); } })();
+  const isOwnExe = (p) => !!p && p.toLowerCase().replace(/ \(deleted\)$/, '') === ownExe;
+  handle('apps:processes', async () => {
+    const mine = ownPids();
+    return (await apps.listProcesses())
+      .filter((p) => !isOwnExe(p.path))
+      .map((p) => ({ ...p, ids: p.ids.filter((id) => !mine.has(id)) }))
+      .filter((p) => p.ids.length);
+  });
+  handle('apps:kill', (ids, name, opts) => {
+    const mine = ownPids();
+    if ((ids || []).some((id) => mine.has(Number(id)))) throw new Error('FastBoost ne peut pas se terminer lui-même.');
+    return apps.killProcesses(ids, name, opts || {});
+  });
+  handle('apps:startup', () => apps.listStartup());
+  handle('apps:setStartup', (item, enabled) => apps.setStartup(item, enabled));
+  handle('apps:installed', async () => (await apps.listInstalledApps()).filter((a) => !isSelf(a)));
+  handle('apps:uninstall', (a) => {
+    if (isSelf(a)) throw new Error('Désinstallez FastBoost depuis le gestionnaire de paquets du système.');
+    return apps.uninstallApp(a);
+  });
+
+  handle('protect:status', () => protection.securityStatus());
+  handle('protect:quickScan', () => protection.quickScan());
+  handle('protect:updateSignatures', () => protection.updateSignatures());
+  handle('protect:action', (id) => protection.securityAction(id));
+  handle('protect:updates', () => protection.checkWindowsUpdates());
+  handle('protect:installUpdates', () => protection.installUpdates());
+  handle('net:diagnose', () => protection.networkDiagnose());
+  handle('net:fix', (id) => protection.networkFix(id));
+
+  handle('file:trash', async (paths) => {
+    let done = 0, failed = 0;
+    for (const p of paths) { try { await shell.trashItem(p); done++; } catch { failed++; } }
+    return { done, failed };
+  });
+  handle('file:reveal', (p) => shell.showItemInFolder(p));
+  handle('file:open', (p) => shell.openPath(p));
+  handle('file:icon', async (p) => {
+    if (!p) return null;
+    // Linux : nom d'icône du thème (.desktop) ou image PNG/SVG
+    if (isLinux) {
+      const url = await apps.iconDataUrl(p).catch(() => null);
+      if (url) return url;
+    }
+    if (!fs.existsSync(p)) return null;
+    const img = await app.getFileIcon(p, { size: 'normal' });
+    return img.isEmpty() ? null : img.toDataURL();
+  });
+
+  handle('tool:launch', (id) => tools.launch(id));
+  handle('prefs:get', () => ({ ...prefs, startup: getStartup() }));
+  handle('prefs:set', (p) => {
+    prefs = { ...prefs, ...p };
+    savePrefs(prefs);
+    if ('theme' in p) applyTheme();
+    if ('startup' in p) setStartup(!!p.startup);
+    return prefs;
+  });
+}
+
+// ---------- Cycle de vie ----------
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  // `fastboost --mini` (par ex. lié à un raccourci clavier) ouvre/ferme le mini-panneau
+  app.on('second-instance', (_e, argv) => {
+    if (menubar && argv.includes('--mini')) menubar.toggleMini('corner');
+    else showWindow();
+  });
+  app.whenReady().then(() => {
+    if (!isLinux) app.setAppUserModelId('com.fastboost.app');
+    prefs = loadPrefs();
+    applyTheme();
+    registerIpc();
+    if (isLinux) {
+      // Linux : mini-panneau façon CleanMyMac X dans la zone de notification
+      menubar = createMenubar({
+        iconPath,
+        showMain: showWindow,
+        sendToMain: (msg) => {
+          if (!win) return;
+          if (win.webContents.isLoading()) win.webContents.once('did-finish-load', () => win.webContents.send('action', msg));
+          else win.webContents.send('action', msg);
+        },
+        services: { system, cleaner, protection, platform },
+        getPrefs: () => prefs,
+        onQuit: () => { quitting = true; app.quit(); },
+      });
+      tray = menubar.tray;
+    } else {
+      createTray();
+    }
+    createWindow();
+    if (menubar && process.argv.includes('--mini')) menubar.showMini('corner');
+    nativeTheme.on('updated', () => { win?.setTitleBarOverlay?.(titleBarColors()); });
+  });
+  app.on('before-quit', () => { quitting = true; });
+  app.on('window-all-closed', () => { if (!tray) app.quit(); });
+}

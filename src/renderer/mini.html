@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>FastBoost — mini-panneau</title>
+  <link rel="stylesheet" href="mini.css" />
+</head>
+<body>
+  <header class="top">
+    <img src="../../assets/icon.png" class="logo" alt="" />
+    <div class="brand">FastBoost</div>
+    <div class="grow"></div>
+    <button class="icon-btn" id="open-settings" title="Paramètres"></button>
+    <button class="icon-btn" id="open-main" title="Ouvrir FastBoost"></button>
+  </header>
+
+  <main class="scroll">
+    <section class="hero" id="hero">
+      <div class="hero-text">
+        <div class="hero-title" id="hero-title">Analyse…</div>
+        <div class="hero-sub" id="hero-sub">Vérification de votre PC</div>
+      </div>
+      <button class="boost" id="boost"><span class="boost-ico"></span><span>Boost</span></button>
+    </section>
+    <div class="result hidden" id="result"></div>
+
+    <section class="grid">
+      <div class="mod" id="mod-disk">
+        <div class="mod-head"><span class="mod-ico c-teal" data-i="storage"></span><span>Stockage</span></div>
+        <div class="ring-row"><div class="ring" id="ring-disk"></div><div><div class="big" id="disk-free">–</div><div class="sub" id="disk-total">libres</div></div></div>
+        <button class="act" id="act-clean" disabled>Nettoyer</button>
+      </div>
+      <div class="mod" id="mod-mem">
+        <div class="mod-head"><span class="mod-ico c-blue" data-i="memory"></span><span>Mémoire</span></div>
+        <div class="ring-row"><div class="ring" id="ring-mem"></div><div><div class="big" id="mem-used">–</div><div class="sub" id="mem-total">utilisés</div></div></div>
+        <button class="act" id="act-free">Libérer</button>
+      </div>
+      <div class="mod" id="mod-cpu">
+        <div class="mod-head"><span class="mod-ico c-orange" data-i="chip"></span><span>Processeur</span></div>
+        <div class="ring-row"><div class="ring" id="ring-cpu"></div><div><div class="big" id="cpu-load">–</div><div class="sub" id="cpu-cores">charge</div></div></div>
+        <button class="act" data-open="processes">Processus</button>
+      </div>
+      <div class="mod" id="mod-net">
+        <div class="mod-head"><span class="mod-ico c-purple" data-i="wifi"></span><span>Réseau</span></div>
+        <div class="net"><div><span class="arrow">↓</span><b id="net-down">0 o/s</b></div><div><span class="arrow">↑</span><b id="net-up">0 o/s</b></div></div>
+        <svg class="spark" id="spark" viewBox="0 0 100 24" preserveAspectRatio="none"></svg>
+        <button class="act" data-open="network">Diagnostic</button>
+      </div>
+    </section>
+
+    <section class="rows">
+      <div class="row">
+        <span class="row-ico c-pink" data-i="trash"></span>
+        <div class="row-main"><div class="row-title">Corbeille</div><div class="row-sub" id="trash-sub">–</div></div>
+        <button class="act small" id="act-trash" disabled>Vider</button>
+      </div>
+      <div class="row">
+        <span class="row-ico c-green" data-i="update"></span>
+        <div class="row-main"><div class="row-title">Mises à jour</div><div class="row-sub" id="upd-sub">Recherche…</div></div>
+        <button class="act small" data-open="updates">Voir</button>
+      </div>
+      <div class="row">
+        <span class="row-ico c-blue" data-i="shield"></span>
+        <div class="row-main"><div class="row-title">Pare-feu</div><div class="row-sub" id="fw-sub">–</div></div>
+        <button class="act small" data-open="protection">Voir</button>
+      </div>
+    </section>
+
+    <section class="hogs">
+      <div class="section-title">Gros consommateurs de mémoire</div>
+      <div id="hogs"></div>
+    </section>
+  </main>
+
+  <footer class="bottom">
+    <button class="open-main" data-open="home">Ouvrir FastBoost</button>
+  </footer>
+
+  <script src="icons.js"></script>
+  <script src="mini.js"></script>
+</body>
+</html>
