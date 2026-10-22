@@ -1,4 +1,4 @@
-// Pont sécurisé entre l'interface et le processus principal.
+// Secure bridge between the renderer and main process.
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const call = async (channel, ...args) => {
@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld('pcm', {
     permReset: (appId) => call('v2:perm:reset', appId),
     leftovers: () => call('v2:leftovers:scan'),
     malwareScan: (kind) => call('v2:malware:scan', kind),
+    malwareQuick: () => call('v2:malware:quick'),
     shred: (paths, opts) => call('v2:shred', paths, opts),
     lensScan: (root) => call('v2:lens:scan', root),
     lensCancel: () => call('v2:lens:cancel'),
@@ -84,7 +85,7 @@ contextBridge.exposeInMainWorld('pcm', {
     pick: (opts) => call('file:pick', opts),
     thumb: (p) => call('file:thumb', p),
     paths: () => call('app:paths'),
-    // Chemin local d'un fichier glissé-déposé (Broyeur)
+    // Local path of a file dropped into the shredder.
     filePath: (file) => webUtils.getPathForFile(file),
   },
   ui: {

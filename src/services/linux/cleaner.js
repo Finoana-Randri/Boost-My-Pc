@@ -1,4 +1,4 @@
-// Linux : nettoyage (caches utilisateur, corbeille, miniatures, journaux systemd, cache des paquets…).
+// Linux cleanup: user caches, trash, thumbnails, systemd logs, and package caches.
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -11,7 +11,7 @@ const DATA = process.env.XDG_DATA_HOME || path.join(HOME, '.local', 'share');
 const UID = typeof process.getuid === 'function' ? process.getuid() : -1;
 const DAY = 24 * 3600 * 1000;
 
-// targets : supprimés par l'utilisateur ; root : { dirs (pour la taille), cmd (commande de nettoyage admin) }
+// `targets` are user-cleanable; `root` lists directories to size and the admin cleanup command.
 const pm = packageManager();
 const PKG_CACHE = {
   apt: { dirs: [{ dir: '/var/cache/apt/archives', match: /\.deb$/ }], cmd: 'apt-get clean' },
@@ -205,14 +205,14 @@ async function clean(ids, onProgress) {
         await walk(dir, t, async (f, s) => {
           try { await fsp.unlink(f); freed += s; deleted++; } catch { failed++; }
         });
-        // Dans /tmp, des dossiers vides peuvent être utilisés par des programmes en cours : on les garde
+        // Keep empty directories in /tmp in case a running program is using them.
         if (t.depth !== 0 && !t.ownOnly) await removeEmptyDirs(dir);
       }
     }
     if (cat.root) rootCmds.push({ cat, cmd: cat.root.cmd });
   }
   let adminCancelled = false;
-  // Toutes les opérations admin dans un seul appel → une seule demande de mot de passe
+  // Run admin operations together so polkit asks for the password only once.
   if (rootCmds.length) {
     onProgress?.({ current: 'Éléments système (authentification requise)', index: cats.length - 1, total: cats.length });
     const before = await Promise.all(rootCmds.map(({ cat }) => sizeOf(cat.root.dirs)));

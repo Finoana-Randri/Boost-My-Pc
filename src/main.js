@@ -1,4 +1,4 @@
-// Processus principal Electron : fenêtre, zone de notification et pont IPC vers les services (Windows & Linux).
+// Electron main process: windows, tray icon, and IPC for the Windows and Linux services.
 const { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -8,8 +8,8 @@ const { platform, system, cleaner, storage, apps, protection, tools } = require(
 const isLinux = platform === 'linux';
 const { createMenubar } = require('./menubar');
 
-// Sous Wayland natif, une application ne peut pas placer ses fenêtres : on passe par XWayland
-// pour que le mini-panneau s'ouvre bien sous la barre supérieure.
+// Native Wayland does not let apps place their windows, so use XWayland
+// to keep the mini panel below the top bar.
 if (isLinux && process.env.DISPLAY && !app.commandLine.hasSwitch('ozone-platform')) {
   app.commandLine.appendSwitch('ozone-platform', 'x11');
 }
@@ -19,7 +19,7 @@ let tray = null;
 let menubar = null;
 let quitting = false;
 
-// ---------- Préférences ----------
+// ---------- Preferences ----------
 const prefsFile = () => path.join(app.getPath('userData'), 'preferences.json');
 const defaultPrefs = { theme: 'system', minimizeToTray: true, startup: false, boostDropCaches: false, alerts: true, effects: 'auto' };
 function loadPrefs() {
@@ -39,7 +39,7 @@ function createWindow() {
     height: 740,
     minWidth: 900,
     minHeight: 600,
-    title: 'FastBoost',
+    title: 'Boost My Pc',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     backgroundColor: backgroundColor(),
     titleBarStyle: 'hidden',
@@ -80,10 +80,10 @@ function createTray() {
   if (!fs.existsSync(iconPath)) return;
   try {
     tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'tray.png')).resize({ width: isLinux ? 22 : 16, height: isLinux ? 22 : 16, quality: 'best' }));
-  } catch { tray = null; return; } // certains bureaux Linux n'ont pas de zone de notification
-  tray.setToolTip('FastBoost');
+  } catch { tray = null; return; } // Some Linux desktops have no tray.
+  tray.setToolTip('Boost My Pc');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Ouvrir FastBoost', click: showWindow },
+    { label: 'Ouvrir Boost My Pc', click: showWindow },
     { label: 'Boost', click: () => { showWindow(); win.webContents.send('action', 'boost'); } },
     { type: 'separator' },
     { label: 'Quitter', click: () => { quitting = true; app.quit(); } },
@@ -97,7 +97,7 @@ function applyTheme() {
   if (win) { win.setTitleBarOverlay?.(titleBarColors()); win.setBackgroundColor(backgroundColor()); }
 }
 
-// ---------- Lancement au démarrage ----------
+// ---------- Launch at startup ----------
 const linuxAutostartFile = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'autostart', 'fastboost.desktop');
 function getStartup() {
   if (isLinux) return fs.existsSync(linuxAutostartFile);
@@ -106,15 +106,14 @@ function getStartup() {
 function setStartup(on) {
   if (!isLinux) return app.setLoginItemSettings({ openAtLogin: on, args: ['--hidden'] });
   if (!on) { try { fs.unlinkSync(linuxAutostartFile); } catch {} return; }
-  // AppImage : lancer le fichier AppImage lui-même ; sinon l'exécutable Electron + le dossier de l'app
+  // For an AppImage, launch the AppImage itself; otherwise use Electron and the app directory.
   const exec = process.env.APPIMAGE
     ? `"${process.env.APPIMAGE}" --hidden`
     : `"${process.execPath}"${process.defaultApp ? ` "${path.resolve(process.argv[1] || '.')}"` : ''} --hidden`;
   fs.mkdirSync(path.dirname(linuxAutostartFile), { recursive: true });
-  fs.writeFileSync(linuxAutostartFile, `[Desktop Entry]\nType=Application\nName=FastBoost\nExec=${exec}\nIcon=${iconPath}\nX-GNOME-Autostart-enabled=true\n`);
+  fs.writeFileSync(linuxAutostartFile, `[Desktop Entry]\nType=Application\nName=Boost My Pc\nExec=${exec}\nIcon=${iconPath}\nX-GNOME-Autostart-enabled=true\n`);
 }
 
-// Mode léger : sans composition GPU, le verre dépoli et les animations coûtent trop cher
 function liteMode() {
   if (prefs.effects === 'off') return true;
   if (prefs.effects === 'on') return false;
@@ -122,7 +121,7 @@ function liteMode() {
   return !String(gpu.gpu_compositing || '').startsWith('enabled');
 }
 
-// ---------- Capacités (l'interface s'adapte au système) ----------
+// ---------- Capabilities (the UI adapts to the system) ----------
 async function capabilities() {
   const info = await system.getSystemInfo().catch(() => ({}));
   return {
@@ -139,11 +138,11 @@ async function capabilities() {
   };
 }
 
-// L'application elle-même (paquet .deb, AppImage ou installation Windows)
+// The app itself (.deb, AppImage, or Windows installation)
 const appDir = path.dirname(process.execPath).toLowerCase();
 function isSelf(a) {
   if (!a) return false;
-  if (a.pkg === 'fastboost') return true;
+  if (a.pkg === 'boost-my-pc' || a.pkg === 'fastboost') return true;
   if (/fastboost\.desktop$/.test(a.desktopFile || '')) return true;
   if (app.isPackaged && [a.uninstall, a.location].some((s) => s && String(s).toLowerCase().includes(appDir))) return true;
   return false;
@@ -188,8 +187,8 @@ function registerIpc() {
     return r.canceled ? null : r.filePaths[0];
   });
 
-  // FastBoost ne s'affiche pas dans ses propres listes et ne peut pas se terminer lui-même
-  // (les processus « zygote » de Chromium sous Linux n'apparaissent pas dans getAppMetrics : on filtre aussi par exécutable)
+  // Keep Boost My Pc out of its own process list so it cannot stop itself.
+  // Linux Chromium zygote processes are missing from getAppMetrics, so filter by executable too.
   const ownPids = () => new Set([process.pid, ...app.getAppMetrics().map((m) => m.pid)]);
   const ownExe = (() => { try { return fs.realpathSync(process.execPath).toLowerCase(); } catch { return process.execPath.toLowerCase(); } })();
   const isOwnExe = (p) => !!p && p.toLowerCase().replace(/ \(deleted\)$/, '') === ownExe;
@@ -202,14 +201,14 @@ function registerIpc() {
   });
   handle('apps:kill', (ids, name, opts) => {
     const mine = ownPids();
-    if ((ids || []).some((id) => mine.has(Number(id)))) throw new Error('FastBoost ne peut pas se terminer lui-même.');
+    if ((ids || []).some((id) => mine.has(Number(id)))) throw new Error('Boost My Pc ne peut pas se terminer lui-même.');
     return apps.killProcesses(ids, name, opts || {});
   });
   handle('apps:startup', () => apps.listStartup());
   handle('apps:setStartup', (item, enabled) => apps.setStartup(item, enabled));
   handle('apps:installed', async () => (await apps.listInstalledApps()).filter((a) => !isSelf(a)));
   handle('apps:uninstall', (a) => {
-    if (isSelf(a)) throw new Error('Désinstallez FastBoost depuis le gestionnaire de paquets du système.');
+    if (isSelf(a)) throw new Error('Désinstallez Boost My Pc depuis le gestionnaire de paquets du système.');
     return apps.uninstallApp(a);
   });
 
@@ -231,7 +230,7 @@ function registerIpc() {
   handle('file:open', (p) => shell.openPath(p));
   handle('file:icon', async (p) => {
     if (!p) return null;
-    // Linux : nom d'icône du thème (.desktop) ou image PNG/SVG
+    // Linux: icon name from the theme (.desktop) or a PNG/SVG file.
     if (isLinux) {
       const url = await apps.iconDataUrl(p).catch(() => null);
       if (url) return url;
@@ -253,7 +252,7 @@ function registerIpc() {
   });
 }
 
-// ---------- Modules v2 (inspirés de CleanMyMac) ----------
+// ---------- v2 modules ----------
 function registerV2() {
   const maintenance = require('./services/v2/maintenance');
   const privacy = require('./services/v2/privacy');
@@ -278,6 +277,8 @@ function registerV2() {
   handle('v2:perm:revoke', (appId, permId) => permissions.revoke(appId, permId));
   handle('v2:perm:reset', (appId) => permissions.reset(appId));
   handle('v2:leftovers:scan', () => leftovers.scan(progress('leftovers')));
+  // Quick check for the Protection overview (heuristics on Linux, Defender status on Windows).
+  handle('v2:malware:quick', () => malware.quickCheck(protection));
   handle('v2:malware:scan', (kind) => {
     if (!['quick', 'normal', 'deep'].includes(kind)) throw new Error('Type d\'analyse inconnu');
     return malware.scan(kind, progress('malware'));
@@ -297,7 +298,7 @@ function registerV2() {
     const r = await dialog.showOpenDialog(win, { properties: props, title: opts.title });
     return r.canceled ? [] : r.filePaths;
   });
-  // Vignette d'image (images similaires)
+  // Thumbnail for a similar image.
   handle('file:thumb', async (p) => {
     const img = nativeImage.createFromPath(p);
     if (img.isEmpty()) return null;
@@ -306,11 +307,11 @@ function registerV2() {
   handle('app:paths', () => ({ home: os.homedir(), pictures: app.getPath('pictures'), downloads: app.getPath('downloads'), root: path.parse(os.homedir()).root }));
 }
 
-// ---------- Cycle de vie ----------
+// ---------- Lifecycle ----------
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  // `fastboost --mini` (par ex. lié à un raccourci clavier) ouvre/ferme le mini-panneau
+  // `boost-my-pc --mini` toggles the mini panel, for example from a keyboard shortcut.
   app.on('second-instance', (_e, argv) => {
     if (menubar && argv.includes('--mini')) menubar.toggleMini('corner');
     else showWindow();
@@ -321,7 +322,7 @@ if (!app.requestSingleInstanceLock()) {
     applyTheme();
     registerIpc();
     if (isLinux) {
-      // Linux : mini-panneau façon CleanMyMac X dans la zone de notification
+      // Linux: show the mini panel from the tray icon.
       menubar = createMenubar({
         iconPath,
         showMain: showWindow,

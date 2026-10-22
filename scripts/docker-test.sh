@@ -1,6 +1,6 @@
 #!/bin/sh
-# Prépare un conteneur Linux (Debian, Fedora ou Arch) puis lance les tests des services Linux.
-# Usage : docker run -v ./src:/app/src:ro -v ./scripts:/app/scripts:ro <image> sh /app/scripts/docker-test.sh
+# Prepare a Debian, Fedora, or Arch container and run the Linux service checks.
+# Run: docker run -v ./src:/app/src:ro -v ./scripts:/app/scripts:ro <image> sh /app/scripts/docker-test.sh
 set -e
 if command -v apt-get >/dev/null; then
   apt-get update -qq >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xterm iproute2 iputils-ping ufw >/dev/null 2>&1

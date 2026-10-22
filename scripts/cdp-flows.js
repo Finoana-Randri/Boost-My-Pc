@@ -1,7 +1,7 @@
-// Teste les parcours v2 via le protocole DevTools : ouvre un module, clique sur « Analyser »
-// (jamais sur une action destructrice), attend le résultat, capture l'écran et relève les erreurs.
-// Usage : node scripts/cdp-flows.js <dossier> <port> <flux...>
-// Flux : smart cleanup threats privacy permissions maintenance leftovers lens similar large cloud
+// Exercise v2 flows through DevTools: open a module and start a scan.
+// Never trigger a destructive action; wait for results, save a screenshot, and collect errors.
+// Run: node scripts/cdp-flows.js <folder> <port> <flow...>
+// Flows: smart cleanup threats privacy permissions maintenance leftovers lens similar large cloud
 const fs = require('fs');
 const [out, port, ...flows] = process.argv.slice(2);
 

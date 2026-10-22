@@ -13,7 +13,7 @@ function fmtBytes(b) {
   return `${b.toFixed(b >= 100 ? 0 : 1).replace('.', ',')} ${u[i]}`;
 }
 
-// Icônes
+// Icons
 $$('[data-i]').forEach((el) => (el.innerHTML = icon(el.dataset.i)));
 $('#open-settings').innerHTML = icon('settings');
 $('#open-main').innerHTML = icon('external');
@@ -27,7 +27,7 @@ function ring(sel, pct, color) {
     <div class="pct">${pct}%</div>`;
 }
 
-// Bouton en deux temps : 1er clic → « Confirmer ? », 2e clic → action
+// Two clicks: confirm first, then run the action.
 function twoStep(btn, label, run) {
   let armed = false, timer;
   btn.onclick = async () => {
@@ -48,7 +48,7 @@ function showResult(text) {
   r.classList.remove('hidden');
 }
 
-// ---------- État ----------
+// ---------- Status ----------
 const state = { stats: null, disk: null, summary: null, procs: [], net: [] };
 
 function renderHero() {
@@ -105,7 +105,7 @@ async function refreshDisk() {
 }
 
 async function refreshProcs() {
-  // Ne pas redessiner pendant une confirmation en cours
+  // Keep the panel steady while a confirmation is open.
   if (document.querySelector('#hogs .confirm, #hogs button:disabled')) return;
   const list = await pcm.apps.processes().catch(() => []);
   if (document.querySelector('#hogs .confirm, #hogs button:disabled')) return;
@@ -203,7 +203,7 @@ $('#open-settings').onclick = () => pcm.ui.openMain('settings');
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') pcm.ui.hideMini(); });
 pcm.ui.onAction((a) => { if (a === 'boost') boost(); });
 
-// ---------- Rafraîchissement (seulement quand le panneau est visible) ----------
+// ---------- Refresh only while the panel is visible ----------
 function refreshAll() {
   refreshFast(); refreshDisk(); refreshProcs(); refreshSummary();
 }

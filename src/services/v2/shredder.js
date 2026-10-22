@@ -1,5 +1,5 @@
-// Broyeur : suppression sécurisée (écrasement par des données aléatoires puis suppression).
-// Sur SSD, l'écrasement n'est pas garanti au niveau matériel (répartition de l'usure) : l'interface le signale.
+// Shredder: overwrite a file with random data before deleting it.
+// SSD wear leveling can prevent overwrites from reaching the physical data; the UI warns about this.
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -8,7 +8,7 @@ const os = require('os');
 
 const CHUNK = 1024 * 1024;
 
-// Emplacements qu'on refuse de broyer (protection contre une erreur de sélection)
+// Paths that must never be shredded.
 function isForbidden(p) {
   const r = path.resolve(p);
   const home = os.homedir();
@@ -35,7 +35,7 @@ async function shredFile(file, passes) {
     }
     await fh.truncate(0);
   } finally { await fh.close(); }
-  // Renomme avant suppression pour effacer aussi le nom du fichier
+  // Rename the file before deleting it so its original name is removed too.
   const tmp = path.join(path.dirname(file), crypto.randomBytes(8).toString('hex'));
   await fsp.rename(file, tmp);
   await fsp.unlink(tmp);

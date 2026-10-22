@@ -1,6 +1,6 @@
-// Protection → Autorisations des applications.
-// Linux : permissions des applications Flatpak (fichiers, appareils, réseau, micro, affichage) avec révocation.
-// Windows : applications ayant utilisé la caméra, le micro ou la localisation (journal du Gestionnaire d'accès).
+// App permissions.
+// Linux: view and revoke Flatpak access to files, devices, the network, microphone, and display.
+// Windows: show apps that accessed the camera, microphone, or location.
 const isLinux = process.platform === 'linux';
 
 const FLATPAK_PERMS = [
@@ -52,7 +52,7 @@ async function linuxReset(appId) {
   return true;
 }
 
-// Windows : HKCU\...\CapabilityAccessManager\ConsentStore\<capacité>
+// Windows: HKCU\...\CapabilityAccessManager\ConsentStore\<capability>
 async function windowsList() {
   const { runPSJson, asArray } = require('../ps');
   const data = await runPSJson(`

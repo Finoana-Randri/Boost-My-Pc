@@ -1,4 +1,4 @@
-// Informations système temps réel + "Boost" mémoire (équivalent PCBoost / BoostOptionsService).
+// Live system information and memory Boost.
 const os = require('os');
 const { execFile } = require('child_process');
 const { runPS, runPSJson, asArray } = require('./ps');
@@ -27,7 +27,7 @@ function cpuUsage() {
 
 let lastNet = null;
 function netBytes() {
-  // `netstat -e` donne le total d'octets reçus/envoyés, rapide et sans droits admin
+  // `netstat -e` reports total bytes received and sent without admin rights.
   return new Promise((resolve) => {
     execFile('netstat', ['-e'], { windowsHide: true, timeout: 5000 }, (err, out) => {
       if (err) return resolve(null);
@@ -102,7 +102,7 @@ async function getSystemInfo() {
   return sysInfoCache;
 }
 
-// Vide le working set de tous les processus accessibles (comme "Boost memory" de PC Manager)
+// Trim the working set of each process we can access.
 async function boostMemory() {
   const before = os.freemem();
   const count = await runPS(`

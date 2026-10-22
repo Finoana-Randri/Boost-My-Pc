@@ -1,5 +1,5 @@
-// Visite les pages de l'app via le protocole DevTools et enregistre une capture de chacune.
-// Usage : node scripts/cdp-shots.js <dossier> <port> page[:attenteMs] ...
+// Visit each app page through DevTools and save a screenshot.
+// Run: node scripts/cdp-shots.js <folder> <port> page[:waitMs] ...
 const fs = require('fs');
 const [out, port, ...pages] = process.argv.slice(2);
 (async () => {

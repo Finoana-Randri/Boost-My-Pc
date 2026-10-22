@@ -1,5 +1,5 @@
-// Entretien intelligent : une seule analyse qui enchaîne 5 vérifications (comme « Smart Care » de CleanMyMac),
-// puis une seule action « Exécuter » qui n'applique que les opérations sûres et sans mot de passe.
+// Smart Care runs five checks in one scan.
+// Run applies only safe actions that do not need a password.
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -54,7 +54,7 @@ function createSmartCare(services) {
     return last;
   }
 
-  // Exécute uniquement ce qui est sûr : nettoyage des fichiers inutiles et tâches de maintenance sans droits admin
+  // Run only safe cleanup and maintenance tasks that do not need admin rights.
   async function run(onProgress) {
     if (!last) throw new Error('Lancez d\'abord une analyse.');
     const res = { freed: 0, tasks: 0 };

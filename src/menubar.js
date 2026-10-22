@@ -1,5 +1,5 @@
-// Mini-panneau de la zone de notification, façon « Menu » de CleanMyMac X :
-// un clic sur l'icône ouvre un panneau compact (état du PC, actions rapides), avec infobulle temps réel et alertes.
+// Tray panel: click the icon to see system status and quick actions.
+// The tooltip shows live status and alerts.
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, screen, Notification, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -24,7 +24,7 @@ function createMenubar({ iconPath, showMain, sendToMain, services, getPrefs, onQ
   let hiddenAt = 0;
   let quitting = false;
 
-  // ---------- Fenêtre du mini-panneau ----------
+  // ---------- Mini panel window ----------
   function createMini() {
     mini = new BrowserWindow({
       width: W,
@@ -38,7 +38,7 @@ function createMenubar({ iconPath, showMain, sendToMain, services, getPrefs, onQ
       fullscreenable: false,
       skipTaskbar: true,
       alwaysOnTop: true,
-      title: 'FastBoost — mini-panneau',
+      title: 'Boost My Pc — mini-panneau',
       icon: fs.existsSync(iconPath) ? iconPath : undefined,
       backgroundColor: bg(),
       webPreferences: {
@@ -49,20 +49,19 @@ function createMenubar({ iconPath, showMain, sendToMain, services, getPrefs, onQ
       },
     });
     mini.loadFile(path.join(__dirname, 'renderer', 'mini.html'));
-    // Se ferme quand on clique ailleurs (comme un menu)
+    // Hide when the user clicks elsewhere, like a menu.
     mini.on('blur', () => {
       if (Date.now() - shownAt > 400 && !mini.webContents.isDevToolsOpened()) { mini.hide(); hiddenAt = Date.now(); }
     });
-    // Fermer la fenêtre (Alt+F4) la masque seulement
+    // Alt+F4 hides the panel instead of closing it.
     mini.on('close', (e) => { if (!quitting) { e.preventDefault(); mini.hide(); } });
     mini.on('closed', () => { mini = null; });
   }
   function bg() { return nativeTheme.shouldUseDarkColors ? '#1d1b26' : '#f6f5fa'; }
 
-  // Place le panneau juste sous l'icône de la barre supérieure (comme un menu de la barre des menus macOS).
-  // Sous Linux, l'emplacement de l'icône n'est pas connu (getBounds renvoie 0) : on utilise le pointeur
-  // s'il se trouve dans la barre du haut (ou du bas pour KDE/Xfce), sinon le coin supérieur droit,
-  // où GNOME/Ubuntu affichent les icônes d'état.
+  // Place the panel below the tray icon. Linux does not report the icon bounds,
+  // so use the pointer when it is near a panel; otherwise use the top-right corner,
+  // where GNOME and Ubuntu put their status icons.
   const BAR = 64;
   function position(anchor) {
     const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -94,23 +93,22 @@ function createMenubar({ iconPath, showMain, sendToMain, services, getPrefs, onQ
   }
   function hideMini() { if (mini?.isVisible()) { mini.hide(); hiddenAt = Date.now(); } }
   function toggleMini(anchor) {
-    // Un clic sur l'icône alors que le panneau est ouvert le fait d'abord perdre le focus (donc se masquer) :
-    // on ne le rouvre pas dans la foulée.
+    // Clicking the icon first blurs and hides an open panel. Don't reopen it immediately.
     if (mini?.isVisible()) hideMini();
     else if (Date.now() - hiddenAt > 350) showMini(anchor);
   }
 
-  // ---------- Icône et menu ----------
+  // ---------- Tray icon and menu ----------
   function createTray() {
     if (!fs.existsSync(iconPath)) return null;
     try {
       tray = new Tray(nativeImage.createFromPath(path.join(path.dirname(iconPath), 'tray.png')).resize({ width: 22, height: 22, quality: 'best' }));
-    } catch { tray = null; return null; } // bureau sans zone de notification
-    tray.setToolTip('FastBoost');
-    // Certains bureaux Linux n'envoient que le menu : la première entrée ouvre donc le mini-panneau
+    } catch { tray = null; return null; } // No tray on this desktop.
+    tray.setToolTip('Boost My Pc');
+    // Some Linux desktops send only a menu event, so make the first item open the panel.
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: 'Afficher le mini-panneau', click: () => showMini('cursor') },
-      { label: 'Ouvrir FastBoost', click: () => showMain() },
+      { label: 'Ouvrir Boost My Pc', click: () => showMain() },
       { type: 'separator' },
       { label: 'Boost', click: () => { showMini('cursor'); mini.webContents.send('mini:action', 'boost'); } },
       { label: 'Bilan de santé', click: () => { showMain(); sendToMain('go:health'); } },
@@ -122,7 +120,7 @@ function createMenubar({ iconPath, showMain, sendToMain, services, getPrefs, onQ
     return tray;
   }
 
-  // ---------- Résumé mis en cache (analyses coûteuses) ----------
+  // ---------- Cached scan summary ----------
   let summary = { updates: null, security: 0, junk: null, trash: null, firewallOk: null, firewall: '', updatedAt: 0 };
   let summaryBusy = null;
   async function refreshSummary(force = false) {
@@ -159,7 +157,7 @@ function createMenubar({ iconPath, showMain, sendToMain, services, getPrefs, onQ
     return summaryBusy;
   }
 
-  // ---------- Infobulle temps réel + alertes ----------
+  // ---------- Live tooltip and alerts ----------
   const lastAlert = {};
   let highMem = 0;
   function alert(key, cooldownMs, title, body) {
@@ -174,7 +172,7 @@ function createMenubar({ iconPath, showMain, sendToMain, services, getPrefs, onQ
   async function tick() {
     const s = await system.getStats().catch(() => null);
     if (!s) return;
-    if (tray) tray.setToolTip(`FastBoost\nProcesseur ${s.cpu} % · Mémoire ${s.memory.percent} %\n↓ ${fmtBytes(s.net.down)}/s  ↑ ${fmtBytes(s.net.up)}/s`);
+    if (tray) tray.setToolTip(`Boost My Pc\nProcesseur ${s.cpu} % · Mémoire ${s.memory.percent} %\n↓ ${fmtBytes(s.net.down)}/s  ↑ ${fmtBytes(s.net.up)}/s`);
     highMem = s.memory.percent >= 90 ? highMem + 1 : 0;
     if (highMem >= 3) alert('mem', 30 * 60 * 1000, 'Mémoire presque pleine', `${s.memory.percent} % de la mémoire est utilisée. Ouvrez le mini-panneau pour libérer de la mémoire.`);
   }
@@ -189,7 +187,7 @@ function createMenubar({ iconPath, showMain, sendToMain, services, getPrefs, onQ
     if (sum?.security > 0) alert('updates', 24 * 3600 * 1000, 'Mises à jour de sécurité', `${sum.security} mise(s) à jour de sécurité disponible(s).`);
   }
 
-  // ---------- IPC du mini-panneau ----------
+  // ---------- Mini panel IPC ----------
   ipcMain.handle('mini:summary', async (_e, force) => {
     try { return { ok: true, data: await refreshSummary(!!force) }; } catch (err) { return { ok: false, error: err.message }; }
   });

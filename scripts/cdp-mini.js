@@ -1,5 +1,5 @@
-// Capture le mini-panneau (page mini.html) via le protocole DevTools, puis teste un Boost.
-// Usage : node scripts/cdp-mini.js <dossier> <port> <suffixe>
+// Capture mini.html through DevTools, then test Boost.
+// Run: node scripts/cdp-mini.js <folder> <port> <suffix>
 const fs = require('fs');
 const [out, port, suffix = ''] = process.argv.slice(2);
 (async () => {
@@ -25,7 +25,7 @@ const [out, port, suffix = ''] = process.argv.slice(2);
   await shot('initial');
   console.log('texte :', (await evalJs(`document.body.innerText.replace(/\\n+/g,' | ')`)).slice(0, 700));
   console.log('visible :', await evalJs('document.visibilityState'));
-  // Vide la corbeille en deux clics, puis Boost
+  // Empty the trash in two clicks, then run Boost.
   await evalJs(`document.querySelector('#act-trash').click(); document.querySelector('#act-trash').click(); 1`);
   await evalJs(`document.querySelector('#boost').click(); 1`);
   await new Promise((r) => setTimeout(r, 5000));

@@ -1,4 +1,4 @@
-// Icônes au trait façon Fluent (SVG inline).
+// Fluent-style outline icons, rendered as inline SVG.
 const ICONS = {
   home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
   shield: '<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
@@ -52,7 +52,7 @@ function icon(name, cls = '') {
   return `<svg class="svg-ico ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 }
 
-// Icônes v2
+// v2 icons
 Object.assign(ICONS, {
   sparkle: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8zM5 15l.6 1.4L7 17l-1.4.6L5 19l-.6-1.4L3 17l1.4-.6z"/>',
   gauge: '<path d="M12 14l4-4"/><path d="M3.5 18a9 9 0 1 1 17 0"/><circle cx="12" cy="14" r="1.5"/>',
@@ -70,7 +70,7 @@ Object.assign(ICONS, {
   upload: '<path d="M12 21V9M7 14l5-5 5 5M5 3h14"/>',
 });
 
-// Icônes de modules v2 : formes pleines en deux tons (blanc + transparences), pour les tuiles en dégradé
+// Solid two-tone icons for the v2 module tiles.
 const MICONS = {
   smart: '<path d="M11 2.5c.45 4.3 2.9 6.75 7.2 7.2-4.3.45-6.75 2.9-7.2 7.2-.45-4.3-2.9-6.75-7.2-7.2 4.3-.45 6.75-2.9 7.2-7.2z"/><path opacity=".75" d="M18.6 13.6c.2 1.9 1.25 2.95 3.15 3.15-1.9.2-2.95 1.25-3.15 3.15-.2-1.9-1.25-2.95-3.15-3.15 1.9-.2 2.95-1.25 3.15-3.15z"/><path opacity=".55" d="M5.4 16.4c.14 1.35.9 2.1 2.25 2.25-1.35.14-2.1.9-2.25 2.25-.14-1.35-.9-2.1-2.25-2.25 1.35-.15 2.1-.9 2.25-2.25z"/>',
   cleanup: '<path opacity=".6" d="M19.4 2.9a1.2 1.2 0 0 1 1.7 1.7l-6.3 6.3-1.7-1.7z"/><path opacity=".85" d="M11.4 9.7l2.9 2.9c.7.7.7 1.8 0 2.5l-.7.7-5.4-5.4.7-.7c.7-.7 1.8-.7 2.5 0z"/><path d="M7.5 11.2l5.3 5.3c-1.7 3.5-4.9 5.4-9.1 5.7a.7.7 0 0 1-.75-.75c.3-4.2 2.2-7.4 4.55-10.25z"/><path opacity=".7" d="M5.2 2.8l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z"/>',
@@ -87,4 +87,46 @@ const MICONS = {
 
 function micon(name, cls = '') {
   return `<svg class="svg-ico m-ico ${cls}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${MICONS[name] || MICONS.smart}</svg>`;
+}
+
+// View toggle icons (list / cards)
+Object.assign(ICONS, {
+  viewList: '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
+  viewCards: '<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>',
+});
+
+// Filled two-tone icons for cards (artwork, card icons, lists)
+const FICONS = {
+  bug: '<path opacity=".6" d="M9 6.8a3 3 0 0 1 6 0c0 .4-.1.7-.2 1-.8-.4-1.8-.6-2.8-.6s-2 .2-2.8.6A3 3 0 0 1 9 6.8z"/><path d="M12 7.6c3 0 5.5 2.6 5.5 6.3 0 3.9-2.5 7.1-5.5 7.1s-5.5-3.2-5.5-7.1c0-3.7 2.5-6.3 5.5-6.3z"/><path fill="#000" opacity=".2" d="M11.35 8.3h1.3V21h-1.3z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" opacity=".75" d="M6.7 11.6 3.6 10.1M6.4 15H3.2M6.9 18.1l-2.6 1.6M17.3 11.6l3.1-1.5M17.6 15h3.2M17.1 18.1l2.6 1.6M9.7 4.7 8.4 2.9M14.3 4.7l1.3-1.8"/>',
+  shieldCheck: '<path d="M12 2.2l8 3.2v6.2c0 5-3.4 9.2-8 10.6-4.6-1.4-8-5.6-8-10.6V5.4z"/><path fill="#000" opacity=".14" d="M12 2.2l8 3.2v6.2c0 5-3.4 9.2-8 10.6z"/><path fill="none" stroke="#000" stroke-opacity=".32" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M8.3 12.2l2.6 2.6 4.9-5.1"/>',
+  warn: '<path d="M10.3 3.9a2 2 0 0 1 3.4 0l8.1 13.9A2 2 0 0 1 20.1 21H3.9a2 2 0 0 1-1.7-3.2z"/><path fill="#000" opacity=".3" d="M11 8.8h2v5.6h-2zM11 15.9h2v2.1h-2z"/>',
+  globe: '<circle cx="12" cy="12" r="9.5"/><path fill="none" stroke="#000" stroke-opacity=".22" stroke-width="1.4" d="M2.5 12h19M12 2.5c2.6 2.6 4 6 4 9.5s-1.4 6.9-4 9.5c-2.6-2.6-4-6-4-9.5s1.4-6.9 4-9.5z"/>',
+  clock: '<circle cx="12" cy="12" r="9.5"/><path fill="none" stroke="#000" stroke-opacity=".3" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" d="M12 6.8v5.4l3.5 2.1"/>',
+  camera: '<rect x="2.5" y="6.5" width="13" height="11" rx="3"/><path opacity=".7" d="M16.5 10.2l4.2-2.5c.4-.2.8.1.8.5v7.6c0 .4-.4.7-.8.5l-4.2-2.5z"/><circle fill="#000" opacity=".2" cx="9" cy="12" r="2.6"/>',
+  eye: '<path d="M12 5c5.5 0 9.3 4.6 10.3 6.1.4.6.4 1.2 0 1.8C21.3 14.4 17.5 19 12 19S2.7 14.4 1.7 12.9a1.6 1.6 0 0 1 0-1.8C2.7 9.6 6.5 5 12 5z"/><circle fill="#000" opacity=".25" cx="12" cy="12" r="3.6"/>',
+  lock: '<path opacity=".6" d="M7.5 10.5V8a4.5 4.5 0 0 1 9 0v2.5h-2.2V8a2.3 2.3 0 0 0-4.6 0v2.5z"/><rect x="4.5" y="10.5" width="15" height="11" rx="2.5"/><circle fill="#000" opacity=".25" cx="12" cy="16" r="1.6"/>',
+  wrench: '<path d="M20.7 7.3a5 5 0 0 1-6.4 6.3l-6.6 6.6a2.2 2.2 0 0 1-3.1-3.1l6.6-6.6a5 5 0 0 1 6.3-6.4l-3.1 3.1.6 2.5 2.5.6z"/>',
+  refresh: '<path d="M12 4a8 8 0 0 1 7.4 5H21l-3 4-3-4h2.1A6 6 0 0 0 6.6 9.1L5 7.8A8 8 0 0 1 12 4z"/><path opacity=".65" d="M12 20a8 8 0 0 1-7.4-5H3l3-4 3 4H6.9a6 6 0 0 0 10.5-.1l1.6 1.3A8 8 0 0 1 12 20z"/>',
+  power: '<path opacity=".55" d="M12 2.5c.8 0 1.4.6 1.4 1.4v7.2a1.4 1.4 0 0 1-2.8 0V3.9c0-.8.6-1.4 1.4-1.4z"/><path d="M6.2 6.3a1.4 1.4 0 0 1 2 2 6 6 0 1 0 7.6 0 1.4 1.4 0 0 1 2-2 8.8 8.8 0 1 1-11.6 0z"/>',
+  memory: '<rect x="3" y="7" width="18" height="10" rx="2"/><g opacity=".6"><rect x="5.5" y="17" width="1.6" height="3" rx=".5"/><rect x="9" y="17" width="1.6" height="3" rx=".5"/><rect x="12.5" y="17" width="1.6" height="3" rx=".5"/><rect x="16" y="17" width="1.6" height="3" rx=".5"/></g><g fill="#000" opacity=".18"><rect x="6" y="9.5" width="3" height="5" rx=".8"/><rect x="10.5" y="9.5" width="3" height="5" rx=".8"/><rect x="15" y="9.5" width="3" height="5" rx=".8"/></g>',
+  process: '<rect x="5" y="5" width="14" height="14" rx="3"/><rect fill="#000" opacity=".2" x="9" y="9" width="6" height="6" rx="1.2"/><g opacity=".6"><rect x="8.2" y="1.8" width="1.6" height="3" rx=".6"/><rect x="14.2" y="1.8" width="1.6" height="3" rx=".6"/><rect x="8.2" y="19.2" width="1.6" height="3" rx=".6"/><rect x="14.2" y="19.2" width="1.6" height="3" rx=".6"/><rect x="1.8" y="8.2" width="3" height="1.6" rx=".6"/><rect x="1.8" y="14.2" width="3" height="1.6" rx=".6"/><rect x="19.2" y="8.2" width="3" height="1.6" rx=".6"/><rect x="19.2" y="14.2" width="3" height="1.6" rx=".6"/></g>',
+  box: '<path d="M12 2.8l8.5 4.6v9.2L12 21.2l-8.5-4.6V7.4z"/><path fill="#000" opacity=".16" d="M12 12v9.2l8.5-4.6V7.4z"/><path fill="#fff" opacity=".3" d="M3.5 7.4 12 12l8.5-4.6L12 2.8z"/>',
+  update: '<circle cx="12" cy="12" r="9.5"/><path fill="none" stroke="#000" stroke-opacity=".3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 7v8.2m-3.6-3.6L12 15.2l3.6-3.6"/>',
+  copy: '<rect opacity=".55" x="3" y="3" width="12" height="14" rx="2.5"/><rect x="8" y="7" width="13" height="14" rx="2.5"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="3"/><path fill="#000" opacity=".2" d="M3 16.5l5-5 4 4 3-3 6 6V17a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"/><circle fill="#000" opacity=".2" cx="16" cy="8.5" r="1.8"/>',
+  file: '<path d="M6.5 2.5H14l5 5V19a2.5 2.5 0 0 1-2.5 2.5h-10A2.5 2.5 0 0 1 4 19V5a2.5 2.5 0 0 1 2.5-2.5z"/><path opacity=".5" d="M14 2.5V7a.5.5 0 0 0 .5.5H19z"/>',
+  download: '<path opacity=".55" d="M4 15.5h3l2.3 2.3a1 1 0 0 0 .7.3h4a1 1 0 0 0 .7-.3l2.3-2.3h3V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M10.6 3.5h2.8v7h3l-4.4 4.6-4.4-4.6h3z"/>',
+  folder: '<path opacity=".6" d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4l2 2h7A2.5 2.5 0 0 1 21 8.5V9H3z"/><path d="M3 9h18v8.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/>',
+  wifi: '<path opacity=".45" d="M12 4.5c3.9 0 7.4 1.5 10 4l-1.9 1.9A11.4 11.4 0 0 0 12 7.2c-3.1 0-6 1.2-8.1 3.2L2 8.5c2.6-2.5 6.1-4 10-4z"/><path opacity=".7" d="M12 9.6c2.5 0 4.7 1 6.3 2.6l-1.9 1.9A6.2 6.2 0 0 0 12 12.3c-1.7 0-3.3.7-4.4 1.8l-1.9-1.9A8.9 8.9 0 0 1 12 9.6z"/><circle cx="12" cy="17.8" r="2.2"/>',
+  storage: '<rect x="3" y="4" width="18" height="7" rx="2.2"/><rect opacity=".7" x="3" y="13" width="18" height="7" rx="2.2"/><circle fill="#000" opacity=".25" cx="7" cy="7.5" r="1"/><circle fill="#000" opacity=".25" cx="7" cy="16.5" r="1"/>',
+  apps: '<rect x="3" y="3" width="8" height="8" rx="2.4"/><rect opacity=".72" x="13" y="3" width="8" height="8" rx="2.4"/><rect opacity=".72" x="3" y="13" width="8" height="8" rx="2.4"/><rect opacity=".45" x="13" y="13" width="8" height="8" rx="2.4"/>',
+  gauge: '<path d="M12 4.2a9.3 9.3 0 0 1 9.3 9.3c0 1.3-.3 2.6-.8 3.8a1.6 1.6 0 0 1-1.5 1H5a1.6 1.6 0 0 1-1.5-1 9.3 9.3 0 0 1 8.5-13.1z"/><path fill="#000" opacity=".3" d="M13.2 14.6a1.9 1.9 0 1 1-2.6-2.6l6.1-4.1z"/>',
+  mic: '<rect x="8.5" y="2.5" width="7" height="12" rx="3.5"/><path opacity=".6" d="M5.5 10.5a1 1 0 0 1 1 1 5.5 5.5 0 0 0 11 0 1 1 0 0 1 2 0 7.5 7.5 0 0 1-6.5 7.4V21h2.5a1 1 0 0 1 0 2h-7a1 1 0 0 1 0-2H11v-2.1a7.5 7.5 0 0 1-6.5-7.4 1 1 0 0 1 1-1z"/>',
+};
+// Map line-icon names to their filled versions
+const FICON_ALIAS = { virus: 'bug', shield: 'shieldCheck', check: 'shieldCheck', firewall: 'shieldCheck', admin: 'shieldCheck', broom: 'box' };
+function ficon(name, cls = '') {
+  const key = FICONS[name] ? name : FICON_ALIAS[name];
+  if (!key) return icon(name, cls);
+  return `<svg class="svg-ico f-ico-svg ${cls}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${FICONS[key]}</svg>`;
 }

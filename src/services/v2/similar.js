@@ -1,5 +1,5 @@
-// Encombrement → Images similaires : empreinte perceptuelle (dHash 64 bits) via nativeImage d'Electron.
-// Deux images sont « similaires » si leurs empreintes diffèrent de 6 bits ou moins (recadrage léger, compression…).
+// Find similar images with Electron's 64-bit dHash.
+// Images are considered similar when their hashes differ by six bits or fewer.
 const { nativeImage } = require('electron');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -29,9 +29,9 @@ async function listImages(root, st) {
   return out;
 }
 
-// dHash : image 9×8 en niveaux de gris, 1 bit par comparaison de pixels voisins
+// dHash: convert to 9×8 grayscale, then compare neighboring pixels.
 function dhash(img) {
-  const bmp = img.resize({ width: 9, height: 8, quality: 'good' }).toBitmap(); // BGRA
+  const bmp = img.resize({ width: 9, height: 8, quality: 'good' }).toBitmap(); // Pixels are stored as BGRA.
   let hi = 0, lo = 0, bit = 0;
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
@@ -64,10 +64,10 @@ async function find(root, onProgress) {
     } catch {}
     if (i % 20 === 0) {
       onProgress?.({ done: i, total: files.length, current: files[i] });
-      await new Promise((r) => setImmediate(r)); // laisse respirer le processus principal
+      await new Promise((r) => setImmediate(r)); // Let the main process handle other work.
     }
   }
-  // Regroupement (union-find)
+  // Group matches with union-find.
   const parent = items.map((_, i) => i);
   const findRoot = (i) => (parent[i] === i ? i : (parent[i] = findRoot(parent[i])));
   for (let i = 0; i < items.length; i++) {
@@ -78,7 +78,7 @@ async function find(root, onProgress) {
   const groups = new Map();
   items.forEach((it, i) => { const r = findRoot(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(it); });
   const result = [...groups.values()].filter((g) => g.length > 1).map((g) => {
-    // La meilleure image (plus grande résolution puis plus gros fichier) est conservée par défaut
+    // Keep the largest image by resolution, using file size to break ties.
     g.sort((a, b) => b.width * b.height - a.width * a.height || b.size - a.size);
     return { files: g.map(({ hash, ...f }) => f), waste: g.slice(1).reduce((a, f) => a + f.size, 0) };
   }).sort((a, b) => b.waste - a.waste);

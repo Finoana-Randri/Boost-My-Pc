@@ -1,4 +1,4 @@
-// Boîte à outils multiplateforme (liste blanche, cf. Plugin.ToolBoxTools). Chaque outil a une implémentation par OS.
+// Cross-platform tool allowlist, with an implementation for each OS.
 const { shell } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -35,7 +35,7 @@ const WINDOWS = {
   power: url('ms-settings:powersleep'),
 };
 
-// Linux : le premier programme installé de chaque liste est utilisé (GNOME, KDE, Xfce, Cinnamon…)
+// On Linux, use the first installed command in each list.
 const desktopSettings = (gnome, kde, other = []) => [
   ['gnome-control-center', [gnome]], ['systemsettings', [kde]], ['systemsettings5', [kde]], ...other,
 ];
@@ -76,7 +76,7 @@ function which(bin) {
   return null;
 }
 
-// Résout l'outil en action concrète, ou null s'il n'est pas disponible sur ce PC
+// Return the action for a tool, or null if it is unavailable.
 function resolve(id) {
   const t = (isLinux ? LINUX : WINDOWS)[id];
   if (!t) return null;

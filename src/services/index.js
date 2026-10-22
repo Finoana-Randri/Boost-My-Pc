@@ -1,4 +1,4 @@
-// Sélectionne l'implémentation des services selon le système d'exploitation.
+// Load the service implementation for the current operating system.
 const isLinux = process.platform === 'linux';
 const dir = isLinux ? './linux/' : './';
 

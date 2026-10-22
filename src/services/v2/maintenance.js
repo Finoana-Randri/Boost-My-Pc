@@ -1,4 +1,4 @@
-// Performances → Tâches de maintenance (équivalent du module « Performances » de CleanMyMac).
+// Maintenance tasks for routine system upkeep.
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -63,7 +63,7 @@ async function run(ids, { boost } = {}) {
     }
     if (asRoot.length) {
       try {
-        // Une seule demande de mot de passe ; chaque tâche rapporte son propre statut
+        // Ask for the admin password once; report each task's result separately.
         const script = asRoot.map((t) => `if (${t.cmd}) >/dev/null 2>&1; then echo "OK ${t.id}"; else echo "KO ${t.id}"; fi`).join('\n');
         const out = await privileged(script, { timeout: 30 * 60000 });
         for (const t of asRoot) results.push({ id: t.id, ok: new RegExp(`^OK ${t.id}$`, 'm').test(out) });

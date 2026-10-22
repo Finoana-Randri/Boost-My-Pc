@@ -1,4 +1,4 @@
-// Utilitaires shell pour Linux : exécution de commandes, détection d'outils, élévation via pkexec.
+// Linux shell helpers for commands, tool detection, and pkexec elevation.
 const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -34,14 +34,14 @@ function which(bin) {
 
 const isRoot = () => typeof process.getuid === 'function' && process.getuid() === 0;
 
-// Exécute un script avec les droits administrateur (une seule demande de mot de passe via polkit)
+// Run a script as admin with a single polkit password prompt.
 async function privileged(script, opts = {}) {
   if (isRoot()) return sh(script, opts);
   if (!which('pkexec')) throw new Error('pkexec est introuvable : impossible d\'obtenir les droits administrateur.');
   try {
     return await run('pkexec', ['sh', '-c', script], { timeout: 30 * 60000, ...opts });
   } catch (e) {
-    // pkexec : 126 = fenêtre d'authentification fermée, 127 = non autorisé
+    // pkexec: 126 means the auth window was closed; 127 means not authorized.
     if (e.code === 126 || e.code === 127 || /dismissed|Not authorized/i.test(e.message)) {
       const err = new Error('Authentification annulée ou refusée.');
       err.cancelled = true;
@@ -67,7 +67,7 @@ function getOsRelease() {
   return osRelease;
 }
 
-// Gestionnaire de paquets principal de la distribution
+// The distribution's primary package manager.
 function packageManager() {
   if (which('apt-get') && which('dpkg-query')) return 'apt';
   if (which('dnf')) return 'dnf';

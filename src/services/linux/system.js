@@ -1,4 +1,4 @@
-// Linux : statistiques temps réel (/proc), disques (df), infos système, Boost.
+// Linux stats from /proc, disk usage from df, system info, and Boost.
 const os = require('os');
 const fs = require('fs');
 const { run, sh, which, isRoot, readText, getOsRelease } = require('./sh');
@@ -66,11 +66,11 @@ async function getDisks() {
     if (!src.startsWith('/dev/') || /^\/dev\/loop/.test(src)) continue;
     if (/^(squashfs|tmpfs|devtmpfs|overlay|efivarfs|vfat)$/.test(fs) && mount !== '/') continue;
     if (/^\/(boot|snap|var\/snap|etc|proc|sys|dev|run)(\/|$)/.test(mount)) continue;
-    if (seen.has(src)) continue; // btrfs : plusieurs sous-volumes du même périphérique
+    if (seen.has(src)) continue; // Btrfs can report several subvolumes for one device.
     seen.add(src);
     disks.push({ id: mount, label: mount === '/' ? 'Système' : mount === '/home' ? 'Dossier personnel' : mount.split('/').pop() || mount, fs, size: Number(size), free: Number(avail), device: src });
   }
-  // Repli (ZFS, overlay, système live…) : statfs sur la racine
+  // Fall back to statfs on / for ZFS, overlay, and live systems.
   if (!disks.length) {
     try {
       const s = fs.statfsSync('/');
@@ -110,7 +110,7 @@ async function getSystemInfo() {
   return infoCache;
 }
 
-// Linux gère la mémoire lui-même : le Boost synchronise les disques et, si demandé, vide le cache de pages
+// Linux manages memory itself. Boost syncs disks and can optionally clear the page cache.
 async function boostMemory({ dropCaches = false } = {}) {
   const before = memInfo().available;
   await sh('sync').catch(() => {});

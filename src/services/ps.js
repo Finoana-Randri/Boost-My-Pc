@@ -1,4 +1,4 @@
-// Petit utilitaire pour exécuter du PowerShell et récupérer du JSON.
+// Run PowerShell and return the result as JSON.
 const { execFile } = require('child_process');
 
 function runPS(script, { timeout = 60000 } = {}) {
@@ -23,10 +23,10 @@ async function runPSJson(script, opts) {
   return JSON.parse(out);
 }
 
-// Toujours renvoyer un tableau (ConvertTo-Json renvoie un objet seul s'il n'y a qu'un élément)
+// Always return an array; ConvertTo-Json returns a single object for one result.
 const asArray = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
 
-// Échappe une chaîne pour l'insérer entre guillemets simples PowerShell
+// Escape a string for a single-quoted PowerShell value.
 const psq = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
 module.exports = { runPS, runPSJson, asArray, psq };

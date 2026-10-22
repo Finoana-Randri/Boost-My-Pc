@@ -1,4 +1,4 @@
-// Gestion du stockage : gros fichiers, téléchargements, doublons (équivalent DiskAnalysis / FileManagement).
+// Find large files, downloads, and duplicates.
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -7,7 +7,7 @@ const crypto = require('crypto');
 
 const isLinux = process.platform === 'linux';
 
-// Dossiers système ignorés (comme SystemDriveExcludePathHelper)
+// Skip system folders.
 const EXCLUDE = isLinux ? [
   /^\/(proc|sys|dev|run|snap|boot|lost\+found|var\/lib\/(docker|containers|flatpak|snapd))\//,
   /\/\.local\/share\/Trash\//,
@@ -24,7 +24,7 @@ const EXCLUDE = isLinux ? [
   /\\\.git\\/i,
 ];
 
-// Dossier Téléchargements (sous Linux, il peut être localisé : « Téléchargements »)
+// The Downloads folder may have a localized name on Linux.
 function downloadsDir() {
   if (isLinux) {
     const cfg = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'user-dirs.dirs');
@@ -76,7 +76,7 @@ const toItem = (f, st) => ({ path: f, name: path.basename(f), size: st.size, mti
 let current = null;
 function cancel() { if (current) current.cancelled = true; }
 
-// olderThanDays : ne garde que les fichiers non modifiés depuis N jours (« gros et anciens fichiers »)
+// `olderThanDays` keeps files that have not changed for at least this many days.
 async function findLargeFiles({ root = os.homedir(), minSize = 100 * 1024 * 1024, limit = 500, olderThanDays = 0 } = {}, onProgress) {
   const state = (current = { dirs: 0, cancelled: false, onProgress });
   const out = [];
@@ -124,7 +124,7 @@ async function findDuplicates({ root = os.homedir(), minSize = 1024 * 1024 } = {
   const groups = [];
   for (const [size, files] of bySize) {
     if (files.length < 2 || state.cancelled) continue;
-    // 1) empreinte rapide sur 64 Ko, 2) empreinte complète pour confirmer
+    // Hash a small sample first, then hash the full file to confirm.
     const quick = new Map();
     for (const f of files) {
       const h = await hashFile(f.path, 65536);

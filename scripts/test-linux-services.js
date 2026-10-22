@@ -1,5 +1,5 @@
-// Test des services Linux en lecture seule (utilisé dans un conteneur Docker Debian/Fedora/Arch).
-// Usage : node scripts/test-linux-services.js
+// Check Linux services in read-only mode (used in Debian, Fedora, or Arch containers).
+// Run: node scripts/test-linux-services.js
 const path = require('path');
 const L = (m) => require(path.join(__dirname, '..', 'src', 'services', 'linux', m));
 const storage = require(path.join(__dirname, '..', 'src', 'services', 'storage'));
@@ -36,7 +36,7 @@ const t = async (name, fn, show) => {
   });
   await t('processes', ap.listProcesses, (r) => [r.length, r.slice(0, 3).map((p) => [p.name, p.desc, p.memory, p.ids.length])]);
   await t('startup', async () => {
-    // /etc/xdg/autostart/demo.desktop est créé par root avant le test (voir la commande docker)
+    // Root creates /etc/xdg/autostart/demo.desktop before the check (see the Docker command).
     const before = await ap.listStartup();
     if (!before.find((i) => i.file === 'demo.desktop')) return { skipped: 'demo.desktop absent', before };
     await ap.setStartup(before.find((i) => i.file === 'demo.desktop'), false);

@@ -1,4 +1,4 @@
-// Linux : processus (/proc), démarrage automatique (XDG autostart), applications installées et désinstallation.
+// Linux processes, autostart entries, installed apps, and uninstall support.
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -10,7 +10,7 @@ const CONFIG = process.env.XDG_CONFIG_HOME || path.join(HOME, '.config');
 const DATA = process.env.XDG_DATA_HOME || path.join(HOME, '.local', 'share');
 const PAGE = 4096;
 
-// ---------- Fichiers .desktop ----------
+// ---------- .desktop files ----------
 function parseDesktop(txt) {
   const out = {};
   let inMain = false;
@@ -25,7 +25,7 @@ function parseDesktop(txt) {
   }
   return out;
 }
-// Nom localisé (Name[fr_FR], Name[fr], Name)
+// Prefer the localized name, then fall back to Name.
 function localized(d, key) {
   const lang = (process.env.LANG || 'fr_FR').split('.')[0];
   return d[`${key}[${lang}]`] || d[`${key}[${lang.split('_')[0]}]`] || d[key] || '';
@@ -48,7 +48,7 @@ function execBinary(exec) {
   return bin.startsWith('/') ? bin : which(bin) || bin;
 }
 
-// ---------- Processus ----------
+// ---------- Processes ----------
 const CLK = 100;
 async function listProcesses() {
   const uid = process.getuid?.();
@@ -60,7 +60,7 @@ async function listProcesses() {
       const name = status.match(/^Name:\s+(.*)$/m)?.[1];
       const rss = Number(status.match(/^VmRSS:\s+(\d+)/m)?.[1] || 0) * 1024;
       const owner = Number(status.match(/^Uid:\s+(\d+)/m)?.[1]);
-      if (!name || !rss) return; // threads noyau
+      if (!name || !rss) return; // Kernel threads.
       let exe = null;
       try { exe = await fsp.readlink(`/proc/${pid}/exe`); } catch {}
       const cmd = (await fsp.readFile(`/proc/${pid}/cmdline`, 'utf8').catch(() => '')).split('\0').filter(Boolean).join(' ');
@@ -76,7 +76,7 @@ async function listProcesses() {
   return [...groups.values()].sort((a, b) => b.memory - a.memory);
 }
 
-// Associe les processus aux applications (.desktop) pour un nom lisible et une icône
+// Match processes to .desktop files to get a readable name and icon.
 let desktopIndex = null;
 async function getDesktopIndex() {
   if (desktopIndex) return desktopIndex;
@@ -98,10 +98,10 @@ async function attachAppNames(groups) {
 
 const PROTECTED = /^(systemd|init|kthreadd|Xorg|Xwayland|gnome-shell|plasmashell|kwin_x11|kwin_wayland|sddm|gdm|gdm3|lightdm|pipewire|wireplumber|pulseaudio|dbus-daemon|dbus-broker|NetworkManager|polkitd|udisksd|systemd-.*|login|agetty|cinnamon|xfwm4|mutter|sway|Hyprland)$/i;
 
-// Par défaut, fermeture propre (SIGTERM : l'application peut enregistrer) ; `force` termine ensuite les récalcitrants.
+// Try SIGTERM first so the app can save its state; `force` stops any process that remains.
 async function killProcesses(ids, name, { force = false } = {}) {
   if (name && PROTECTED.test(name)) throw new Error(`« ${name} » est un processus système protégé.`);
-  // PID ≤ 1 interdit : kill(-1) viserait tous les processus de l'utilisateur, kill(1) le système
+  // Do not kill PID 1 or lower: -1 targets all user processes, and 1 is the system.
   const pids = (ids || []).map(Number).filter((id) => Number.isInteger(id) && id > 1);
   if (!pids.length) throw new Error('Aucun processus valide.');
   const denied = [];
@@ -118,7 +118,7 @@ async function killProcesses(ids, name, { force = false } = {}) {
   return true;
 }
 
-// ---------- Démarrage automatique (XDG autostart) ----------
+// ---------- Autostart (XDG) ----------
 const USER_AUTOSTART = path.join(CONFIG, 'autostart');
 const SYS_AUTOSTART = ['/etc/xdg/autostart'];
 
@@ -134,7 +134,7 @@ async function listStartup() {
       const d = parseDesktop(txt);
       const isUser = dir === USER_AUTOSTART;
       const prev = items.get(f);
-      // Ignore les entrées réservées à un autre bureau
+      // Skip entries meant for another desktop.
       const desk = (process.env.XDG_CURRENT_DESKTOP || '').split(':');
       if (d.OnlyShowIn && !d.OnlyShowIn.split(';').some((x) => desk.includes(x))) { if (!prev) continue; }
       if (d.NotShowIn && d.NotShowIn.split(';').some((x) => x && desk.includes(x))) continue;
@@ -144,7 +144,7 @@ async function listStartup() {
         name: localized(d, 'Name') || prev?.name || f.replace(/\.desktop$/, ''),
         command: cleanExec(d.Exec || prev?.command || ''),
         exe: d.Icon || prev?.exe || execBinary(d.Exec || ''),
-        hive: isUser && !prev ? 'HKCU' : 'HKLM', // HKCU = propre à l'utilisateur, HKLM = fourni par le système
+        hive: isUser && !prev ? 'HKCU' : 'HKLM', // HKCU is user-specific; HKLM is system-wide.
         source: isUser ? 'user' : 'system',
         hasSystem: !!prev || !isUser,
         enabled,
@@ -154,7 +154,7 @@ async function listStartup() {
   return [...items.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 }
 
-// Active/désactive en écrivant une copie dans ~/.config/autostart (méthode standard, sans droits admin)
+// Enable or disable an entry through ~/.config/autostart; no admin rights are needed.
 async function setStartup(item, enabled) {
   await fsp.mkdir(USER_AUTOSTART, { recursive: true });
   const userFile = path.join(USER_AUTOSTART, item.file);
@@ -169,7 +169,7 @@ async function setStartup(item, enabled) {
   return true;
 }
 
-// ---------- Applications installées ----------
+// ---------- Installed apps ----------
 const APP_DIRS = [
   '/usr/share/applications',
   '/usr/local/share/applications',
@@ -202,7 +202,7 @@ async function readDesktopApps() {
   return [...seen.values()];
 }
 
-// Trouve le paquet propriétaire de chaque fichier .desktop, en un seul appel
+// Find the package that owns each .desktop file in one call.
 async function ownerPackages(files) {
   const pm = packageManager();
   const map = new Map();
@@ -276,7 +276,7 @@ async function listInstalledApps() {
   const apps = await readDesktopApps();
   const sysFiles = apps.filter((a) => a.type === 'system').map((a) => a.file);
   const [owners, sizes, flat, snaps] = await Promise.all([ownerPackages(sysFiles), packageSizes(), flatpakInfo(), snapInfo()]);
-  // Un paquet = une ligne : on garde le .desktop qui ressemble le plus à l'application principale
+  // Keep one .desktop entry per package, choosing the one that looks like the main app.
   const score = (a, pkg) => {
     const base = a.id.replace(/\.desktop$/, '').toLowerCase();
     let s = 0;
@@ -292,7 +292,7 @@ async function listInstalledApps() {
     if (a.type === 'system') { pkg = owners.get(a.file); info = sizes.get(pkg) || {}; }
     else if (a.type === 'flatpak') info = flat.get(pkg) || {};
     else if (a.type === 'snap') info = snaps.get(pkg) || {};
-    if (a.type === 'system' && !pkg) continue; // non désinstallable par le gestionnaire de paquets
+    if (a.type === 'system' && !pkg) continue; // Cannot be removed through the package manager.
     const key = `${a.type}:${pkg || a.id}`;
     const s = score(a, pkg);
     if (best.has(key) && best.get(key).score >= s) continue;
@@ -332,7 +332,7 @@ async function uninstallApp(app) {
   return { started: true, finished: true };
 }
 
-// ---------- Icônes ----------
+// ---------- Icons ----------
 const ICON_DIRS = [
   path.join(DATA, 'icons'), path.join(HOME, '.icons'), '/usr/share/icons', '/usr/local/share/icons',
   '/var/lib/flatpak/exports/share/icons', path.join(DATA, 'flatpak', 'exports', 'share', 'icons'),

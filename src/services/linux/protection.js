@@ -1,4 +1,4 @@
-// Linux : pare-feu (ufw / firewalld), antivirus (ClamAV), Secure Boot, mises à jour, diagnostic réseau.
+// Linux firewall, antivirus, Secure Boot, updates, and network diagnostics.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -93,7 +93,7 @@ async function securityAction(id) {
   }
 }
 
-// ---------- Mises à jour ----------
+// ---------- Updates ----------
 async function checkWindowsUpdates() {
   const pm = packageManager();
   const updates = [];
@@ -130,7 +130,7 @@ async function checkWindowsUpdates() {
 async function installUpdates() {
   const pm = packageManager();
   const sys = {
-    // confdef/confold : garde les fichiers de configuration modifiés au lieu de bloquer sur une question
+    // Keep modified configuration files instead of stopping for a prompt.
     apt: 'export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade',
     dnf: 'dnf -y upgrade',
     pacman: 'pacman -Syu --noconfirm',
@@ -144,7 +144,7 @@ async function installUpdates() {
   return true;
 }
 
-// ---------- Diagnostic réseau ----------
+// ---------- Network diagnostics ----------
 function tcpPing(host, port = 443, timeout = 3000) {
   return new Promise((resolve) => {
     const start = Date.now();

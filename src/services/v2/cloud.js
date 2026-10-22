@@ -1,6 +1,6 @@
-// Nettoyage cloud : analyse des dossiers synchronisés localement (OneDrive, Dropbox, Google Drive, Nextcloud…).
-// Supprimer un fichier ici le supprime aussi du cloud après synchronisation : l'interface le rappelle.
-// Windows/OneDrive : « Libérer de l'espace » garde le fichier en ligne mais supprime la copie locale.
+// Scan locally synced folders from OneDrive, Dropbox, Google Drive, Nextcloud, and other providers.
+// Deleting a file here also deletes it from the cloud after sync; the UI warns about this.
+// OneDrive's "Free up space" keeps the online file and removes only the local copy.
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -21,7 +21,7 @@ function candidates() {
     { service: 'iCloud Drive', paths: [path.join(HOME, 'iCloudDrive')] },
     { service: 'Proton Drive', paths: [path.join(HOME, 'Proton Drive')] },
   ];
-  // Dossiers OneDrive d'entreprise : « OneDrive - Nom de l'entreprise »
+  // Business OneDrive folders use the "OneDrive - Company Name" format.
   try { for (const d of fs.readdirSync(HOME)) if (/^OneDrive - /.test(d)) c[0].paths.push(path.join(HOME, d)); } catch {}
   return c;
 }
@@ -41,7 +41,7 @@ async function detect() {
 let state = null;
 function cancel() { if (state) state.cancelled = true; }
 
-// Analyse un dossier : taille totale, gros fichiers (≥ 25 Mo) et fichiers anciens (non modifiés depuis 1 an)
+// Scan a folder for its total size, large files (25 MB or more), and files unchanged for a year.
 async function analyze(folder, onProgress) {
   state = { cancelled: false };
   const st = state;
@@ -75,7 +75,7 @@ async function analyze(folder, onProgress) {
   return { folder, total, count, large: large.slice(0, 300), old: old.slice(0, 300), cancelled: st.cancelled };
 }
 
-// OneDrive (Windows) : retire la copie locale en gardant le fichier dans le cloud
+// Remove the local OneDrive copy while keeping the file in the cloud.
 async function freeUp(paths) {
   if (isLinux) throw new Error('Non disponible sous Linux');
   const { runPS, psq } = require('../ps');

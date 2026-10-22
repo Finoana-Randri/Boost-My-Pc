@@ -1,6 +1,6 @@
-// Applications → Restes : dossiers de configuration/données laissés par des applications désinstallées.
-// Prudence : un dossier n'est proposé que si son nom ne correspond à AUCUNE application ou paquet connu
-// ET qu'il n'a pas été modifié depuis 90 jours. La suppression passe par la corbeille (réversible).
+// Find configuration and data folders left behind by uninstalled apps.
+// List a folder only when it does not match a known app or package
+// and has not changed for 90 days. Removal goes through the trash.
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -10,9 +10,9 @@ const isLinux = process.platform === 'linux';
 const HOME = os.homedir();
 const STALE_MS = 90 * 24 * 3600 * 1000;
 
-// Dossiers standard à ne jamais proposer
+// Never suggest standard folders.
 const KEEP = new Set([
-  // Linux / XDG / bureaux
+  // Linux, XDG, and desktop environments
   'autostart', 'systemd', 'dconf', 'gtk-2.0', 'gtk-3.0', 'gtk-4.0', 'fontconfig', 'fonts', 'pulse', 'pipewire', 'menus', 'applications',
   'icons', 'themes', 'trash', 'keyrings', 'mime', 'user-dirs.dirs', 'user-dirs.locale', 'mimeapps.list', 'ibus', 'fcitx', 'environment.d',
   'gnome-session', 'gnome-shell', 'gnome-control-center', 'nautilus', 'evolution', 'tracker', 'tracker3', 'gvfs-metadata', 'xdg-desktop-portal',
@@ -66,12 +66,12 @@ function isKnown(name, tokens) {
   if (!n || KEEP.has(name.toLowerCase()) || KEEP.has(n)) return true;
   if (tokens.has(n)) return true;
   for (const part of name.toLowerCase().split(/[^a-z0-9]+/)) if (part.length >= 4 && tokens.has(part)) return true;
-  // Correspondance partielle (ex. « code » pour « code-oss », « jetbrains » pour « jetbrains-toolbox »)
+  // Match partial names, such as "code" to "code-oss" or "jetbrains" to "jetbrains-toolbox".
   for (const t of tokens) if (t.length >= 5 && (n.startsWith(t) || t.startsWith(n))) return true;
   return false;
 }
 
-// Taille d'un dossier ; s'arrête dès qu'un élément plus récent que `cutoff` est trouvé (dossier encore utilisé)
+// Stop counting when a file newer than `cutoff` appears; the folder is still in use.
 async function dirInfo(p, cutoff) {
   let size = 0, n = 0;
   const stack = [p];
@@ -111,7 +111,7 @@ async function scan(onProgress) {
     await Promise.all(candidatesList.slice(i, i + 4).map(async (c) => {
       onProgress?.({ current: c.full, done: i, total: candidatesList.length });
       const st = await fsp.stat(c.full).catch(() => null);
-      if (!st || st.mtimeMs > cutoff) return; // encore utilisé récemment
+      if (!st || st.mtimeMs > cutoff) return; // Still in use.
       const info = await dirInfo(c.full, cutoff);
       if (info.recent || info.size < 50 * 1024) return;
       out.push({ path: c.full, name: c.name, size: info.size, mtime: st.mtimeMs, root: c.root });

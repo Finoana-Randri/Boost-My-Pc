@@ -1,15 +1,15 @@
-// Applications : processus, démarrage (StartupScanService) et désinstallation (Plugin.Uninstall).
+// Process lists, startup apps, and app removal.
 const { spawn } = require('child_process');
 const { runPS, runPSJson, asArray, psq } = require('./ps');
 
-// ---------- Processus ----------
+// ---------- Processes ----------
 async function listProcesses() {
   const list = await runPSJson(`
     Get-Process | Where-Object { $_.Id -ne 0 -and $_.Id -ne 4 } |
       Select-Object Id, ProcessName, WorkingSet64, Path, MainWindowTitle, @{n='Desc';e={ try { $_.MainModule.FileVersionInfo.FileDescription } catch { $null } }} |
       ConvertTo-Json -Compress
   `, { timeout: 60000 });
-  // Regroupe par nom comme le gestionnaire de processus de PC Manager
+  // Group by name so related processes are easy to scan.
   const groups = new Map();
   for (const p of asArray(list)) {
     const key = p.ProcessName.toLowerCase();
@@ -30,7 +30,7 @@ async function killProcesses(ids, name) {
   if (name && PROTECTED.test(name)) throw new Error(`« ${name} » est un processus système protégé.`);
   const pids = (ids || []).map(Number).filter((id) => Number.isInteger(id) && id > 4);
   if (!pids.length) throw new Error('Aucun processus valide.');
-  // Vérifie ensuite que les processus sont vraiment terminés (sinon : accès refusé)
+  // Check that the processes actually exited; otherwise Windows may deny access.
   const left = await runPS(`
     $ids = @(${pids.join(',')})
     Stop-Process -Id $ids -Force -ErrorAction SilentlyContinue
@@ -38,11 +38,11 @@ async function killProcesses(ids, name) {
     @(Get-Process -Id $ids -ErrorAction SilentlyContinue).Count
   `);
   const n = parseInt(left, 10) || 0;
-  if (n > 0) throw new Error(n === pids.length ? 'Accès refusé : redémarrez FastBoost en administrateur pour terminer ce processus.' : `${n} instance(s) n'ont pas pu être terminées (droits administrateur requis).`);
+  if (n > 0) throw new Error(n === pids.length ? 'Accès refusé : redémarrez Boost My Pc en administrateur pour terminer ce processus.' : `${n} instance(s) n'ont pas pu être terminées (droits administrateur requis).`);
   return true;
 }
 
-// ---------- Démarrage ----------
+// ---------- Startup ----------
 const RUN_KEYS = [
   { hive: 'HKCU', key: 'Software\\Microsoft\\Windows\\CurrentVersion\\Run', approved: 'Run' },
   { hive: 'HKLM', key: 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', approved: 'Run' },
@@ -88,7 +88,7 @@ function extractExe(cmd = '') {
   return m ? m[1] : cmd;
 }
 
-// Active/désactive via StartupApproved (même mécanisme que le Gestionnaire des tâches et PC Manager)
+// Use StartupApproved, the Windows mechanism for controlling startup apps.
 async function setStartup(item, enabled) {
   const ap = `${item.hive}:\\${APPROVED_BASE}${item.approved}`;
   const bytes = enabled
@@ -102,7 +102,7 @@ async function setStartup(item, enabled) {
   return true;
 }
 
-// ---------- Désinstallation ----------
+// ---------- Uninstall ----------
 async function listInstalledApps() {
   const apps = await runPSJson(`
     $paths = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
@@ -115,7 +115,7 @@ async function listInstalledApps() {
           @{n='size';e={[int64]$_.EstimatedSize * 1024}}, @{n='date';e={$_.InstallDate}}, @{n='icon';e={$_.DisplayIcon}},
           @{n='uninstall';e={$_.UninstallString}}, @{n='location';e={$_.InstallLocation}}, @{n='type';e={'desktop'}}
     }
-    # Noms lisibles des apps Store via le menu Démarrer (AppID = PackageFamilyName!App)
+    # Get readable Store app names from Start (AppID = PackageFamilyName!App).
     $names = @{}
     Get-StartApps -ErrorAction SilentlyContinue | Where-Object { $_.AppID -like '*!*' } | ForEach-Object {
       $pfn = $_.AppID.Split('!')[0]; if (-not $names.ContainsKey($pfn)) { $names[$pfn] = $_.Name } }
@@ -144,9 +144,9 @@ async function uninstallApp(app) {
     return { started: true, finished: true };
   }
   let cmd = app.uninstall || '';
-  // Comme PC Manager : MsiExec /I{GUID} -> /X{GUID} pour lancer la désinstallation
+  // Use /X instead of /I to uninstall the MSI package.
   cmd = cmd.replace(/(msiexec(\.exe)?\s+)\/I/i, '$1/X');
-  // Chemin non entre guillemets contenant des espaces
+  // Unquoted path containing spaces.
   if (!cmd.startsWith('"')) {
     const m = cmd.match(/^(.+?\.exe)(.*)$/i);
     if (m && m[1].includes(' ')) cmd = `"${m[1]}"${m[2]}`;

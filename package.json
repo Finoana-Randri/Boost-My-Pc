@@ -1,8 +1,8 @@
 {
-  "name": "fastboost",
-  "productName": "FastBoost",
-  "version": "2.0.0",
-  "description": "FastBoost 2 : nettoyez, protégez et accélérez votre PC sous Linux et Windows",
+  "name": "boost-my-pc",
+  "productName": "Boost My Pc",
+  "version": "2.0.1",
+  "description": "Boost My Pc 2: clean, protect, and speed up your PC on Linux and Windows",
   "main": "src/main.js",
   "homepage": "https://github.com/Finoana-Randri/FastBoost",
   "repository": {
@@ -30,10 +30,11 @@
   },
   "build": {
     "appId": "com.fastboost.app",
-    "productName": "FastBoost",
-    "files": ["src/**/*", "assets/**/*", "package.json"],
+    "productName": "Boost My Pc",
+    "files": ["src/**/*", "assets/icon.png", "assets/tray.png", "package.json"],
     "directories": { "output": "dist" },
     "win": {
+      "artifactName": "Boost-My-Pc-Setup-${version}.${ext}",
       "icon": "assets/icon.png"
     },
     "nsis": {
@@ -41,13 +42,14 @@
       "allowToChangeInstallationDirectory": true
     },
     "linux": {
+      "artifactName": "Boost-My-Pc-${version}.${ext}",
       "icon": "assets/icon.png",
       "category": "System",
       "synopsis": "Optimisez, nettoyez et protégez votre PC",
-      "executableName": "fastboost",
+      "executableName": "boost-my-pc",
       "maintainer": "Finoana Randri <Finoana-Randri@users.noreply.github.com>",
       "desktop": {
-        "Name": "FastBoost",
+        "Name": "Boost My Pc",
         "Comment": "Optimisez, nettoyez et protégez votre PC",
         "Keywords": "boost;nettoyage;cleaner;system;monitor;",
         "StartupWMClass": "FastBoost"

@@ -1,6 +1,6 @@
 #!/bin/sh
-# Lance l'interface Linux dans un conteneur Debian (Xvfb) et capture chaque page.
-# Usage : docker run -v ./:/src:ro -v <sortie>:/out node:22-bookworm sh /src/scripts/docker-gui.sh [dark]
+# Run the Linux UI in a Debian container with Xvfb and capture each page.
+# Run: docker run -v ./:/src:ro -v <output>:/out node:22-bookworm sh /src/scripts/docker-gui.sh [dark]
 set -e
 apt-get update -qq >/dev/null
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \

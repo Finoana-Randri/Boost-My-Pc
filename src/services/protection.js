@@ -1,5 +1,5 @@
-// Protection & réseau : Defender, pare-feu, Windows Update (Plugin.SystemUpdate),
-// diagnostic réseau (Plugin.NetworkProblem : Connection, DHCP, DNS, proxy env, WebProxy, Hardware).
+// Windows protection and network services: Defender, firewall, and Windows Update.
+// Network diagnostics cover connections, DHCP, DNS, proxy settings, and hardware.
 const dns = require('dns').promises;
 const net = require('net');
 const { runPS, runPSJson, asArray } = require('./ps');
@@ -23,7 +23,7 @@ async function securityStatus() {
 }
 
 async function quickScan() {
-  // Lance une analyse rapide Defender (peut durer plusieurs minutes)
+  // Start a quick Defender scan; it can take a few minutes.
   await runPS('Start-MpScan -ScanType QuickScan -ErrorAction Stop', { timeout: 30 * 60000 });
   return true;
 }
@@ -33,7 +33,7 @@ async function updateSignatures() {
   return true;
 }
 
-// Recherche via le COM Microsoft.Update.Session (comme IUpdateSearcher dans SystemUpdate)
+// Check for updates through the Microsoft.Update.Session COM API.
 async function checkWindowsUpdates() {
   const r = await runPSJson(`
     $s = New-Object -ComObject Microsoft.Update.Session
@@ -49,7 +49,7 @@ async function checkWindowsUpdates() {
   return { updates: asArray(r?.updates), pendingReboot: !!r?.pendingReboot };
 }
 
-// ---------- Diagnostic réseau ----------
+// ---------- Network diagnostics ----------
 function tcpPing(host, port = 443, timeout = 3000) {
   return new Promise((resolve) => {
     const start = Date.now();

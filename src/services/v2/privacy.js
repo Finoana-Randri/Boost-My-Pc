@@ -1,6 +1,6 @@
-// Protection → Confidentialité : historique, cookies et traces des navigateurs et du système.
-// Les données d'un navigateur ne sont effacées que s'il est fermé (sinon ses fichiers seraient corrompus).
-// Jamais touchés : mots de passe, favoris, données de cartes bancaires.
+// Clean browser and system history, cookies, and other traces.
+// Only clear browser data after the browser closes, to avoid corrupting its files.
+// Passwords, bookmarks, and payment card data are never touched.
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -12,7 +12,7 @@ const LOCAL = process.env.LOCALAPPDATA || path.join(HOME, 'AppData', 'Local');
 const ROAMING = process.env.APPDATA || path.join(HOME, 'AppData', 'Roaming');
 const CONFIG = process.env.XDG_CONFIG_HOME || path.join(HOME, '.config');
 
-// Navigateurs Chromium : dossier racine des profils + nom du processus
+// Chromium browsers: profile root and process name.
 const CHROMIUMS = isLinux ? [
   { id: 'chrome', name: 'Google Chrome', dir: path.join(CONFIG, 'google-chrome'), proc: /^chrome$/ },
   { id: 'chromium', name: 'Chromium', dir: path.join(CONFIG, 'chromium'), proc: /^chromium(-browser)?$/ },
@@ -33,7 +33,7 @@ const FIREFOX = {
   proc: isLinux ? /^(firefox|firefox-bin|GeckoMain)$/ : /^firefox$/i,
 };
 
-// Fichiers de chaque catégorie (relatifs au profil)
+// Files for each category, relative to the profile.
 const CHROMIUM_FILES = {
   history: ['History', 'History-journal', 'Visited Links', 'Top Sites', 'Top Sites-journal'],
   cookies: ['Cookies', 'Cookies-journal', path.join('Network', 'Cookies'), path.join('Network', 'Cookies-journal')],
@@ -93,7 +93,7 @@ async function runningProcessNames() {
   return [...names];
 }
 
-// Construit la liste des éléments : { id, group, name, desc, files[], size, blocked }
+// Build the item list: { id, group, name, desc, files[], size, blocked }.
 async function collect() {
   const running = await runningProcessNames();
   const isRunning = (re) => running.some((n) => re.test(n));
@@ -116,7 +116,7 @@ async function collect() {
       if (files.length) items.push({ id: `firefox:${cat}`, group: 'Firefox', cat, files, blocked: isRunning(FIREFOX.proc) ? 'Fermez Firefox pour effacer ces données' : null });
     }
   }
-  // Traces du système
+  // System traces
   const sys = isLinux
     ? [
       { id: 'sys:recent', name: 'Documents récents', desc: 'Liste des fichiers ouverts récemment', files: [path.join(HOME, '.local', 'share', 'recently-used.xbel')] },
@@ -163,7 +163,7 @@ async function clean(ids) {
   for (const it of items) {
     if (it.blocked) { skipped.push(it.blocked); continue; }
     try {
-      // Les dossiers « conteneurs » (Recent, miniatures) sont vidés mais conservés
+      // Clear container folders such as Recent and thumbnails, but keep the folders.
       for (const f of it.files) await removePath(f, it.group === 'Système');
       if (it.registry) {
         const { runPS, psq } = require('../ps');

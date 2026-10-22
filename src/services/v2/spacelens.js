@@ -1,5 +1,5 @@
-// Carte du disque (équivalent « Space Lens ») : arborescence des tailles pour une vue interactive.
-// Pour rester léger, chaque dossier ne garde que ses plus gros enfants ; le reste est regroupé.
+// Disk Map: an interactive tree of folder sizes.
+// Keep the largest children in each folder and group the rest to limit work.
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -9,7 +9,7 @@ const SKIP = isLinux
   ? /^\/(proc|sys|dev|run|snap|lost\+found)(\/|$)|^\/var\/lib\/(docker|containers)(\/|$)/
   : /^[a-z]:\\(\$recycle\.bin|system volume information|windows\\winsxs)(\\|$)/i;
 const KEEP_CHILDREN = 40;
-const MIN_KEEP = 1024 * 1024; // les éléments < 1 Mo sont regroupés
+const MIN_KEEP = 1024 * 1024; // Group items smaller than 1 MB.
 
 let state = null;
 function cancel() { if (state) state.cancelled = true; }
@@ -23,7 +23,7 @@ async function scanDir(dir, st, depth) {
   if (st.dirs % 300 === 0) st.onProgress?.({ dirs: st.dirs, files: st.files, current: dir });
   const kids = [];
   let small = 0, smallCount = 0;
-  // Fichiers : stat en parallèle par lots
+  // Stat files in batches.
   const files = entries.filter((e) => e.isFile());
   for (let i = 0; i < files.length; i += 64) {
     const sizes = await Promise.all(files.slice(i, i + 64).map((e) => fsp.lstat(path.join(dir, e.name)).then((s) => s.size).catch(() => 0)));
@@ -35,7 +35,7 @@ async function scanDir(dir, st, depth) {
       else { small += sz; smallCount++; }
     });
   }
-  // Sous-dossiers : récursion avec un peu de parallélisme
+  // Recurse into subfolders with limited parallelism.
   const dirs = entries.filter((e) => e.isDirectory() && !e.isSymbolicLink());
   for (let i = 0; i < dirs.length; i += 6) {
     const subs = await Promise.all(dirs.slice(i, i + 6).map((e) => scanDir(path.join(dir, e.name), st, depth + 1)));

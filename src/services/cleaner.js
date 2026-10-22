@@ -1,4 +1,4 @@
-// Nettoyage : scènes "HealthCheck" et "DeepClean" reconstruites d'après CleanTrash.Options (REA ev_d8b0de32…).
+// Cleanup rules for `HealthCheck` and `DeepClean`, based on `CleanTrash.Options`.
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
@@ -10,7 +10,7 @@ const ROAMING = env.APPDATA || path.join(env.USERPROFILE, 'AppData', 'Roaming');
 const WIN = env.WINDIR || 'C:\\Windows';
 const PDATA = env.ProgramData || 'C:\\ProgramData';
 
-// Chaque cible : { dir, match?: RegExp sur le nom de fichier, depth?: 0 = fichiers du dossier seulement }
+// Each target has a directory, an optional filename pattern, and an optional depth limit.
 const CATEGORIES = [
   {
     id: 'temp', name: 'Fichiers temporaires', scenes: ['health', 'deep'], recommended: true,
@@ -109,7 +109,7 @@ async function isAdmin() {
   return adminCache;
 }
 
-// Développe un éventuel segment "*" (ex. profils Firefox)
+// Expand a wildcard segment, such as a Firefox profile path.
 async function expandDir(dir) {
   const parts = dir.split(path.sep);
   const star = parts.indexOf('*');
@@ -122,8 +122,8 @@ async function expandDir(dir) {
   } catch { return []; }
 }
 
-// Parcourt une cible et appelle onFile(fullPath, size)
-// Les stat() d'un même dossier sont faits en parallèle pour accélérer l'analyse.
+// Walk a target and call `onFile(fullPath, size)` for each match.
+// Stat files in the same folder in parallel.
 async function walk(dir, { match, depth = Infinity }, onFile, level = 0, budget = { n: 0 }) {
   let entries;
   try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return; }
@@ -204,7 +204,7 @@ async function clean(ids, onProgress) {
       if (t.admin && !admin) continue;
       for (const dir of await expandDir(t.dir)) {
         await walk(dir, t, async (f, s) => {
-          try { await fsp.unlink(f); freed += s; deleted++; } catch { failed++; } // fichiers verrouillés ignorés
+          try { await fsp.unlink(f); freed += s; deleted++; } catch { failed++; } // Ignore locked files.
         });
         if (t.depth !== 0) await removeEmptyDirs(dir);
       }

@@ -1,4 +1,4 @@
-/* Mini-panneau façon CleanMyMac X : panneau sombre, dégradé violet/bleu, modules colorés */
+/* Compact tray panel with a dark background and colored module accents. */
 :root {
   --bg: #1d1b26;
   --panel: rgba(255, 255, 255, .055);
@@ -53,7 +53,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .grow { flex: 1; }
 .svg-ico { width: 18px; height: 18px; }
 
-/* En-tête */
+/* Header */
 .top { display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px; }
 .logo { width: 20px; height: 20px; }
 .brand { font-weight: 700; font-size: 14px; }
@@ -64,7 +64,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .scroll::-webkit-scrollbar { width: 6px; }
 .scroll::-webkit-scrollbar-thumb { background: var(--track); border-radius: 3px; }
 
-/* Héros */
+/* Status */
 .hero {
   background: var(--hero); color: #fff; border-radius: 16px; padding: 16px 16px 16px 18px;
   display: flex; align-items: center; gap: 12px; position: relative; overflow: hidden;
@@ -119,7 +119,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .act.confirm { background: var(--bad); color: #fff; }
 .act.done { background: transparent; color: var(--ok); }
 
-/* Lignes */
+/* Rows */
 .rows { margin-top: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
 .row { display: flex; align-items: center; gap: 10px; padding: 9px 11px; }
 .row + .row { border-top: 1px solid var(--border); }
@@ -130,7 +130,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .row-sub.warn { color: var(--warn); }
 .row-sub.bad { color: var(--bad); }
 
-/* Gros consommateurs */
+/* Top resource users */
 .hogs { margin-top: 10px; }
 .section-title { font-size: 11.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; margin: 0 4px 6px; }
 .hog { display: flex; align-items: center; gap: 9px; padding: 6px 6px; border-radius: 10px; }
@@ -141,7 +141,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hog .mem { color: var(--text-2); font-size: 12px; }
 .hog .act { padding: 4px 10px; }
 
-/* Pied */
+/* Footer */
 .bottom { padding: 8px 12px 12px; }
 .open-main { width: 100%; border: 0; border-radius: 10px; padding: 9px; background: var(--btn); font-weight: 700; }
 .open-main:hover { background: var(--btn-hover); }

@@ -1,5 +1,5 @@
-// Test des modules v2 (Windows et Linux). Lecture seule, sauf le broyeur testé sur un fichier temporaire.
-// Usage : node scripts/test-v2-services.js
+// Check v2 modules on Windows and Linux. Read-only, except for a temporary shredder file.
+// Run: node scripts/test-v2-services.js
 const path = require('path');
 const os = require('os');
 const fs = require('fs');

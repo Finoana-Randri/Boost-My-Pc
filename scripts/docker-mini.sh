@@ -1,6 +1,6 @@
 #!/bin/sh
-# Teste le mini-panneau Linux dans un conteneur Debian (Xvfb) : thème sombre puis clair.
-# Usage : docker run -v ./:/src:ro -v <sortie>:/out node:22-bookworm sh /src/scripts/docker-mini.sh
+# Check the Linux mini panel in a Debian container with Xvfb, in dark and light themes.
+# Run: docker run -v ./:/src:ro -v <output>:/out node:22-bookworm sh /src/scripts/docker-mini.sh
 set -e
 apt-get update -qq >/dev/null
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
@@ -10,7 +10,7 @@ id alix >/dev/null 2>&1 || useradd -m alix
 H=/home/alix
 mkdir -p $H/app "$H/.config/FastBoost" $H/Downloads $H/.local/share/Trash/files $H/.local/share/Trash/info $H/.cache/thumbnails/large
 cp -r /src/src /src/assets /src/package.json $H/app/
-# Données factices : corbeille, miniatures, fichier temporaire ancien
+# Test data: trash, thumbnails, and an old temporary file.
 head -c 60000000 /dev/urandom > $H/.local/share/Trash/files/vieux-film.mkv
 printf '[Trash Info]\nPath=/home/alix/vieux-film.mkv\nDeletionDate=2026-10-01T10:00:00\n' > $H/.local/share/Trash/info/vieux-film.mkv.trashinfo
 head -c 8000000 /dev/urandom > $H/.cache/thumbnails/large/a.png
@@ -26,6 +26,6 @@ run() {
 run dark 9340
 echo "----- état après le 1er passage (corbeille vidée ?)"
 ls -la $H/.local/share/Trash/files || true
-# Recrée la corbeille pour la capture en thème clair
+# Recreate the trash for the light-theme screenshot.
 head -c 60000000 /dev/urandom > $H/.local/share/Trash/files/vieux-film.mkv && chown alix $H/.local/share/Trash/files/vieux-film.mkv
 run light 9341

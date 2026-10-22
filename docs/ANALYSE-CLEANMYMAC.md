@@ -1,4 +1,4 @@
-# Analyse REA — cleanmymac.com/fr (base de FastBoost v2)
+# Analyse REA — cleanmymac.com/fr (base de Boost My Pc v2)
 
 Outil : REA `capture_browser_scenario` (Chrome headless, 1440×900, fr-FR), page publique `https://cleanmymac.com/fr`.
 Evidence : `ev_10be91e710c2929f2bea5232c7c48127725044fdad11c66494c0573f44ccdbd5` (capture d'écran + arbre d'accessibilité, aucune action sur la page).
@@ -31,7 +31,7 @@ Evidence : `ev_10be91e710c2929f2bea5232c7c48127725044fdad11c66494c0573f44ccdbd5`
 
 Style : grand fond en dégradé lavande → rose → violet, barre de navigation flottante blanche très arrondie, boutons « pilule », typographie arrondie et grasse.
 
-## Décisions pour FastBoost v2
+## Décisions pour Boost My Pc v2
 
 - **Inspiration, pas copie** : palette violet/magenta, panneaux en verre dépoli (`backdrop-filter`), un dégradé par module, grand bouton d'analyse circulaire. Aucun logo, icône, illustration ni nom de MacPaw n'est repris.
 - Chaque module annoncé a un équivalent Linux/Windows (voir le README) ; « Nettoyage cloud » agit sur les dossiers synchronisés localement (OneDrive, Dropbox, Google Drive, Nextcloud…), faute d'accès aux API des services.
