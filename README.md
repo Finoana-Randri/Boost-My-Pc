@@ -20,11 +20,11 @@ One scan checks five areas; one click applies safe actions.
 
 ![Smart Care results](docs/screenshots/v2/02-resultats-entretien.png)
 
-| Cleanup | Protection — threats |
+| Cleanup | Protection overview |
 |---|---|
-| ![Cleanup](docs/screenshots/v2/03-nettoyage.png) | ![Threats](docs/screenshots/v2/04-protection-menaces.png) |
+| ![Cleanup](docs/screenshots/v2/03-nettoyage.png) | ![Protection overview](docs/screenshots/v2/04-protection-menaces.png) |
 
-| Privacy | Performance |
+| Privacy | Performance overview |
 |---|---|
 | ![Privacy](docs/screenshots/v2/05-confidentialite.png) | ![Performance](docs/screenshots/v2/06-performances.png) |
 
@@ -40,7 +40,7 @@ One scan checks five areas; one click applies safe actions.
 |---|---|---|
 | ![Shredder](docs/screenshots/v2/11-broyeur.png) | ![Tools](docs/screenshots/v2/12-outils.png) | ![Settings](docs/screenshots/v2/13-parametres.png) |
 
-> Screenshots were captured on Debian 12 (Xvfb) with test data; the desktop panel and window controls are not shown. The Smart Care and Disk Map screenshots show version 2.0.2.
+> Screenshots were captured on Debian 12 (Xvfb) with test data; the desktop panel and window controls are not shown. They show the current version; regenerate them with `scripts/docker-v2.sh` (`scripts/readme-shots.sh` names them `readme-01` to `readme-13`).
 
 ## Modules
 

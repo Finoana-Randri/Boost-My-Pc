@@ -1,6 +1,6 @@
 // Drive the app through DevTools with a list of steps, for the tests and screenshots.
 // Run: node scripts/cdp-steps.js <port> <folder> <step...>
-// Steps: eval:<js> | wait:<css> | sleep:<ms> | shot:<name>
+// Steps: eval:<js> | wait:<css> | sleep:<ms> | shot:<name> | size:<w>,<h> (size:0 resets) | scheme:light|dark
 const fs = require('fs');
 const [port, out, ...steps] = process.argv.slice(2);
 (async () => {
@@ -27,6 +27,10 @@ const [port, out, ...steps] = process.argv.slice(2);
     const [k, ...rest] = s.split(':'); const v = rest.join(':');
     if (k === 'eval') console.log('eval', JSON.stringify(await ev(v)));
     else if (k === 'sleep') await new Promise((r) => setTimeout(r, Number(v)));
+    else if (k === 'size') {
+      const [width, height] = v.split(',').map(Number);
+      await send('Emulation.setDeviceMetricsOverride', width ? { width, height, deviceScaleFactor: 1, mobile: false } : { width: 0, height: 0, deviceScaleFactor: 0, mobile: false });
+    } else if (k === 'scheme') await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: v }] });
     else if (k === 'wait') {
       const t0 = Date.now();
       while (!(await ev(`!!document.querySelector(${JSON.stringify(v)})`))) {

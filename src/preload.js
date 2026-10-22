@@ -9,6 +9,7 @@ const call = async (channel, ...args) => {
 
 contextBridge.exposeInMainWorld('pcm', {
   platform: process.platform,
+  lite: process.argv.includes('--bmp-lite'),
   caps: () => call('app:caps'),
   latest: () => call('app:latest'),
   system: {

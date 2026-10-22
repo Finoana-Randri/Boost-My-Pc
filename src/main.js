@@ -48,6 +48,8 @@ function createWindow() {
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      // Lets the page start in lightweight mode before its first render.
+      additionalArguments: [liteMode() ? '--bmp-lite' : '--bmp-full'],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

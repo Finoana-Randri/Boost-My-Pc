@@ -6,6 +6,7 @@ const IS_LINUX = pcm.platform === 'linux';
 document.body.classList.add(IS_LINUX ? 'linux' : 'windows');
 // Detail view mode: list by default, cards if the user chose them
 try { if (localStorage.getItem('detailView') === 'cards') document.body.classList.add('view-cards'); } catch {}
+document.body.classList.toggle('lite', !!pcm.lite);
 let CAPS = { platform: pcm.platform, tools: [], isAdmin: false };
 let PATHS = { home: '', pictures: '', downloads: '', root: '/' };
 const UPDATES_NAME = IS_LINUX ? 'Mises à jour du système' : 'Windows Update';
@@ -272,10 +273,11 @@ function bindSelection(root, { onDone, onAction, confirmText } = {}) {
     if (!paths.length) return;
     if (onAction) return onAction(paths);
     if (!(await confirmBox('Placer dans la corbeille ?', confirmText || `${plural(paths.length, 'élément sera déplacé', 'éléments seront déplacés')} vers la corbeille. Vous pourrez les restaurer.`, 'Placer dans la corbeille'))) return;
+    const t = pageToken;
     const r = await safe(() => pcm.file.trash(paths));
     if (!r) return;
     toast(`${plural(r.done, 'élément déplacé', 'éléments déplacés')} vers la corbeille${r.failed ? ` · ${r.failed} échec(s)` : ''}`);
-    onDone?.();
+    if (t === pageToken) onDone?.();
   };
   upd();
   return upd;
@@ -493,6 +495,13 @@ PAGES.cleanup = async (token) => {
   };
 };
 
+// One icon per cleanup category.
+const CLEAN_ICONS = {
+  temp: 'file', tmp: 'file', webcache: 'globe', thumbs: 'image', trash: 'box', recycle: 'box', appcache: 'apps',
+  devjunk: 'wrench', crash: 'warn', wer: 'warn', dumps: 'warn', journal: 'clock', logs: 'clock', pkgcache: 'download',
+  flatpakunused: 'download', delivery: 'update', wucache: 'update', dxcache: 'gauge', recent: 'eye',
+};
+
 function renderCleanResult(r, token) {
   const total = r.items.reduce((a, i) => a + i.size, 0);
   const empty = (i) => i.size === 0 && !(i.countOnly && i.files);
@@ -504,7 +513,7 @@ function renderCleanResult(r, token) {
     </div>
     <div class="list glass" id="clean-list">${r.items.map((i) => `
       <label class="row" style="cursor:pointer"><input type="checkbox" data-id="${i.id}" data-size="${i.size}" ${i.recommended && !empty(i) ? 'checked' : ''} ${empty(i) ? 'disabled' : ''}/>
-        <div class="r-ico tint">${ficon('broom')}</div>
+        <div class="r-ico tint">${ficon(CLEAN_ICONS[i.id] || 'box')}</div>
         <div class="r-main"><div class="r-title">${esc(i.name)} ${i.recommended ? '<span class="pill info">Recommandé</span>' : ''}</div><div class="r-sub">${esc(i.desc)}</div></div>
         <div class="r-meta">${i.countOnly ? `${i.files} élément(s)` : `<b>${fmtBytes(i.size)}</b><div class="small">${i.files || 0} fichier(s)</div>`}</div></label>`).join('')}</div>
     <div class="action-bar"><span class="summary" id="sel-size"></span><button class="btn-main" id="do-clean">Nettoyer</button></div>`);
@@ -1044,7 +1053,9 @@ async function appsUninstall(token, top) {
       b.disabled = true; b.innerHTML = '<span class="spinner"></span>';
       const r = await safe(() => pcm.apps.uninstall(a), 'Désinstallation');
       if (r) toast(r.finished ? `${a.name} a été désinstallée` : `Désinstallation de ${a.name} lancée`);
-      if (r?.finished) { all.splice(all.indexOf(a), 1); render(); } else { b.disabled = false; b.textContent = 'Désinstaller'; }
+      if (r?.finished) all.splice(all.indexOf(a), 1);
+      if (!alive(token)) return; // The user opened another page during the uninstall.
+      if (r?.finished) render(); else { b.disabled = false; b.textContent = 'Désinstaller'; }
     }));
     loadIcons();
   };
@@ -1645,12 +1656,12 @@ PAGES.settings = async (token) => {
     </div>
     <h2>Informations système</h2>
     <div class="card glass"><div class="kv">
-      <div>Appareil</div><div>${esc(info.hostname)} · ${esc([info.maker, info.model].filter(Boolean).join(' '))}</div>
+      <div>Appareil</div><div>${esc([info.hostname, [info.maker, info.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || '–')}</div>
       <div>Système</div><div>${esc(info.os)} (${IS_LINUX ? 'noyau' : 'build'} ${esc(info.build)})</div>
       ${IS_LINUX ? `<div>Bureau</div><div>${esc([info.desktop, info.session].filter(Boolean).join(' · ') || '–')}</div>` : ''}
       <div>Processeur</div><div>${esc(info.cpu)} · ${info.cores} cœurs</div>
       <div>Mémoire</div><div>${fmtBytes(info.totalMem)}</div>
-      <div>Carte graphique</div><div>${esc(info.gpu)}</div>
+      <div>Carte graphique</div><div>${esc(info.gpu || '–')}</div>
     </div></div>
     <h2>À propos</h2>
     <div class="card glass about"><img src="../../assets/icon.png" alt=""/><div><b>Boost My Pc</b><span>Version ${esc(CAPS.version || '')}</span></div><span id="s-latest"></span></div>`);
@@ -1685,11 +1696,15 @@ pcm.onAction((a) => {
 });
 
 // ===================== Startup =====================
+// Folder paths load instantly; system information (slow on Windows) loads in the background
+// so that Smart Care shows right away and the menu responds immediately.
 (async () => {
-  try { CAPS = await pcm.caps(); } catch {}
   try { PATHS = await pcm.v2.paths(); } catch {}
+  go('smart');
+  try { CAPS = await pcm.caps(); } catch {}
   document.body.classList.toggle('lite', !!CAPS.lite);
   $('#admin-badge').textContent = IS_LINUX ? 'root' : 'Administrateur';
   $('#admin-badge').classList.toggle('hidden', !CAPS.isAdmin);
-  go('smart');
+  // Redraw the pages that show this information if one of them is open.
+  if (['tools', 'settings'].includes(currentRoute)) go(currentRoute);
 })();
