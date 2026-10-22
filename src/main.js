@@ -1,5 +1,5 @@
 // Electron main process: windows, tray icon, and IPC for the Windows and Linux services.
-const { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage, dialog, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -58,11 +58,23 @@ function createWindow() {
     const quiet = process.argv.includes('--hidden') || (menubar && process.argv.includes('--mini'));
     if (!quiet || !tray) win.show();
   });
+  if (process.platform === 'win32') roundCorners(win);
   win.on('close', (e) => {
     if (!quitting && prefs.minimizeToTray && tray) { e.preventDefault(); win.hide(); }
   });
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   if (process.argv.includes('--dev')) win.webContents.openDevTools({ mode: 'detach' });
+}
+
+// Windows 11 does not always round windows with a custom title bar:
+// ask DWM for rounded corners (DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2).
+// Older Windows versions ignore the attribute.
+function roundCorners(w) {
+  const buf = w.getNativeWindowHandle();
+  const hwnd = buf.length >= 8 ? buf.readBigUInt64LE(0) : BigInt(buf.readUInt32LE(0));
+  const { runPS } = require('./services/ps');
+  runPS(`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class BmpDwm { [DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr h, int a, ref int v, int s); }'
+$v = 2; [void][BmpDwm]::DwmSetWindowAttribute([IntPtr]${hwnd}, 33, [ref]$v, 4)`, { timeout: 20000 }).catch(() => {});
 }
 
 function backgroundColor() {
@@ -131,6 +143,7 @@ async function capabilities() {
     desktop: info.desktop,
     isAdmin: await cleaner.isAdmin().catch(() => false),
     lite: liteMode(),
+    version: app.getVersion(),
     tools: tools.available(),
     packageManager: isLinux ? require('./services/linux/sh').packageManager() : null,
     hasFlatpak: isLinux && !!require('./services/linux/sh').which('flatpak'),
@@ -160,6 +173,13 @@ function handle(name, fn) {
 
 function registerIpc() {
   handle('app:caps', capabilities);
+  // Latest published version, shown in Settings > About.
+  handle('app:latest', async () => {
+    const res = await net.fetch('https://api.github.com/repos/Finoana-Randri/FastBoost/releases/latest', { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`GitHub ${res.status}`);
+    const r = await res.json();
+    return { version: String(r.tag_name || '').replace(/^v/, ''), url: r.html_url };
+  });
   handle('system:stats', () => system.getStats());
   handle('system:disks', () => system.getDisks());
   handle('system:info', () => system.getSystemInfo());
@@ -269,6 +289,7 @@ function registerV2() {
 
   handle('v2:smart:scan', () => smart.scan(progress('smart')));
   handle('v2:smart:run', () => smart.run(progress('smart')));
+  handle('v2:smart:cancel', () => smart.cancel());
   handle('v2:maint:list', () => maintenance.list());
   handle('v2:maint:run', (ids) => maintenance.run(ids || [], { boost }));
   handle('v2:privacy:scan', () => privacy.scan());

@@ -282,17 +282,20 @@ function bindSelection(root, { onDone, onAction, confirmText } = {}) {
 }
 
 // ===================== Smart Care =====================
+// Tile layout: Cleanup (tall), Protection in the center with the scan log,
+// Performance, then Applications and Storage around the round main button.
 const SMART_STEPS = {
-  cleanup: ['Nettoyage', 'broom', 'g-cleanup'],
-  protection: ['Protection', 'shield', 'g-protection'],
-  performance: ['Performances', 'gauge', 'g-performance'],
-  applications: ['Applications', 'apps', 'g-applications'],
-  clutter: ['Encombrement', 'layers', 'g-clutter'],
+  cleanup: ['Nettoyage', 'g-cleanup', 'cleanup'],
+  protection: ['Protection', 'g-protection', 'protection'],
+  performance: ['Performances', 'g-performance', 'performance'],
+  applications: ['Applications', 'g-applications', 'applications/updates'],
+  clutter: ['Encombrement', 'g-clutter', 'clutter/large'],
 };
+const SMART_ORDER = Object.keys(SMART_STEPS);
 let smartResult = null;
 
 PAGES.smart = async (token) => {
-  if (smartResult) return renderSmartResult(token);
+  if (smartResult) return smartShowResult(token);
   page(intro('smart', {
     lead: 'Une seule analyse pour nettoyer, protéger et accélérer votre PC. Boost My Pc vérifie cinq points et vous propose les actions utiles.',
     features: [
@@ -304,61 +307,171 @@ PAGES.smart = async (token) => {
       ['lock', 'Sans risque', 'Rien n\'est supprimé sans votre accord'],
     ],
   }));
-  $('#scan').onclick = async () => {
-    page(scanning('smart', 'Analyse en cours…', 'Préparation', { pct: 0 }));
-    progressHandlers.smart = (p) => {
-      if (!alive(token) || !p.step || p.index == null) return;
-      page(scanning('smart', `Analyse : ${SMART_STEPS[p.step][0]}`, `Étape ${p.index + 1} sur 5`, { pct: p.index / 5 }));
-    };
-    const r = await safe(() => pcm.v2.smartScan(), 'Analyse');
-    if (!alive(token)) return;
-    if (!r) return go('smart');
-    smartResult = r;
-    renderSmartResult(token);
-  };
+  $('#scan').onclick = () => smartScan(token);
 };
 
-function renderSmartResult(token) {
-  const s = Object.fromEntries(smartResult.steps.map((x) => [x.id, x]));
-  const card = (id, val, sub, state, link) => {
-    const [title, ic, g] = SMART_STEPS[id];
-    return `<div class="result-card glass">
-      <div class="rc-ico ${g}">${micon(id)}</div>
-      <div class="muted small" style="font-weight:800">${title}</div>
-      <div class="rc-val">${val}</div>
-      <div class="rc-sub">${sub}</div>
-      <div class="rc-state">${state}</div>
-      <button class="btn" data-go="${link}">Examiner</button></div>`;
-  };
-  const ok = (t) => `<span class="pill ok">${icon('check')} ${t}</span>`;
-  const warn = (t) => `<span class="pill warn">${t}</span>`;
-  const c = s.cleanup || {}, p = s.protection || {}, pe = s.performance || {}, a = s.applications || {}, cl = s.clutter || {};
-  const issues = smartResult.steps.reduce((n, x) => n + (x.issues || 0), 0);
-  const willClean = c.size || 0;
-  const willTasks = (pe.tasks || []).length;
-  page(`${header('smart')}
-    <p class="lead">${issues ? `Nous avons trouvé ${plural(issues, 'point à traiter', 'points à traiter')}.` : 'Votre PC est en pleine forme.'} Les actions sûres seront appliquées en un clic ; le reste est à examiner.</p>
-    <div class="cards c5">
-      ${card('cleanup', c.error ? '–' : fmtBytes(c.size), c.error ? esc(c.error) : 'de fichiers inutiles à supprimer', c.size > 0 ? warn('À nettoyer') : ok('Propre'), 'cleanup')}
-      ${card('protection', p.error ? '–' : plural(p.threats?.length || 0, 'menace', 'menaces'), esc(p.note || (IS_LINUX ? 'Analyse heuristique des points d\'entrée' : '')), p.threats?.length ? `<span class="pill bad">À examiner</span>` : ok('Protégé'), 'protection')}
-      ${card('performance', plural(willTasks, 'tâche', 'tâches'), `de maintenance recommandées · ${plural(pe.startup || 0, 'app', 'apps')} au démarrage`, willTasks ? warn('À exécuter') : ok('Optimisé'), 'performance')}
-      ${card('applications', a.error ? '–' : plural(a.updates || 0, 'mise à jour', 'mises à jour'), a.security ? `dont ${a.security} de sécurité` : (a.pendingReboot ? 'Redémarrage nécessaire' : 'disponibles'), a.updates ? warn('À installer') : ok('À jour'), 'applications/updates')}
-      ${card('clutter', plural(cl.count || 0, 'fichier', 'fichiers'), cl.count ? `${fmtBytes(cl.size)} de gros téléchargements anciens` : 'Aucun gros fichier oublié', cl.count ? warn('À trier') : ok('Rangé'), 'clutter/large')}
-    </div>
-    <div class="action-bar">
-      <span class="summary">${willClean || willTasks ? `Nettoyer ${fmtBytes(willClean)} · ${plural(willTasks, 'tâche', 'tâches')}` : 'Rien à exécuter automatiquement'}</span>
-      <button class="btn-main" id="smart-run" ${willClean || willTasks ? '' : 'disabled'}>Exécuter</button>
-      <button class="btn" id="smart-new">${icon('refresh')} Relancer</button>
+function smartTile(id, cls = '') {
+  const [title, g, link] = SMART_STEPS[id];
+  return `<div class="sc-tile glass ${cls}" data-id="${id}" data-state="wait">
+    <div class="sc-art ${g}">${micon(id)}</div>
+    <div class="sc-text"><div class="sc-name">${title}</div><div class="sc-val">En attente…</div><div class="sc-sub"></div></div>
+    <button class="sc-link hidden" data-go="${link}">Examiner ${icon('chevron')}</button>
+  </div>`;
+}
+
+// Draw the board once; the tiles are then updated in place so the transitions stay smooth.
+function smartBoard() {
+  const R = 58, C = 2 * Math.PI * R;
+  page(`<div class="sc-head"><h1 id="sc-title">Entretien intelligent</h1><p class="lead" id="sc-lead"></p></div>
+    <div class="sc-grid enter">
+      ${smartTile('cleanup', 'tall')}
+      <div class="sc-tile sc-hero glass" data-id="protection" data-state="wait">
+        <div class="sc-art g-protection">${micon('protection')}</div>
+        <div class="sc-text"><div class="sc-name">Protection</div><div class="sc-val">En attente…</div><div class="sc-sub"></div></div>
+        <ul class="sc-log">${SMART_ORDER.map((id) => `<li data-log="${id}" data-state="wait"><span class="sc-dot"></span><b>${SMART_STEPS[id][0]}</b><span class="sc-log-val">En attente</span></li>`).join('')}</ul>
+        <button class="sc-link hidden" data-go="protection">Examiner ${icon('chevron')}</button>
+      </div>
+      ${smartTile('performance')}
+      ${smartTile('applications', 'wide')}
+      <div class="sc-center">
+        <button class="sc-btn" id="sc-btn"><svg viewBox="0 0 132 132"><circle cx="66" cy="66" r="${R}" class="sc-track"/><circle cx="66" cy="66" r="${R}" class="sc-arc" id="sc-arc" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg><span id="sc-btn-label">Arrêter</span></button>
+        <div class="sc-hint" id="sc-hint"></div>
+      </div>
+      ${smartTile('clutter', 'wide')}
     </div>`);
-  $('#smart-new').onclick = () => { smartResult = null; go('smart'); };
-  $('#smart-run').onclick = async () => {
-    page(scanning('smart', 'Exécution…', 'Nettoyage et maintenance'));
-    const r = await safe(() => pcm.v2.smartRun(), 'Exécution');
-    smartResult = null;
-    if (!alive(token)) return;
-    if (!r) return go('smart');
-    page(doneView('smart', 'Entretien terminé', `${fmtBytes(r.freed)} libérés · ${plural(r.tasks, 'tâche effectuée', 'tâches effectuées')}`, 'smart'));
+  setTimeout(() => $('.sc-grid')?.classList.remove('enter'), 1000);
+  return {
+    progress(pct) { const a = $('#sc-arc'); if (a) a.style.strokeDashoffset = C * (1 - Math.max(0, Math.min(1, pct))); },
   };
+}
+
+function smartSet(id, state, val, sub = '') {
+  const t = $(`.sc-tile[data-id="${id}"]`);
+  if (t) {
+    t.dataset.state = state;
+    t.querySelector('.sc-val').innerHTML = val;
+    t.querySelector('.sc-sub').innerHTML = sub;
+    t.querySelector('.sc-link').classList.toggle('hidden', !['ok', 'warn', 'bad', 'done'].includes(state));
+  }
+  const l = $(`[data-log="${id}"]`);
+  if (l) {
+    l.dataset.state = state;
+    l.querySelector('.sc-log-val').innerHTML = state === 'active' ? 'Analyse…' : state === 'wait' ? 'En attente' : val;
+  }
+}
+
+async function smartScan(token) {
+  smartResult = null;
+  const board = smartBoard();
+  $('#sc-lead').textContent = 'Analyse de votre PC en cours…';
+  $('#sc-hint').textContent = 'Préparation';
+  const btn = $('#sc-btn');
+  btn.classList.add('busy');
+  btn.onclick = () => { btn.disabled = true; $('#sc-btn-label').textContent = 'Arrêt…'; pcm.v2.smartCancel(); };
+  progressHandlers.smart = (p) => {
+    if (!alive(token) || p.index == null) return;
+    SMART_ORDER.forEach((id, i) => {
+      if (i < p.index && $(`.sc-tile[data-id="${id}"]`)?.dataset.state === 'active') smartSet(id, 'scanned', 'Analysé');
+    });
+    if (p.index < 5) {
+      smartSet(p.step, 'active', 'Analyse…');
+      $('#sc-hint').textContent = `${SMART_STEPS[p.step][0]} · étape ${p.index + 1} sur 5`;
+    }
+    board.progress(p.index / 5);
+  };
+  let r;
+  try { r = await pcm.v2.smartScan(); }
+  catch (e) {
+    if (alive(token)) { if (!/arrêtée/.test(e.message)) toast(`Analyse : ${e.message}`, true); go('smart'); }
+    return;
+  }
+  if (!alive(token)) return;
+  smartResult = r;
+  board.progress(1);
+  await new Promise((res) => setTimeout(res, 350));
+  if (alive(token)) smartShowResult(token, true);
+}
+
+function smartShowResult(token, animated = false) {
+  if (!animated) smartBoard().progress(1);
+  const s = Object.fromEntries(smartResult.steps.map((x) => [x.id, x]));
+  const c = s.cleanup || {}, p = s.protection || {}, pe = s.performance || {}, a = s.applications || {}, cl = s.clutter || {};
+  const tasks = (pe.tasks || []).length;
+  const threats = p.threats?.length || 0;
+  const values = {
+    cleanup: c.error ? ['bad', 'Indisponible', esc(c.error)] : c.size > 0 ? ['warn', fmtBytes(c.size), 'de fichiers inutiles à nettoyer'] : ['ok', 'Propre', 'Aucun fichier inutile'],
+    protection: p.error ? ['bad', 'Indisponible', esc(p.error)] : threats ? ['bad', plural(threats, 'menace', 'menaces'), 'à examiner'] : ['ok', 'Aucune menace', esc(p.note || (IS_LINUX ? 'Points d\'entrée vérifiés' : ''))],
+    performance: pe.error ? ['bad', 'Indisponible', esc(pe.error)] : tasks ? ['warn', plural(tasks, 'tâche', 'tâches'), `de maintenance · ${plural(pe.startup || 0, 'app', 'apps')} au démarrage`] : ['ok', 'Optimisé', `${plural(pe.startup || 0, 'app', 'apps')} au démarrage`],
+    applications: a.error ? ['bad', 'Indisponible', esc(a.error)] : a.updates ? ['warn', plural(a.updates, 'mise à jour', 'mises à jour'), a.security ? `dont ${a.security} de sécurité` : 'disponibles'] : ['ok', 'À jour', a.pendingReboot ? 'Redémarrage nécessaire' : 'Aucune mise à jour en attente'],
+    clutter: cl.error ? ['bad', 'Indisponible', esc(cl.error)] : cl.count ? ['warn', plural(cl.count, 'gros fichier', 'gros fichiers'), `${fmtBytes(cl.size)} dans les téléchargements`] : ['ok', 'Rangé', 'Aucun gros fichier oublié'],
+  };
+  SMART_ORDER.forEach((id, i) => setTimeout(() => alive(token) && smartSet(id, ...values[id]), animated ? i * 120 : 0));
+  const issues = smartResult.steps.reduce((n, x) => n + (x.issues || 0), 0);
+  const canRun = c.size > 0 || tasks > 0;
+  const btn = $('#sc-btn');
+  btn.classList.remove('busy');
+  btn.classList.add('ready');
+  btn.disabled = false;
+  $('#sc-title').textContent = issues ? 'Analyse terminée' : 'Votre PC est en pleine forme';
+  $('#sc-lead').textContent = issues
+    ? `${plural(issues, 'point à traiter', 'points à traiter')}. Les actions sûres s'appliquent en un clic ; le reste est à examiner.`
+    : 'Rien d\'urgent. Vous pouvez tout de même examiner chaque module.';
+  const what = [c.size > 0 ? `${fmtBytes(c.size)} à nettoyer` : '', tasks ? plural(tasks, 'tâche', 'tâches') : ''].filter(Boolean).join(' · ');
+  $('#sc-hint').innerHTML = `${what ? `${what} · ` : ''}<button class="link" id="sc-new">Nouvelle analyse</button>`;
+  $('#sc-btn-label').textContent = canRun ? 'Exécuter' : 'Analyser';
+  $('#sc-new').onclick = () => smartScan(token);
+  btn.onclick = () => (canRun ? smartRun(token, values) : smartScan(token));
+}
+
+async function smartRun(token, values) {
+  const s = Object.fromEntries(smartResult.steps.map((x) => [x.id, x]));
+  const btn = $('#sc-btn');
+  btn.classList.remove('ready');
+  btn.classList.add('busy');
+  btn.disabled = true;
+  $('#sc-btn-label').textContent = 'En cours';
+  $('#sc-title').textContent = 'Entretien en cours…';
+  $('#sc-lead').textContent = 'Nettoyage des fichiers inutiles et maintenance du système.';
+  $('#sc-hint').textContent = '';
+  const steps = ['cleanup', 'performance'].filter((id) => (id === 'cleanup' ? s.cleanup?.size > 0 : s.performance?.tasks?.length));
+  steps.forEach((id) => smartSet(id, 'queued', values[id][1], 'en attente…'));
+  progressHandlers.smart = (p) => {
+    if (!alive(token) || !p.step || p.index != null) return;
+    if (p.step === 'performance' && steps.includes('cleanup')) smartSet('cleanup', 'done', 'Nettoyé', `${fmtBytes(s.cleanup.size)} supprimés`);
+    smartSet(p.step, 'active', p.step === 'cleanup' ? 'Nettoyage…' : 'Maintenance…', values[p.step][1]);
+    $('#sc-hint').textContent = p.step === 'cleanup' ? 'Suppression des fichiers inutiles' : 'Tâches de maintenance';
+  };
+  const r = await safe(() => pcm.v2.smartRun(), 'Exécution');
+  smartResult = null;
+  if (!alive(token)) return;
+  if (!r) return go('smart');
+  if (steps.includes('cleanup')) smartSet('cleanup', 'done', 'Nettoyé', `${fmtBytes(r.freed)} libérés`);
+  if (steps.includes('performance')) smartSet('performance', 'done', 'Optimisé', plural(r.tasks, 'tâche effectuée', 'tâches effectuées'));
+  btn.classList.remove('busy');
+  btn.classList.add('ready', 'finished');
+  btn.disabled = false;
+  $('#sc-btn-label').innerHTML = icon('check');
+  $('#sc-title').textContent = 'Entretien terminé';
+  $('#sc-lead').textContent = `${fmtBytes(r.freed)} libérés · ${plural(r.tasks, 'tâche effectuée', 'tâches effectuées')}.`;
+  $('#sc-hint').innerHTML = '<button class="link" id="sc-new">Nouvelle analyse</button>';
+  $('#sc-new').onclick = () => smartScan(token);
+  btn.onclick = () => smartScan(token);
+  celebrate(btn);
+}
+
+// Small burst of particles around an element when a task finishes.
+function celebrate(el) {
+  if (document.body.classList.contains('lite') || !el) return;
+  const box = el.getBoundingClientRect();
+  const colors = ['#f133c5', '#7c5cff', '#4be3a0', '#ffc53d', '#4fc3ff'];
+  for (let i = 0; i < 22; i++) {
+    const d = document.createElement('i');
+    d.className = 'confetti';
+    const ang = (i / 22) * Math.PI * 2, dist = 80 + Math.random() * 70;
+    d.style.cssText = `left:${box.left + box.width / 2}px;top:${box.top + box.height / 2}px;background:${colors[i % colors.length]};--dx:${Math.cos(ang) * dist}px;--dy:${Math.sin(ang) * dist}px;animation-delay:${Math.random() * 80}ms`;
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 1100);
+  }
 }
 
 // ===================== Cleanup =====================
@@ -1184,8 +1297,21 @@ async function clutterDownloads(token, top) {
 // ===================== Disk Map =====================
 let lensData = null;
 let lensPath = [];
+let lensJob = null; // Scan in progress: { root, promise }
+
+// Scan screen of the Disk Map. If the user leaves and comes back, it picks up the scan in progress.
+async function lensWait(token) {
+  page(scanning('lens', 'Cartographie du disque…', lensJob.root, { stop: true }));
+  $('#scan-stop').onclick = () => pcm.v2.lensCancel();
+  progressHandlers.lens = (p) => alive(token) && setScan(`${p.dirs.toLocaleString('fr-FR')} dossiers · ${p.files.toLocaleString('fr-FR')} fichiers`, p.current);
+  const res = await lensJob.promise;
+  if (!alive(token)) return;
+  if (!res) return go('lens');
+  renderLens(token);
+}
 
 PAGES.lens = async (token) => {
+  if (lensJob) return lensWait(token);
   if (lensData) return renderLens(token);
   page(intro('lens', {
     lead: 'Visualisez ce qui occupe votre disque sous forme de carte interactive. Cliquez sur un dossier pour l\'explorer, supprimez ce qui ne sert plus.',
@@ -1194,55 +1320,71 @@ PAGES.lens = async (token) => {
     button: 'Analyser',
   }));
   let root = PATHS.home;
-  const start = async (r) => {
+  const start = (r) => {
     root = r;
-    page(scanning('lens', 'Cartographie du disque…', root, { stop: true }));
-    $('#scan-stop').onclick = () => pcm.v2.lensCancel();
-    progressHandlers.lens = (p) => alive(token) && setScan(`${p.dirs} dossiers · ${p.files} fichiers`, p.current);
-    const res = await safe(() => pcm.v2.lensScan(root), 'Carte du disque');
-    if (!res || !alive(token)) return go('lens');
-    lensData = res;
-    lensPath = [res.tree];
-    renderLens(token);
+    const job = { root, promise: null };
+    job.promise = safe(() => pcm.v2.lensScan(root), 'Carte du disque').then((res) => {
+      if (lensJob === job) lensJob = null;
+      if (res) { lensData = res; lensPath = [res.tree]; }
+      return res;
+    });
+    lensJob = job;
+    lensWait(token);
   };
   $$('[data-root]').forEach((b) => (b.onclick = () => start(b.dataset.root)));
   $('#lens-pick').onclick = async () => { const p = await pcm.storage.pickFolder(); if (p) start(p); };
   $('#scan').onclick = () => start(root);
 };
 
-// Squarified treemap: split the area into tiles with similar proportions.
-function squarify(items, x, y, w, h) {
-  const total = items.reduce((a, i) => a + i.size, 0);
-  if (!total || w <= 0 || h <= 0) return [];
-  const area = w * h;
-  const nodes = items.map((i) => ({ item: i, a: (i.size / total) * area }));
-  const out = [];
-  let rect = { x, y, w, h };
-  let row = [];
-  const worst = (r, side) => {
-    const s = r.reduce((a, n) => a + n.a, 0);
-    const mx = Math.max(...r.map((n) => n.a)), mn = Math.min(...r.map((n) => n.a));
-    return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn));
-  };
-  const layoutRow = (r) => {
-    const s = r.reduce((a, n) => a + n.a, 0);
-    if (rect.w >= rect.h) {
-      const cw = s / rect.h; let cy = rect.y;
-      for (const n of r) { const ch = n.a / cw; out.push({ ...n, x: rect.x, y: cy, w: cw, h: ch }); cy += ch; }
-      rect = { x: rect.x + cw, y: rect.y, w: rect.w - cw, h: rect.h };
-    } else {
-      const ch = s / rect.w; let cx = rect.x;
-      for (const n of r) { const cw = n.a / ch; out.push({ ...n, x: cx, y: rect.y, w: cw, h: ch }); cx += cw; }
-      rect = { x: rect.x, y: rect.y + ch, w: rect.w, h: rect.h - ch };
+// Circle packing: place circles from largest to smallest, each one touching two already
+// placed circles, as close to the center as possible. The aspect ratio stretches
+// the cluster so it fills a wide area.
+function packCircles(radii, aspect = 1) {
+  const placed = [];
+  const fits = (c) => placed.every((p) => Math.hypot(p.x - c.x, p.y - c.y) >= p.r + c.r - 1e-6);
+  const cost = (c) => (c.x / aspect) ** 2 + c.y ** 2;
+  for (const r of radii) {
+    if (!placed.length) { placed.push({ x: 0, y: 0, r }); continue; }
+    if (placed.length === 1) { placed.push({ x: placed[0].r + r, y: 0, r }); continue; }
+    let best = null, bestCost = Infinity;
+    for (let i = 0; i < placed.length; i++) {
+      for (let j = i + 1; j < placed.length; j++) {
+        const a = placed[i], b = placed[j];
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        const r1 = a.r + r, r2 = b.r + r;
+        if (!d || d > r1 + r2 || d < Math.abs(r1 - r2)) continue;
+        const k = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
+        const h = Math.sqrt(Math.max(0, r1 * r1 - k * k));
+        const px = a.x + (k * dx) / d, py = a.y + (k * dy) / d;
+        for (const s of [1, -1]) {
+          const c = { x: px - (s * h * dy) / d, y: py + (s * h * dx) / d, r };
+          const v = cost(c);
+          if (v < bestCost && fits(c)) { best = c; bestCost = v; }
+        }
+      }
     }
-  };
-  for (const n of nodes) {
-    const side = Math.min(rect.w, rect.h);
-    if (!row.length || worst([...row, n], side) <= worst(row, side)) row.push(n);
-    else { layoutRow(row); row = [n]; }
+    placed.push(best || { x: placed.reduce((m, p) => Math.max(m, p.x + p.r), 0) + r, y: 0, r });
   }
-  if (row.length) layoutRow(row);
-  return out;
+  return placed;
+}
+
+// Pack and scale circles into a w × h box (or inside a circle when round is set).
+function packInto(sizes, w, h, { round = false, pad = 0 } = {}) {
+  const pack = packCircles(sizes.map((s) => Math.sqrt(s)), round ? 1 : w / h);
+  if (!pack.length) return [];
+  let scale, ox, oy;
+  if (round) {
+    const cx = pack.reduce((a, p) => a + p.x, 0) / pack.length, cy = pack.reduce((a, p) => a + p.y, 0) / pack.length;
+    const R = Math.max(...pack.map((p) => Math.hypot(p.x - cx, p.y - cy) + p.r));
+    scale = (Math.min(w, h) / 2 - pad) / R;
+    ox = w / 2 - cx * scale; oy = h / 2 - cy * scale;
+  } else {
+    const x0 = Math.min(...pack.map((p) => p.x - p.r)), x1 = Math.max(...pack.map((p) => p.x + p.r));
+    const y0 = Math.min(...pack.map((p) => p.y - p.r)), y1 = Math.max(...pack.map((p) => p.y + p.r));
+    scale = Math.min((w - pad * 2) / (x1 - x0), (h - pad * 2) / (y1 - y0));
+    ox = (w - (x1 - x0) * scale) / 2 - x0 * scale; oy = (h - (y1 - y0) * scale) / 2 - y0 * scale;
+  }
+  return pack.map((p) => ({ x: ox + p.x * scale, y: oy + p.y * scale, r: p.r * scale }));
 }
 
 // Disk Map colors: hand-picked gradients that work on the purple background.
@@ -1284,7 +1426,7 @@ function renderLens(token) {
   page(`${header('lens')}
     <div class="crumbs">${lensPath.map((n, i) => `<button class="crumb ${i === lensPath.length - 1 ? 'current' : ''}" data-crumb="${i}">${esc(i === 0 ? n.path : n.name)}</button>`).join('')}
       <div class="grow"></div><span class="muted small">${fmtBytes(node.size)} · ${node.files.toLocaleString('fr-FR')} fichiers</span><button class="btn" id="lens-new">${icon('refresh')} Nouvelle analyse</button></div>
-    <div class="lens-wrap"><div><div class="treemap" id="tm"></div>
+    <div class="lens-wrap"><div><div class="bubbles" id="tm"></div>
       <div class="tm-legend">${kids.some((c) => c.dir) ? `<span><i style="background:${grad(LENS_PALETTE[0])}"></i>Dossiers (cliquez pour explorer)</span>` : ''}
         ${LENS_TYPES.filter(([n]) => usedTypes.has(n)).map(([n, , c]) => `<span><i style="background:${grad(c)}"></i>${n}</span>`).join('')}
         ${usedTypes.has('Autres fichiers') ? `<span><i style="background:${grad(LENS_PALETTE[8])}"></i>Autres fichiers</span>` : ''}
@@ -1297,29 +1439,43 @@ function renderLens(token) {
         <div class="r-meta"><b>${fmtBytes(c.size)}</b><div class="small">${Math.round((c.size / node.size) * 100)} %</div></div></div>`).join('')}</div></div>
     ${trashBar()}`);
   const tm = $('#tm');
-  const W = tm.clientWidth, H = Math.max(440, tm.clientHeight);
-  const GAP = 4;
-  const tiles = squarify(kids, 0, 0, W, H);
-  tm.innerHTML = tiles.map((t) => {
-    const idx = kids.indexOf(t.item);
-    const c = colors[idx];
-    const x = t.x + GAP / 2, y = t.y + GAP / 2, w = Math.max(0, t.w - GAP), h = Math.max(0, t.h - GAP);
-    const big = w > 150 && h > 90;
-    const label = w > 64 && h > 40;
-    // Show subfolders inside larger tiles (second level).
+  const W = tm.clientWidth, H = Math.max(460, tm.clientHeight);
+  const order = kids.map((c, i) => i).sort((a, b) => kids[b].size - kids[a].size);
+  const circles = packInto(order.map((i) => kids[i].size), W, H, { pad: 10 });
+  tm.innerHTML = circles.map((p, n) => {
+    const idx = order[n], item = kids[idx], c = colors[idx];
+    const r = Math.max(0, p.r - 3);
+    if (r < 5) return ''; // Too small to see; the item stays in the list.
+    // Show subfolders as small bubbles inside large folders (second level).
     let inner = '';
-    if (t.item.dir && w > 170 && h > 140 && t.item.children?.length > 1) {
-      const pad = 10, top = 46;
-      inner = squarify(t.item.children.filter((s) => s.size > 0 && !s.other).slice(0, 16), pad, top, w - pad * 2, h - top - 30)
-        .map((s) => `<span class="tm-sub" style="left:${s.x + 1.5}px;top:${s.y + 1.5}px;width:${Math.max(0, s.w - 3)}px;height:${Math.max(0, s.h - 3)}px">${s.w > 70 && s.h > 26 ? esc(s.item.name) : ''}</span>`).join('');
+    if (item.dir && r > 78 && item.children?.length > 1) {
+      const subs = item.children.filter((s) => s.size > 0 && !s.other).sort((a, b) => b.size - a.size).slice(0, 14);
+      inner = packInto(subs.map((s) => s.size), r * 2, r * 2, { round: true, pad: r * 0.12 })
+        .map((q, k) => `<span class="bb-sub" style="left:${q.x - q.r + 1.5}px;top:${q.y - q.r + 1.5}px;width:${Math.max(0, q.r * 2 - 3)}px;height:${Math.max(0, q.r * 2 - 3)}px;animation-delay:${0.25 + n * 0.03 + k * 0.02}s"></span>`).join('');
     }
-    return `<div class="tm-cell ${t.item.dir ? 'dir' : 'file'} ${t.item.other ? 'other' : ''} ${big ? 'big' : ''}" data-tile="${idx}" title="${esc(t.item.name)} — ${fmtBytes(t.item.size)}"
-      style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;${c ? `background:${grad(c)};--glow:${c[0]}` : ''}">
-      ${label ? `<div class="tm-label">${t.item.dir ? icon('folder') : t.item.other ? '' : icon('file')}<span class="tm-name">${esc(t.item.name)}</span></div><span class="tm-size">${fmtBytes(t.item.size)}</span>` : ''}${inner}</div>`;
+    const label = r > 30;
+    return `<div class="bubble ${item.dir ? 'dir' : 'file'} ${item.other ? 'other' : ''} ${r > 90 ? 'big' : ''}" data-tile="${idx}" title="${esc(item.name)} — ${fmtBytes(item.size)}"
+      style="left:${p.x - r}px;top:${p.y - r}px;width:${r * 2}px;height:${r * 2}px;animation-delay:${Math.min(n * 0.035, 0.6)}s;${c ? `--c1:${c[0]};--c2:${c[1]}` : ''}">
+      ${inner}${label ? `<div class="bb-label"><span class="bb-name">${esc(item.name)}</span><span class="bb-size">${fmtBytes(item.size)}</span></div>` : ''}</div>`;
   }).join('');
-  const open = (c) => { if (c?.dir && c.children?.length) { lensPath.push(c); renderLens(token); } };
-  $$('[data-tile]').forEach((el) => (el.onclick = () => open(kids[Number(el.dataset.tile)])));
-  $$('[data-open]').forEach((el) => (el.onclick = () => open(kids[Number(el.dataset.open)])));
+  // Zoom into the clicked folder, then draw its content.
+  const open = (c, el) => {
+    if (!c?.dir || !c.children?.length) return;
+    if (el && !document.body.classList.contains('lite')) {
+      tm.style.transformOrigin = `${el.offsetLeft + el.offsetWidth / 2}px ${el.offsetTop + el.offsetHeight / 2}px`;
+      tm.classList.add('zooming');
+      setTimeout(() => { if (alive(token)) { lensPath.push(c); renderLens(token); } }, 320);
+    } else { lensPath.push(c); renderLens(token); }
+  };
+  $$('[data-tile]').forEach((el) => (el.onclick = () => open(kids[Number(el.dataset.tile)], el)));
+  $$('[data-open]').forEach((el) => (el.onclick = () => open(kids[Number(el.dataset.open)], $(`[data-tile="${el.dataset.open}"]`))));
+  // Hovering a row highlights its bubble, and the other way around.
+  $$('#lens-list .row').forEach((row, i) => {
+    const b = $(`[data-tile="${i}"]`);
+    row.onmouseenter = () => b?.classList.add('hl');
+    row.onmouseleave = () => b?.classList.remove('hl');
+    if (b) { b.onmouseenter = () => row.classList.add('hl'); b.onmouseleave = () => row.classList.remove('hl'); }
+  });
   $$('[data-crumb]').forEach((b) => (b.onclick = () => { lensPath = lensPath.slice(0, Number(b.dataset.crumb) + 1); renderLens(token); }));
   $('#lens-new').onclick = () => { lensData = null; go('lens'); };
   bindSelection($('#lens-list'), {
@@ -1497,7 +1653,16 @@ PAGES.settings = async (token) => {
       <div>Carte graphique</div><div>${esc(info.gpu)}</div>
     </div></div>
     <h2>À propos</h2>
-    <div class="card glass small muted">Boost My Pc 2.0.0 — interface inspirée de la palette de CleanMyMac et fonctions reconstruites à partir de l'analyse REA de Microsoft PC Manager. Projet indépendant, non affilié à Microsoft ni à MacPaw.</div>`);
+    <div class="card glass about"><img src="../../assets/icon.png" alt=""/><div><b>Boost My Pc</b><span>Version ${esc(CAPS.version || '')}</span></div><span id="s-latest"></span></div>`);
+  pcm.latest().then((l) => {
+    const el = $('#s-latest');
+    if (!el || !l?.version) return;
+    const newer = l.version.localeCompare(CAPS.version || '', undefined, { numeric: true }) > 0;
+    el.outerHTML = newer
+      ? `<button class="btn" id="s-update">${icon('download')} Version ${esc(l.version)} disponible</button>`
+      : `<span class="pill ok">${icon('check')} À jour</span>`;
+    $('#s-update') && ($('#s-update').onclick = () => window.open(l.url));
+  }).catch(() => {});
   $('#s-theme').value = p.theme;
   $('#s-fx').value = p.effects || 'auto';
   $('#s-fx').onchange = async (e) => {

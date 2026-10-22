@@ -30,6 +30,7 @@ const STEPS = [
   const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
   const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true })).result.result?.value;
   await send('Runtime.enable');
+  await send('Page.bringToFront');
   await new Promise((r) => setTimeout(r, 2500));
   for (const [route, click, until] of STEPS) {
     const t0 = Date.now();

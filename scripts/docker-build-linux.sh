@@ -3,7 +3,7 @@
 # Run: docker run -v ./:/src:ro -v ./dist:/out electronuserland/builder:20 sh /src/scripts/docker-build-linux.sh
 set -e
 mkdir -p /build
-cp -r /src/src /src/assets /src/package.json /src/package-lock.json /build/
+cp -r /src/src /src/assets /src/build /src/package.json /src/package-lock.json /build/
 cd /build
 npm ci --no-audit --no-fund --silent
 npx electron-builder --linux AppImage deb --publish never

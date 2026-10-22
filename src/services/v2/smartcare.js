@@ -15,14 +15,17 @@ function downloadsDir() {
 function createSmartCare(services) {
   const { cleaner, protection, apps, storage, maintenance, malware } = services;
   let last = null;
+  let cancelled = false;
 
   async function step(id, fn, onProgress, index) {
+    if (cancelled) throw new Error('Analyse arrêtée.');
     onProgress?.({ step: id, index, total: 5 });
     try { return { id, ...(await fn()) }; }
     catch (e) { return { id, error: e.message, issues: 0 }; }
   }
 
   async function scan(onProgress) {
+    cancelled = false;
     const steps = [];
     steps.push(await step('cleanup', async () => {
       const r = await cleaner.scan('health');
@@ -50,6 +53,8 @@ function createSmartCare(services) {
       const size = files.reduce((a, f) => a + f.size, 0);
       return { files: files.slice(0, 10), count: files.length, size, issues: files.length ? 1 : 0 };
     }, onProgress, 4));
+    if (cancelled) throw new Error('Analyse arrêtée.');
+    onProgress?.({ step: 'clutter', index: 5, total: 5 });
     last = { steps, at: Date.now() };
     return last;
   }
@@ -74,7 +79,10 @@ function createSmartCare(services) {
     return res;
   }
 
-  return { scan, run };
+  // Stop the scan before its next step.
+  const cancel = () => { cancelled = true; };
+
+  return { scan, run, cancel };
 }
 
 module.exports = { createSmartCare };

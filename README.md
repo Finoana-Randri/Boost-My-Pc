@@ -40,19 +40,19 @@ One scan checks five areas; one click applies safe actions.
 |---|---|---|
 | ![Shredder](docs/screenshots/v2/11-broyeur.png) | ![Tools](docs/screenshots/v2/12-outils.png) | ![Settings](docs/screenshots/v2/13-parametres.png) |
 
-> Screenshots were captured on Debian 12 (Xvfb) with test data; the desktop panel and window controls are not shown. They predate the card overviews described below.
+> Screenshots were captured on Debian 12 (Xvfb) with test data; the desktop panel and window controls are not shown. The Smart Care and Disk Map screenshots show version 2.0.2.
 
 ## Modules
 
 | Module | What it does |
 |---|---|
-| **Smart Care** | Checks for junk files, threats, maintenance tasks, updates, and large forgotten files in one scan. **Run** applies safe actions. |
+| **Smart Care** | Checks for junk files, threats, maintenance tasks, updates, and large forgotten files in one scan. Results appear as tiles around a round button that shows progress; **Run** applies safe actions, and **Stop** ends the scan. |
 | **Cleanup** | Cleans system and browser caches, temporary files, logs, crash reports, package caches, development caches (npm, pip, Yarn, Gradle, Cargo), and the trash. |
 | **Protection** | Runs quick, standard, or deep scans (ClamAV with heuristic scanning on Linux; Microsoft Defender on Windows); manages privacy data (history, cookies, sessions — never passwords or bookmarks); checks app permissions (Flatpak on Linux, camera/microphone/location on Windows) and firewall status. |
 | **Performance** | Runs maintenance tasks (DNS, fonts, SSD TRIM, logs, orphaned packages, and more), manages startup apps, finds resource-heavy processes, and diagnoses network issues. |
 | **Applications** | Uninstalls apps (apt, dnf, pacman, zypper, Flatpak, Snap on Linux; Windows apps and Microsoft Store apps), finds leftovers from removed apps, and checks for updates. |
 | **Storage** | Finds exact duplicates, similar images (perceptual hash), large and old files, and downloads. |
-| **Disk Map** | Explore folder sizes interactively and remove items you no longer need. |
+| **Disk Map** | Shows folders and files as bubbles sized by disk usage. Click a folder to zoom in, and remove items you no longer need. The scan runs in a separate process, so a slow or unresponsive folder can't block it. |
 | **Cloud Cleanup** | Finds large and old files in OneDrive, Dropbox, Google Drive, Nextcloud, and other synced folders. Includes **Free up local space** for OneDrive. |
 | **Shredder** | Permanently deletes files by overwriting them with random data (1, 3, or 7 passes). Supports drag and drop. |
 | **Mini panel** | On Linux, click the top-bar icon to open a compact panel with system status, Boost, trash, and updates. Run `boost-my-pc --mini` to open it from a keyboard shortcut. |
@@ -71,17 +71,17 @@ Download the installers from the [latest release](https://github.com/Finoana-Ran
 
 ```bash
 # Debian / Ubuntu / Mint / Pop!_OS
-sudo apt install ./Boost-My-Pc-2.0.1.deb
+sudo apt install ./Boost-My-Pc-2.0.2.deb
 
 # All distributions
-chmod +x Boost-My-Pc-2.0.1.AppImage && ./Boost-My-Pc-2.0.1.AppImage
+chmod +x Boost-My-Pc-2.0.2.AppImage && ./Boost-My-Pc-2.0.2.AppImage
 ```
 
 On standard GNOME desktops (Fedora, Debian), install the *AppIndicator and KStatusNotifierItem Support* extension to show the top-bar icon.
 
 ### Windows
 
-1. Download `Boost-My-Pc-Setup-2.0.1.exe` from the latest release.
+1. Download `Boost-My-Pc-Setup-2.0.2.exe` from the latest release.
 2. Run it. The setup wizard (in French) lets you choose the install folder, then creates **Boost My Pc** shortcuts on the desktop and in the Start menu, and launches the app.
 3. The installer is not code-signed yet, so Windows SmartScreen may show *Windows protected your PC*. Select **More info**, then **Run anyway**.
 

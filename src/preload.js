@@ -10,6 +10,7 @@ const call = async (channel, ...args) => {
 contextBridge.exposeInMainWorld('pcm', {
   platform: process.platform,
   caps: () => call('app:caps'),
+  latest: () => call('app:latest'),
   system: {
     stats: () => call('system:stats'),
     disks: () => call('system:disks'),
@@ -63,6 +64,7 @@ contextBridge.exposeInMainWorld('pcm', {
   v2: {
     smartScan: () => call('v2:smart:scan'),
     smartRun: () => call('v2:smart:run'),
+    smartCancel: () => call('v2:smart:cancel'),
     maintList: () => call('v2:maint:list'),
     maintRun: (ids) => call('v2:maint:run', ids),
     privacyScan: () => call('v2:privacy:scan'),

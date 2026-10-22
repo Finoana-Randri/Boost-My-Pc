@@ -13,7 +13,7 @@ mkdir -p $H/app "$H/.config/Boost My Pc" $H/Downloads $H/Pictures/vacances $H/Dr
 cp -r /src/src /src/assets /src/package.json /src/scripts $H/app/
 echo "{\"theme\":\"$THEME\"}" > "$H/.config/Boost My Pc/preferences.json"
 # Images: identical and near-identical copies (including a renamed copy) for Similar Images.
-for f in /src/docs/screenshots/*.png; do cp "$f" $H/Pictures/; cp "$f" "$H/Pictures/vacances/copie-$(basename "$f")"; done
+for f in /src/docs/screenshots/v2/*.png; do cp "$f" $H/Pictures/; cp "$f" "$H/Pictures/vacances/copie-$(basename "$f")"; done
 # Cloud: a Dropbox folder with a large old file.
 head -c 30000000 /dev/urandom > $H/Dropbox/projets/video-2024.mp4 && touch -d '2 years ago' $H/Dropbox/projets/video-2024.mp4
 head -c 2000000 /dev/urandom > $H/Dropbox/projets/archive.zip && touch -d '18 months ago' $H/Dropbox/projets/archive.zip
@@ -23,6 +23,8 @@ touch -d '200 days ago' $H/.config/vieille-appli-supprimee/data.db $H/.config/vi
 # Test threat signals: an autostart entry and executable in /tmp.
 printf '#!/bin/sh\necho test\n' > /tmp/miner.sh && chmod +x /tmp/miner.sh && chown alix /tmp/miner.sh
 printf '[Desktop Entry]\nType=Application\nName=Updater\nExec=/tmp/miner.sh --silent\n' > $H/.config/autostart/updater.desktop
+# Junk files for Cleanup and Smart Care.
+head -c 5000000 /dev/urandom > $H/.cache/thumbnails/large/vignette.png
 # A large, old download.
 head -c 60000000 /dev/urandom > $H/Downloads/ancien-installateur.iso && touch -d '1 year ago' $H/Downloads/ancien-installateur.iso
 chown -R alix $H
@@ -37,4 +39,4 @@ RES=$(dirname "$(readlink -f /usr/bin/boost-my-pc)")/resources
 rm -f "$RES/app.asar" && mkdir -p "$RES/app" && cp -r /src/src /src/assets /src/package.json "$RES/app/"
 su alix -c "cd /home/alix/app && (XDG_CURRENT_DESKTOP=GNOME xvfb-run -a -s '-screen 0 1280x800x24' boost-my-pc --no-sandbox --disable-gpu --remote-debugging-port=9350 >/tmp/electron.log 2>&1 &) && \
   node scripts/cdp-shots.js /out 9350 smart:2500 cleanup:1500 protection:1500 performance:1500 applications:2500 lens:1500 shredder:1200 tools:2500 settings:2000 && \
-  node scripts/cdp-flows.js /out 9350 smart cleanup threats privacy permissions status maintenance startup leftovers updates lens similar large downloads cloud shredder || cat /tmp/electron.log"
+  node scripts/cdp-flows.js /out 9350 smart cleanup threats privacy permissions status maintenance startup leftovers updates lens similar large downloads cloud shredder &&   node scripts/cdp-steps.js 9350 /out 'eval:(smartResult=null,lensData=null,go(\"smart\"))' sleep:1000 'eval:document.querySelector(\"#scan\").click()' sleep:1500 shot:sc-1-analyse     wait:.sc-btn.ready sleep:1500 shot:sc-2-resultat 'eval:document.querySelector(\"#sc-btn\").click()' sleep:300 shot:sc-3-execution wait:.sc-btn.finished sleep:1200 shot:sc-4-termine     'eval:go(\"lens\")' sleep:800 'eval:document.querySelector(\"[data-root]\").click()' wait:.bubble sleep:1500 shot:carte-1     'eval:document.querySelector(\".bubble.dir\").click()' sleep:1500 shot:carte-2 'eval:go(\"settings\")' sleep:2000 shot:parametres || cat /tmp/electron.log"
