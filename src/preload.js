@@ -1,5 +1,5 @@
 // Pont sécurisé entre l'interface et le processus principal.
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const call = async (channel, ...args) => {
   const r = await ipcRenderer.invoke(channel, ...args);
@@ -59,6 +59,33 @@ contextBridge.exposeInMainWorld('pcm', {
   prefs: {
     get: () => call('prefs:get'),
     set: (p) => call('prefs:set', p),
+  },
+  v2: {
+    smartScan: () => call('v2:smart:scan'),
+    smartRun: () => call('v2:smart:run'),
+    maintList: () => call('v2:maint:list'),
+    maintRun: (ids) => call('v2:maint:run', ids),
+    privacyScan: () => call('v2:privacy:scan'),
+    privacyClean: (ids) => call('v2:privacy:clean', ids),
+    permList: () => call('v2:perm:list'),
+    permRevoke: (appId, permId) => call('v2:perm:revoke', appId, permId),
+    permReset: (appId) => call('v2:perm:reset', appId),
+    leftovers: () => call('v2:leftovers:scan'),
+    malwareScan: (kind) => call('v2:malware:scan', kind),
+    shred: (paths, opts) => call('v2:shred', paths, opts),
+    lensScan: (root) => call('v2:lens:scan', root),
+    lensCancel: () => call('v2:lens:cancel'),
+    similarFind: (root) => call('v2:similar:find', root),
+    similarCancel: () => call('v2:similar:cancel'),
+    cloudDetect: () => call('v2:cloud:detect'),
+    cloudAnalyze: (folder) => call('v2:cloud:analyze', folder),
+    cloudFreeUp: (paths) => call('v2:cloud:freeUp', paths),
+    cloudCancel: () => call('v2:cloud:cancel'),
+    pick: (opts) => call('file:pick', opts),
+    thumb: (p) => call('file:thumb', p),
+    paths: () => call('app:paths'),
+    // Chemin local d'un fichier glissé-déposé (Broyeur)
+    filePath: (file) => webUtils.getPathForFile(file),
   },
   ui: {
     openMain: (page) => call('ui:openMain', page),

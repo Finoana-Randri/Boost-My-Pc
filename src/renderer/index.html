@@ -6,7 +6,9 @@
   <title>FastBoost</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body data-mod="smart">
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+
   <header class="titlebar">
     <img src="../../assets/icon.png" class="titlebar-icon" alt="" />
     <span class="titlebar-title">FastBoost</span>
@@ -14,21 +16,31 @@
   </header>
 
   <div class="layout">
-    <nav class="sidebar" id="nav">
-      <button class="nav-item active" data-page="home"><span class="ico" data-icon="home"></span><span>Accueil</span></button>
-      <button class="nav-item" data-page="protection"><span class="ico" data-icon="shield"></span><span>Protection</span></button>
-      <button class="nav-item" data-page="storage"><span class="ico" data-icon="storage"></span><span>Stockage</span></button>
-      <button class="nav-item" data-page="apps"><span class="ico" data-icon="apps"></span><span>Applications</span></button>
-      <button class="nav-item" data-page="toolbox"><span class="ico" data-icon="toolbox"></span><span>Boîte à outils</span></button>
+    <nav class="sidebar glass" id="nav">
+      <button class="nav-item" data-page="smart"><span class="nav-ico g-smart" data-icon="sparkle"></span>Entretien intelligent</button>
+      <div class="nav-group">Nettoyage</div>
+      <button class="nav-item" data-page="cleanup"><span class="nav-ico g-cleanup" data-icon="broom"></span>Nettoyage</button>
+      <div class="nav-group">Protection</div>
+      <button class="nav-item" data-page="protection"><span class="nav-ico g-protection" data-icon="shield"></span>Protection</button>
+      <div class="nav-group">Vitesse</div>
+      <button class="nav-item" data-page="performance"><span class="nav-ico g-performance" data-icon="gauge"></span>Performances</button>
+      <div class="nav-group">Applications</div>
+      <button class="nav-item" data-page="applications"><span class="nav-ico g-applications" data-icon="apps"></span>Applications</button>
+      <div class="nav-group">Fichiers</div>
+      <button class="nav-item" data-page="clutter"><span class="nav-ico g-clutter" data-icon="layers"></span>Encombrement</button>
+      <button class="nav-item" data-page="lens"><span class="nav-ico g-lens" data-icon="lens"></span>Carte du disque</button>
+      <button class="nav-item" data-page="cloud"><span class="nav-ico g-cloud" data-icon="cloud"></span>Nettoyage cloud</button>
+      <button class="nav-item" data-page="shredder"><span class="nav-ico g-shredder" data-icon="shredder"></span>Broyeur</button>
       <div class="nav-spacer"></div>
-      <button class="nav-item" data-page="settings"><span class="ico" data-icon="settings"></span><span>Paramètres</span></button>
+      <button class="nav-item" data-page="tools"><span class="nav-ico g-tools" data-icon="toolbox"></span>Outils</button>
+      <button class="nav-item" data-page="settings"><span class="nav-ico g-settings" data-icon="settings"></span>Paramètres</button>
     </nav>
 
     <main class="content" id="content"></main>
   </div>
 
-  <div id="toast" class="toast hidden"></div>
-  <div id="modal" class="modal hidden"><div class="modal-box"><h3 id="modal-title"></h3><p id="modal-text"></p><div class="modal-actions"><button class="btn" id="modal-cancel">Annuler</button><button class="btn primary" id="modal-ok">Confirmer</button></div></div></div>
+  <div id="toast" class="toast glass hidden"></div>
+  <div id="modal" class="modal hidden"><div class="modal-box glass"><h3 id="modal-title"></h3><p id="modal-text"></p><div class="modal-actions"><button class="btn" id="modal-cancel">Annuler</button><button class="btn primary" id="modal-ok">Confirmer</button></div></div></div>
 
   <script src="icons.js"></script>
   <script src="app.js"></script>

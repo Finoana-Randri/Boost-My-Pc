@@ -67,6 +67,17 @@ const CATEGORIES = [
     ],
   },
   {
+    id: 'devjunk', name: 'Fichiers de développement', scenes: ['deep'], recommended: false,
+    desc: 'Caches de npm, pip, Yarn, Gradle et Cargo (retéléchargés si besoin).',
+    targets: [
+      { dir: path.join(LOCAL, 'npm-cache', '_cacache') },
+      { dir: path.join(LOCAL, 'pip', 'Cache') },
+      { dir: path.join(LOCAL, 'Yarn', 'Cache') },
+      { dir: path.join(env.USERPROFILE || '', '.gradle', 'caches') },
+      { dir: path.join(env.USERPROFILE || '', '.cargo', 'registry', 'cache') },
+    ],
+  },
+  {
     id: 'wucache', name: 'Cache de Windows Update', scenes: ['deep'], recommended: false,
     desc: 'Fichiers de mise à jour déjà installés.',
     targets: [{ dir: path.join(WIN, 'SoftwareDistribution', 'Download'), admin: true }],

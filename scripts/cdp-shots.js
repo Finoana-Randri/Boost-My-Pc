@@ -25,7 +25,7 @@ const [out, port, ...pages] = process.argv.slice(2);
     await new Promise((r) => setTimeout(r, Number(wait || 2500)));
     const shot = await send('Page.captureScreenshot', { format: 'png' });
     fs.writeFileSync(`${out}/linux-${name}.png`, Buffer.from(shot.result.data, 'base64'));
-    const txt = await send('Runtime.evaluate', { expression: `currentPage + ' :: ' + document.querySelector('#content').innerText.slice(0,200).replace(/\\n+/g,' | ')`, returnByValue: true });
+    const txt = await send('Runtime.evaluate', { expression: `(typeof currentRoute !== 'undefined' ? currentRoute : currentPage) + ' :: ' + document.querySelector('#content').innerText.slice(0,200).replace(/\\n+/g,' | ')`, returnByValue: true });
     console.log(name, '=>', txt.result.result.value);
   }
   console.log('ERRORS:', errors.length ? errors.join('\n') : 'aucune');

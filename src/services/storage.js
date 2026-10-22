@@ -76,10 +76,12 @@ const toItem = (f, st) => ({ path: f, name: path.basename(f), size: st.size, mti
 let current = null;
 function cancel() { if (current) current.cancelled = true; }
 
-async function findLargeFiles({ root = os.homedir(), minSize = 100 * 1024 * 1024, limit = 500 } = {}, onProgress) {
+// olderThanDays : ne garde que les fichiers non modifiés depuis N jours (« gros et anciens fichiers »)
+async function findLargeFiles({ root = os.homedir(), minSize = 100 * 1024 * 1024, limit = 500, olderThanDays = 0 } = {}, onProgress) {
   const state = (current = { dirs: 0, cancelled: false, onProgress });
   const out = [];
-  await walk(root, (f, st) => { if (st.size >= minSize) out.push(toItem(f, st)); }, state);
+  const before = olderThanDays > 0 ? Date.now() - olderThanDays * 24 * 3600 * 1000 : Infinity;
+  await walk(root, (f, st) => { if (st.size >= minSize && st.mtimeMs < before) out.push(toItem(f, st)); }, state);
   out.sort((a, b) => b.size - a.size);
   return out.slice(0, limit);
 }

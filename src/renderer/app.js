@@ -5,7 +5,7 @@
 const IS_LINUX = pcm.platform === 'linux';
 document.body.classList.add(IS_LINUX ? 'linux' : 'windows');
 let CAPS = { platform: pcm.platform, tools: [], isAdmin: false };
-const OS_NAME = IS_LINUX ? 'votre session' : 'Windows';
+let PATHS = { home: '', pictures: '', downloads: '', root: '/' };
 const UPDATES_NAME = IS_LINUX ? 'Mises à jour du système' : 'Windows Update';
 const APP_TYPES = IS_LINUX
   ? { system: 'Paquets du système', flatpak: 'Flatpak', snap: 'Snap', user: 'Raccourcis personnels' }
@@ -25,16 +25,16 @@ function fmtBytes(b, d = 1) {
   do { b /= 1024; i++; } while (b >= 1024 && i < u.length - 1);
   return `${b.toFixed(b >= 100 ? 0 : d).replace('.', ',')} ${u[i]}`;
 }
-const fmtSpeed = (b) => `${fmtBytes(b)}/s`;
 const fmtDate = (ms) => new Date(ms).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
 
 let toastTimer;
 function toast(msg, error = false) {
   const t = $('#toast');
   t.textContent = msg;
-  t.className = 'toast' + (error ? ' error' : '');
+  t.className = 'toast glass' + (error ? ' error' : '');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.add('hidden'), 4000);
+  toastTimer = setTimeout(() => t.classList.add('hidden'), 4500);
 }
 
 function confirmBox(title, text, okLabel = 'Confirmer') {
@@ -59,489 +59,567 @@ async function loadIcons(root = content) {
     const p = img.dataset.file;
     if (!iconCache.has(p)) iconCache.set(p, pcm.file.icon(p).catch(() => null));
     const url = await iconCache.get(p);
-    if (url) { img.src = url; img.classList.remove('hidden'); img.nextElementSibling?.classList.add('hidden'); }
+    if (url && img.isConnected) { img.src = url; img.classList.remove('hidden'); img.nextElementSibling?.classList.add('hidden'); }
   }
 }
-const fileIcon = (p, fallback = 'file') => p
-  ? `<img data-file="${esc(p)}" class="hidden" alt="" />${icon(fallback)}`
-  : icon(fallback);
+const fileIcon = (p, fallback = 'file') => (p ? `<img data-file="${esc(p)}" class="hidden" alt="" />${icon(fallback)}` : icon(fallback));
 
-function gauge(pct, size = 74, stroke = 7) {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const color = pct >= 85 ? 'var(--bad)' : pct >= 70 ? '#e8a200' : 'var(--accent)';
+function gauge(pct, size = 70, stroke = 7) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r;
   return `<div class="gauge" style="width:${size}px;height:${size}px"><svg width="${size}" height="${size}">
     <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="var(--track)" stroke-width="${stroke}" fill="none"/>
-    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="${color}" stroke-width="${stroke}" fill="none" stroke-linecap="round"
-      stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}" style="transition:stroke-dashoffset .5s"/></svg>
-    <div class="g-val">${pct}%</div></div>`;
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="url(#gg)" stroke-width="${stroke}" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}" style="transition:stroke-dashoffset .5s"/>
+    <defs><linearGradient id="gg"><stop offset="0" stop-color="var(--a1)"/><stop offset="1" stop-color="var(--a2)"/></linearGradient></defs></svg><div class="g-val">${pct}%</div></div>`;
 }
 
-function tile(ic, title, sub, onclick, id = '') {
-  return `<button class="tile" ${id ? `id="${id}"` : ''} data-go="${esc(onclick)}"><div class="t-ico">${icon(ic)}</div>
-    <div><div class="t-title">${esc(title)}</div><div class="t-sub">${sub}</div></div><div class="t-end">${icon('chevron')}</div></button>`;
-}
-// Tuile d'un outil externe : affichée seulement s'il existe sur ce système
-function toolTile(id, ic, title, sub) {
-  if (!CAPS.tools.includes(id)) return '';
-  return `<button class="tile" data-tool="${id}"><div class="t-ico">${icon(ic)}</div><div><div class="t-title">${esc(title)}</div><div class="t-sub">${esc(sub)}</div></div><div class="t-end">${icon('external')}</div></button>`;
-}
-const toolSection = (title, tiles) => (tiles.join('') ? `<h2>${esc(title)}</h2><div class="grid g2">${tiles.join('')}</div>` : '');
-const header = (title, back) => `<h1>${back ? `<button class="back" data-go="${back}">${icon('back')}</button>` : ''}${esc(title)}</h1>`;
-const loading = (txt = 'Chargement…') => `<div class="loading"><span class="spinner"></span>${esc(txt)}</div>`;
+// ===================== Modules =====================
+const MODULES = {
+  smart: { title: 'Entretien intelligent', icon: 'sparkle' },
+  cleanup: { title: 'Nettoyage', icon: 'broom' },
+  protection: { title: 'Protection', icon: 'shield' },
+  performance: { title: 'Performances', icon: 'gauge' },
+  applications: { title: 'Applications', icon: 'apps' },
+  clutter: { title: 'Encombrement', icon: 'layers' },
+  lens: { title: 'Carte du disque', icon: 'lens' },
+  cloud: { title: 'Nettoyage cloud', icon: 'cloud' },
+  shredder: { title: 'Broyeur', icon: 'shredder' },
+  tools: { title: 'Outils', icon: 'toolbox' },
+  settings: { title: 'Paramètres', icon: 'settings' },
+};
+// Anciennes routes (mini-panneau, zone de notification)
+const LEGACY = {
+  home: 'smart', health: 'cleanup', deepclean: 'cleanup', storage: 'lens', apps: 'applications', updates: 'applications/updates',
+  processes: 'performance/processes', startup: 'performance/startup', uninstall: 'applications/uninstall', network: 'performance/network',
+  downloads: 'clutter/downloads', large: 'clutter/large', duplicates: 'clutter/duplicates', toolbox: 'tools',
+};
 
-// ===================== Navigation =====================
 const PAGES = {};
-let currentPage = 'home';
 let pageToken = 0;
-let liveTimer = null;
+let currentRoute = 'smart';
+const progressHandlers = {};
+pcm.onProgress((p) => progressHandlers[p.channel]?.(p));
 
-function go(page) {
-  const top = page.split('/')[0];
-  const mapTop = { health: 'home', deepclean: 'storage', large: 'storage', downloads: 'storage', duplicates: 'storage', processes: 'apps', startup: 'apps', uninstall: 'apps', updates: 'protection', network: 'protection' };
-  const navKey = mapTop[top] || top;
-  $$('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.page === navKey));
-  currentPage = page;
-  clearInterval(liveTimer);
+function go(route) {
+  route = LEGACY[route] || route;
+  const [mod, tab] = route.split('/');
+  const m = MODULES[mod] ? mod : 'smart';
+  currentRoute = tab ? `${m}/${tab}` : m;
+  document.body.dataset.mod = m;
+  $$('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.page === m));
+  for (const k of Object.keys(progressHandlers)) delete progressHandlers[k];
   const token = ++pageToken;
   content.scrollTop = 0;
-  (PAGES[top] || PAGES.home)(token);
+  PAGES[m](token, tab);
 }
 const alive = (token) => token === pageToken;
 
 document.addEventListener('click', (e) => {
   const g = e.target.closest('[data-go]');
-  if (g) { e.preventDefault(); go(g.dataset.go); }
+  if (g) { e.preventDefault(); go(g.dataset.go); return; }
+  const t = e.target.closest('[data-tool]');
+  if (t) safe(() => pcm.tool.launch(t.dataset.tool), 'Outil');
+  const r = e.target.closest('[data-reveal]');
+  if (r) pcm.file.reveal(r.dataset.reveal);
 });
-$$('.nav-item').forEach((n) => { n.innerHTML = n.innerHTML.replace(/<span class="ico" data-icon="(\w+)"><\/span>/, (_m, k) => icon(k)); n.onclick = () => go(n.dataset.page); });
+$$('.nav-item').forEach((n) => {
+  const ico = n.querySelector('[data-icon]');
+  ico.innerHTML = micon(n.dataset.page);
+  n.onclick = () => go(n.dataset.page);
+});
 
-// ===================== Accueil =====================
-const perfHist = { net: [] };
-let lastHealth = null;
+// ===================== Composants communs =====================
+function page(html) { content.innerHTML = `<div class="page">${html}</div>`; return $('.page'); }
 
-PAGES.home = async (token) => {
-  content.innerHTML = `<div class="page">
-    ${header('Accueil')}
-    <div class="card hero">
-      <div class="hero-stats">
-        <div class="stat"><div class="val" id="h-mem">–<small>%</small></div><div class="lbl">Utilisation de la mémoire</div></div>
-        <div class="stat"><div class="val" id="h-temp">–</div><div class="lbl">Fichiers temporaires</div></div>
-      </div>
-      <button class="boost-btn" id="boost">${icon('rocket')}<span>Boost</span></button>
-    </div>
-    <div id="boost-result"></div>
+function header(mod, sub) {
+  return `<h1>${esc(MODULES[mod].title)}</h1>${sub ? `<p class="lead">${sub}</p>` : ''}`;
+}
 
-    <h2>Bilan de santé</h2>
-    ${tile('heart', 'Bilan de santé', 'Recherchez les problèmes et optimisez votre PC en un clic', 'health')}
+function tabs(mod, list, active) {
+  return `<div class="tabs glass">${list.map(([id, label]) => `<button class="tab ${id === active ? 'active' : ''}" data-go="${mod}/${id}">${esc(label)}</button>`).join('')}</div>`;
+}
 
-    <h2>Performances en temps réel</h2>
-    <div class="grid g3">
-      <div class="card meter-row"><div id="g-cpu">${gauge(0)}</div><div><div class="t-title">Processeur</div><div class="muted small" id="cpu-name">…</div></div></div>
-      <div class="card meter-row"><div id="g-mem">${gauge(0)}</div><div><div class="t-title">Mémoire</div><div class="muted small" id="mem-detail">…</div></div></div>
-      <div class="card"><div class="t-title" style="margin-bottom:8px">Réseau</div>
-        <div class="small">↓ <b id="net-down">0 o/s</b> &nbsp; ↑ <b id="net-up">0 o/s</b></div>
-        <svg class="chart" id="net-chart" viewBox="0 0 120 30" preserveAspectRatio="none"></svg></div>
-    </div>
-
-    <h2>Raccourcis</h2>
-    <div class="grid g2">
-      ${tile('process', 'Gestion des processus', 'Fermez les processus qui consomment trop de mémoire', 'processes')}
-      ${tile('power', 'Applications au démarrage', `Accélérez le démarrage de ${IS_LINUX ? 'votre session' : 'Windows'}`, 'startup')}
-      ${tile('broom', 'Nettoyage approfondi', 'Libérez de l\'espace disque', 'deepclean')}
-      ${tile('wifi', 'Diagnostic réseau', 'Détectez et réparez les problèmes de connexion', 'network')}
-    </div>
-    <h2>Stockage</h2>
-    <div class="grid g2" id="home-disks">${loading()}</div>
+// Écran d'accueil d'un module : grande icône, texte, fonctionnalités, bouton rond
+function intro(mod, { title, lead, features = [], button = 'Analyser', extra = '' }) {
+  return `<div class="intro">
+    <div class="hero-icon">${micon(mod)}</div>
+    <h1>${esc(title || MODULES[mod].title)}</h1>
+    <p class="lead">${lead}</p>
+    ${features.length ? `<div class="features">${features.map(([ic, t, s]) => `<div class="feature glass"><div class="f-ico">${icon(ic)}</div><div><b>${esc(t)}</b><span>${esc(s)}</span></div></div>`).join('')}</div>` : ''}
+    ${extra}
+    <button class="scan-btn" id="scan">${esc(button)}</button>
   </div>`;
-
-  $('#boost').onclick = doBoost;
-  pcm.system.info().then((i) => { if (alive(token)) $('#cpu-name').textContent = `${i.cpu} · ${i.cores} cœurs`; }).catch(() => {});
-
-  const refresh = async () => {
-    const s = await pcm.system.stats().catch(() => null);
-    if (!s || !alive(token)) return;
-    perfHist.net.push(s.net.down); if (perfHist.net.length > 60) perfHist.net.shift();
-    $('#h-mem').innerHTML = `${s.memory.percent}<small>%</small>`;
-    $('#g-cpu').innerHTML = gauge(s.cpu);
-    $('#g-mem').innerHTML = gauge(s.memory.percent);
-    $('#mem-detail').textContent = `${fmtBytes(s.memory.used)} / ${fmtBytes(s.memory.total)}`;
-    $('#net-down').textContent = fmtSpeed(s.net.down);
-    $('#net-up').textContent = fmtSpeed(s.net.up);
-    const max = Math.max(...perfHist.net, 1024);
-    const pts = perfHist.net.map((v, i) => `${(i / 59) * 120},${30 - (v / max) * 28}`).join(' ');
-    $('#net-chart').innerHTML = `<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>`;
-  };
-  refresh();
-  liveTimer = setInterval(refresh, 2000);
-
-  renderDisks('#home-disks', token);
-
-  if (lastHealth) $('#h-temp').textContent = fmtBytes(lastHealth);
-  else pcm.clean.scan('health').then((r) => {
-    lastHealth = r.items.filter((i) => i.recommended).reduce((a, i) => a + i.size, 0);
-    if (alive(token)) $('#h-temp').textContent = fmtBytes(lastHealth);
-  }).catch(() => { if (alive(token)) $('#h-temp').textContent = '–'; });
-};
-
-async function renderDisks(sel, token) {
-  const disks = await pcm.system.disks().catch(() => []);
-  if (!alive(token)) return;
-  $(sel).innerHTML = disks.map((d) => {
-    const pct = Math.round(((d.size - d.free) / d.size) * 100);
-    return `<div class="card disk"><div class="disk-head">${icon('storage')}<div><div class="t-title">${esc(d.label)} (${esc(d.id)})</div>
-      <div class="muted small">${fmtBytes(d.free)} libres sur ${fmtBytes(d.size)} · ${esc(d.fs)}</div></div></div>
-      <div class="bar ${pct > 90 ? 'bad' : pct > 75 ? 'warn' : ''}"><div style="width:${pct}%"></div></div></div>`;
-  }).join('') || '<div class="muted">Aucun disque détecté</div>';
 }
 
-let boosting = false;
-async function doBoost() {
-  if (boosting) return;
-  boosting = true;
-  const btn = $('#boost');
-  btn?.classList.add('busy');
-  try {
-    const [mem, scan] = await Promise.all([pcm.system.boost(), pcm.clean.scan('health')]);
-    const tempId = IS_LINUX ? 'tmp' : 'temp';
-    const temp = scan.items.find((i) => i.id === tempId);
-    let cleaned = { freed: 0 };
-    if (temp && temp.size > 0) cleaned = await pcm.clean.run([tempId]);
-    lastHealth = null;
-    const res = $('#boost-result');
-    if (res) {
-      const memTxt = IS_LINUX
-        ? `Disques synchronisés · mémoire disponible : +${fmtBytes(mem.freed)}`
-        : `Mémoire libérée : ${fmtBytes(mem.freed)} (${mem.processes} processus optimisés)`;
-      res.innerHTML = `<div class="card result-banner" style="margin-top:12px"><div class="status-ico ok">${icon('check')}</div>
-        <div><div class="t-title">Boost terminé</div><div class="muted small">${memTxt} · Fichiers temporaires supprimés : ${fmtBytes(cleaned.freed)}</div></div></div>`;
-    }
-    toast(`Boost terminé : ${fmtBytes(mem.freed + cleaned.freed)} libérés`);
-    pcm.clean.scan('health').then((r) => { lastHealth = r.items.filter((i) => i.recommended).reduce((a, i) => a + i.size, 0); const el = $('#h-temp'); if (el) el.textContent = fmtBytes(lastHealth); });
-  } catch (e) {
-    toast('Boost : ' + e.message, true);
-  } finally {
-    boosting = false;
-    $('#boost')?.classList.remove('busy');
-  }
-}
-pcm.onAction((a) => {
-  if (a === 'boost') { go('home'); setTimeout(doBoost, 300); }
-  else if (typeof a === 'string' && a.startsWith('go:')) go(a.slice(3));
-});
-
-// ===================== Nettoyage (Bilan de santé / approfondi) =====================
-let cleanProgress = null;
-pcm.onProgress((p) => {
-  if (p.channel === 'clean' && cleanProgress) cleanProgress(p);
-  if (p.channel === 'storage' && storageProgress) storageProgress(p);
-});
-
-function cleanPage(scene, title, back) {
-  return async (token) => {
-    content.innerHTML = `<div class="page">${header(title, back)}
-      <div class="card" id="scan-box"><div class="loading"><span class="spinner"></span><span id="scan-cur">Analyse en cours…</span></div><div class="progress-line"></div></div>
-      <div id="scan-res"></div></div>`;
-    cleanProgress = (p) => { const el = $('#scan-cur'); if (el && alive(token)) el.textContent = `Analyse : ${p.current} (${p.index + 1}/${p.total})`; };
-    const r = await safe(() => pcm.clean.scan(scene), 'Analyse');
-    cleanProgress = null;
-    if (!r || !alive(token)) return;
-    renderCleanResult(r, scene, title, back, token);
-  };
+// Écran d'analyse : anneau animé + texte d'état
+function scanning(mod, status, detail = '', { pct = null, stop = false } = {}) {
+  const size = 190, stroke = 10, r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  const arc = pct == null
+    ? `<circle cx="95" cy="95" r="${r}" stroke="url(#sg)" stroke-width="${stroke}" fill="none" stroke-linecap="round" stroke-dasharray="${c * 0.28} ${c}"/>`
+    : `<circle cx="95" cy="95" r="${r}" stroke="url(#sg)" stroke-width="${stroke}" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct)}" style="transition:stroke-dashoffset .4s"/>`;
+  return `<div class="scanning">
+    <div class="ring-big ${pct == null ? 'spin' : ''}"><svg width="${size}" height="${size}"><defs><linearGradient id="sg"><stop offset="0" stop-color="var(--a1)"/><stop offset="1" stop-color="var(--a2)"/></linearGradient></defs>
+      <circle cx="95" cy="95" r="${r}" stroke="var(--track)" stroke-width="${stroke}" fill="none"/>${arc}</svg>
+      <div class="ring-center">${micon(mod)}</div></div>
+    <div class="scan-status" id="scan-status">${esc(status)}</div>
+    <div class="scan-detail" id="scan-detail">${esc(detail)}</div>
+    ${stop ? '<button class="btn btn-stop" id="scan-stop">Arrêter</button>' : ''}
+  </div>`;
 }
 
-function renderCleanResult(r, scene, title, back, token) {
-  const total = r.items.reduce((a, i) => a + i.size, 0);
-  const needAdmin = r.items.some((i) => i.needsAdmin);
-  $('#scan-box').outerHTML = `<div class="card result-banner" id="scan-box">
-    <div class="status-ico ${total > 0 ? 'warn' : 'ok'}">${icon(total > 0 ? 'broom' : 'check')}</div>
-    <div style="flex:1"><div class="big">${fmtBytes(total)}</div><div class="muted small">peuvent être nettoyés</div></div>
-    <div class="t-title" id="sel-size"></div>
-    <button class="btn primary lg" id="do-clean">Nettoyer</button></div>
-    ${needAdmin && !r.admin ? (IS_LINUX
-      ? `<div class="card" style="margin-top:12px;display:flex;align-items:center;gap:12px"><div class="status-ico warn">${icon('admin')}</div>
-      <div style="flex:1" class="small">Les éléments système (journaux, cache des paquets, rapports de plantage) demanderont votre mot de passe au moment du nettoyage.</div></div>`
-      : `<div class="card" style="margin-top:12px;display:flex;align-items:center;gap:12px"><div class="status-ico warn">${icon('admin')}</div>
-      <div style="flex:1" class="small">Certains éléments système nécessitent les droits administrateur pour être analysés et nettoyés.</div>
-      <button class="btn" id="relaunch">Redémarrer en administrateur</button></div>`) : ''}`;
-  const empty = (i) => i.size === 0 && !(i.countOnly && i.files);
-  $('#scan-res').innerHTML = `<h2>Éléments</h2><div class="list">${r.items.map((i) => `
-    <label class="row" style="cursor:pointer"><input type="checkbox" data-id="${i.id}" data-size="${i.size}" ${i.recommended && !empty(i) ? 'checked' : ''} ${empty(i) ? 'disabled' : ''}/>
-      <div class="r-main"><div class="r-title">${esc(i.name)} ${i.recommended ? '<span class="pill info">Recommandé</span>' : ''}${i.needsAdmin && IS_LINUX ? ` <span class="pill warn">${icon('admin')} Mot de passe</span>` : ''}</div>
-      <div class="r-sub">${esc(i.desc)}${i.needsAdmin && !IS_LINUX ? ' · certains emplacements nécessitent les droits admin' : ''}</div></div>
-      <div class="r-meta">${i.countOnly ? `${i.files} élément(s)` : `${fmtBytes(i.size)}<div class="small muted">${i.files || 0} fichier(s)</div>`}</div></label>`).join('')}</div>`;
-
-  const updateSel = () => {
-    const sel = $$('#scan-res input:checked');
-    const size = sel.reduce((a, c) => a + Number(c.dataset.size), 0);
-    $('#sel-size').textContent = sel.length ? `Sélection : ${fmtBytes(size)}` : '';
-    $('#do-clean').disabled = sel.length === 0;
-  };
-  $$('#scan-res input').forEach((c) => (c.onchange = updateSel));
-  updateSel();
-  $('#relaunch') && ($('#relaunch').onclick = () => safe(() => pcm.system.relaunchAdmin()));
-
-  $('#do-clean').onclick = async () => {
-    const ids = $$('#scan-res input:checked').map((c) => c.dataset.id);
-    if ((ids.includes('recycle') || ids.includes('trash')) && !(await confirmBox('Vider la Corbeille ?', 'Les fichiers de la Corbeille seront supprimés définitivement.', 'Vider'))) return;
-    $('#do-clean').disabled = true;
-    $('#do-clean').innerHTML = '<span class="spinner"></span> Nettoyage…';
-    cleanProgress = (p) => { const b = $('#do-clean'); if (b && alive(token)) b.innerHTML = `<span class="spinner"></span> ${esc(p.current)}`; };
-    const res = await safe(() => pcm.clean.run(ids), 'Nettoyage');
-    cleanProgress = null;
-    if (!res || !alive(token)) return;
-    lastHealth = null;
-    $('#scan-box').outerHTML = `<div class="card result-banner" id="scan-box"><div class="status-ico ok">${icon('check')}</div>
-      <div style="flex:1"><div class="big">${fmtBytes(res.freed)} libérés</div>
-      <div class="muted small">${res.deleted} fichier(s) supprimé(s)${res.failed ? ` · ${res.failed} ignoré(s) car en cours d'utilisation` : ''}${res.adminCancelled ? ' · éléments système non nettoyés (authentification annulée)' : ''}</div></div>
-      <button class="btn" data-go="${scene === 'health' ? 'health' : 'deepclean'}">${icon('refresh')} Analyser à nouveau</button></div>`;
-    $('#scan-res').innerHTML = '';
-  };
+function setScan(status, detail) {
+  if (status != null && $('#scan-status')) $('#scan-status').textContent = status;
+  if (detail != null && $('#scan-detail')) $('#scan-detail').textContent = detail;
 }
 
-PAGES.health = cleanPage('health', 'Bilan de santé', 'home');
-PAGES.deepclean = cleanPage('deep', 'Nettoyage approfondi', 'storage');
+function doneView(mod, title, sub, again) {
+  return `<div class="intro">
+    <div class="hero-icon">${icon('check')}</div>
+    <h1>${esc(title)}</h1><p class="lead">${esc(sub)}</p>
+    <button class="btn" data-go="${again}">${icon('refresh')} Nouvelle analyse</button>
+  </div>`;
+}
 
-// ===================== Stockage =====================
-let storageProgress = null;
-
-PAGES.storage = async (token) => {
-  content.innerHTML = `<div class="page">${header('Stockage')}
-    <div class="grid g2" id="st-disks">${loading()}</div>
-    <h2>Gestion du stockage</h2>
-    <div class="grid g2">
-      ${tile('broom', 'Nettoyage approfondi', 'Cache système, fichiers temporaires, mises à jour…', 'deepclean')}
-      ${tile('file', 'Gérer les fichiers volumineux', 'Trouvez les fichiers qui occupent le plus d\'espace', 'large')}
-      ${tile('download', 'Fichiers téléchargés', 'Triez et supprimez vos anciens téléchargements', 'downloads')}
-      ${tile('copy', 'Fichiers en double', 'Repérez les fichiers identiques', 'duplicates')}
-    </div>
-    ${toolSection(IS_LINUX ? 'Outils du système' : 'Outils Windows', [
-      toolTile('storageSense', 'storage', 'Assistant Stockage', 'Libérez de l\'espace automatiquement'),
-      toolTile('cleanmgr', 'trash', 'Nettoyage de disque', 'Outil classique de Windows'),
-      toolTile('diskUsage', 'storage', 'Analyseur d\'utilisation des disques', 'Visualisez ce qui occupe votre espace'),
-      toolTile('disks', 'chip', 'Disques', 'Santé SMART, partitions et formatage'),
-    ])}</div>`;
-  renderDisks('#st-disks', token);
-};
-
-function fileRows(items, { showType = true } = {}) {
+// Liste de fichiers avec cases à cocher + barre d'action « Placer dans la corbeille »
+function fileRows(items, { showType = true, checked = false } = {}) {
   return items.map((f) => `<div class="row">
-    <input type="checkbox" data-path="${esc(f.path)}" data-size="${f.size}"/>
+    <input type="checkbox" data-path="${esc(f.path)}" data-size="${f.size}" ${checked ? 'checked' : ''}/>
     <div class="r-ico">${fileIcon(f.path)}</div>
     <div class="r-main"><div class="r-title" title="${esc(f.path)}">${esc(f.name)}</div><div class="r-sub">${esc(f.path)}</div></div>
-    ${showType ? `<div class="r-meta">${esc(f.type)}</div>` : ''}
-    <div class="r-meta">${fmtDate(f.mtime)}</div>
+    ${showType && f.type ? `<div class="r-meta">${esc(f.type)}</div>` : ''}
+    ${f.mtime ? `<div class="r-meta">${fmtDate(f.mtime)}</div>` : ''}
     <div class="r-meta"><b>${fmtBytes(f.size)}</b></div>
-    <div class="r-actions"><button class="btn subtle" data-reveal="${esc(f.path)}" title="Ouvrir l'emplacement">${icon('folder')}</button></div></div>`).join('');
+    <button class="btn ghost" data-reveal="${esc(f.path)}" title="Afficher dans le dossier">${icon('folder')}</button></div>`).join('');
 }
 
-function bindFileActions(root, onDeleted) {
-  root.addEventListener('click', (e) => {
-    const r = e.target.closest('[data-reveal]');
-    if (r) pcm.file.reveal(r.dataset.reveal);
-  });
+function trashBar(label = 'Placer dans la corbeille') {
+  return `<div class="action-bar" id="file-actions"><span class="summary sel"></span><button class="btn-main del" disabled>${esc(label)}</button></div>`;
+}
+
+// Relie cases à cocher et barre d'action ; `onAction(paths)` par défaut = corbeille
+function bindSelection(root, { onDone, onAction, confirmText } = {}) {
   const bar = $('#file-actions');
   const upd = () => {
     const sel = $$('input[data-path]:checked', root);
-    bar.querySelector('.sel').textContent = sel.length ? `${sel.length} sélectionné(s) · ${fmtBytes(sel.reduce((a, c) => a + Number(c.dataset.size), 0))}` : '';
+    const size = sel.reduce((a, c) => a + Number(c.dataset.size || 0), 0);
+    bar.querySelector('.sel').textContent = sel.length ? `${plural(sel.length, 'élément sélectionné', 'éléments sélectionnés')}${size ? ` · ${fmtBytes(size)}` : ''}` : 'Sélectionnez des éléments';
     bar.querySelector('.del').disabled = !sel.length;
   };
   root.addEventListener('change', upd);
   bar.querySelector('.del').onclick = async () => {
     const paths = $$('input[data-path]:checked', root).map((c) => c.dataset.path);
-    if (!(await confirmBox('Déplacer vers la Corbeille ?', `${paths.length} fichier(s) seront déplacés vers la Corbeille. Vous pourrez les restaurer.`, 'Supprimer'))) return;
+    if (!paths.length) return;
+    if (onAction) return onAction(paths);
+    if (!(await confirmBox('Placer dans la corbeille ?', confirmText || `${plural(paths.length, 'élément sera déplacé', 'éléments seront déplacés')} vers la corbeille. Vous pourrez les restaurer.`, 'Placer dans la corbeille'))) return;
     const r = await safe(() => pcm.file.trash(paths));
     if (!r) return;
-    toast(`${r.done} fichier(s) déplacé(s) vers la Corbeille${r.failed ? `, ${r.failed} échec(s)` : ''}`);
-    onDeleted();
+    toast(`${plural(r.done, 'élément déplacé', 'éléments déplacés')} vers la corbeille${r.failed ? ` · ${r.failed} échec(s)` : ''}`);
+    onDone?.();
   };
   upd();
   return upd;
 }
 
-const actionBar = (extra = '') => `<div class="list-head" id="file-actions">${extra}<div class="grow"></div><span class="sel muted small"></span><button class="btn danger del">${icon('trash')} Supprimer</button></div>`;
-
-PAGES.large = async (token, opts = {}) => {
-  const root = opts.root || (PAGES.large.root ??= null);
-  const minMb = PAGES.large.min || 100;
-  content.innerHTML = `<div class="page">${header('Fichiers volumineux', 'storage')}
-    ${actionBar(`<span class="muted small">Dossier :</span><b class="small" id="lf-root">${esc(root || 'Dossier personnel')}</b>
-      <button class="btn" id="lf-pick">${icon('folder')} Changer</button>
-      <select id="lf-min">${[50, 100, 500, 1024].map((m) => `<option value="${m}" ${m === minMb ? 'selected' : ''}>&gt; ${m >= 1024 ? '1 Go' : m + ' Mo'}</option>`).join('')}</select>`)}
-    <div id="lf-list"><div class="card"><div class="loading"><span class="spinner"></span><span id="lf-prog">Recherche des fichiers volumineux…</span><button class="btn" id="lf-cancel">Arrêter</button></div><div class="progress-line"></div></div></div></div>`;
-  $('#lf-pick').onclick = async () => { const p = await pcm.storage.pickFolder(); if (p) { PAGES.large.root = p; go('large'); } };
-  $('#lf-min').onchange = (e) => { PAGES.large.min = Number(e.target.value); pcm.storage.cancel(); go('large'); };
-  $('#lf-cancel').onclick = () => pcm.storage.cancel();
-  storageProgress = (p) => { const el = $('#lf-prog'); if (el && alive(token)) el.textContent = `${p.dirs} dossiers analysés · ${p.current}`; };
-  const items = await safe(() => pcm.storage.large({ root: root || undefined, minSize: minMb * 1024 * 1024 }));
-  storageProgress = null;
-  if (!items || !alive(token)) return;
-  $('#lf-list').innerHTML = items.length ? `<div class="list">${fileRows(items)}</div>` : `<div class="card empty">Aucun fichier de plus de ${minMb} Mo trouvé.</div>`;
-  bindFileActions($('#lf-list'), () => go('large'));
-  loadIcons();
+// ===================== Entretien intelligent =====================
+const SMART_STEPS = {
+  cleanup: ['Nettoyage', 'broom', 'g-cleanup'],
+  protection: ['Protection', 'shield', 'g-protection'],
+  performance: ['Performances', 'gauge', 'g-performance'],
+  applications: ['Applications', 'apps', 'g-applications'],
+  clutter: ['Encombrement', 'layers', 'g-clutter'],
 };
+let smartResult = null;
 
-PAGES.downloads = async (token) => {
-  content.innerHTML = `<div class="page">${header('Fichiers téléchargés', 'storage')}
-    ${actionBar('<select id="dl-sort"><option value="date">Trier par date</option><option value="size">Trier par taille</option></select><select id="dl-type"><option value="">Tous les types</option></select>')}
-    <div id="dl-list">${loading()}</div></div>`;
-  const r = await safe(() => pcm.storage.downloads());
-  if (!r || !alive(token)) return;
-  const types = [...new Set(r.items.map((i) => i.type))];
-  $('#dl-type').innerHTML += types.map((t) => `<option>${esc(t)}</option>`).join('');
-  const render = () => {
-    let items = [...r.items];
-    const t = $('#dl-type').value;
-    if (t) items = items.filter((i) => i.type === t);
-    if ($('#dl-sort').value === 'size') items.sort((a, b) => b.size - a.size);
-    const total = items.reduce((a, i) => a + i.size, 0);
-    $('#dl-list').innerHTML = items.length
-      ? `<p class="muted small">${items.length} fichier(s) · ${fmtBytes(total)} dans ${esc(r.dir)}</p><div class="list">${fileRows(items)}</div>`
-      : '<div class="card empty">Aucun fichier téléchargé.</div>';
-    loadIcons();
-    updSel?.();
+PAGES.smart = async (token) => {
+  if (smartResult) return renderSmartResult(token);
+  page(intro('smart', {
+    lead: 'Une seule analyse pour nettoyer, protéger et accélérer votre PC. FastBoost vérifie cinq points et vous propose les actions utiles.',
+    features: [
+      ['broom', 'Fichiers inutiles', 'Caches, temporaires et rapports de plantage'],
+      ['shield', 'Menaces', IS_LINUX ? 'Démarrages et tâches suspects' : 'État de Microsoft Defender'],
+      ['gauge', 'Maintenance', 'Tâches qui gardent le système rapide'],
+      ['apps', 'Mises à jour', 'Système et applications'],
+      ['layers', 'Encombrement', 'Gros fichiers oubliés dans les téléchargements'],
+      ['lock', 'Sans risque', 'Rien n\'est supprimé sans votre accord'],
+    ],
+  }));
+  $('#scan').onclick = async () => {
+    page(scanning('smart', 'Analyse en cours…', 'Préparation', { pct: 0 }));
+    progressHandlers.smart = (p) => {
+      if (!alive(token) || !p.step || p.index == null) return;
+      page(scanning('smart', `Analyse : ${SMART_STEPS[p.step][0]}`, `Étape ${p.index + 1} sur 5`, { pct: p.index / 5 }));
+    };
+    const r = await safe(() => pcm.v2.smartScan(), 'Analyse');
+    if (!alive(token)) return;
+    if (!r) return go('smart');
+    smartResult = r;
+    renderSmartResult(token);
   };
-  let updSel = null;
-  $('#dl-sort').onchange = $('#dl-type').onchange = render;
-  render();
-  updSel = bindFileActions($('#dl-list'), () => go('downloads'));
 };
 
-PAGES.duplicates = async (token) => {
-  const root = PAGES.duplicates.root || null;
-  content.innerHTML = `<div class="page">${header('Fichiers en double', 'storage')}
-    ${actionBar(`<span class="muted small">Dossier :</span><b class="small">${esc(root || 'Dossier personnel')}</b><button class="btn" id="dp-pick">${icon('folder')} Changer</button>
-      <button class="btn" id="dp-auto">Sélectionner les copies</button>`)}
-    <div id="dp-list"><div class="card"><div class="loading"><span class="spinner"></span><span id="dp-prog">Recherche des doublons (fichiers &gt; 1 Mo)…</span><button class="btn" id="dp-cancel">Arrêter</button></div><div class="progress-line"></div></div></div></div>`;
-  $('#dp-pick').onclick = async () => { const p = await pcm.storage.pickFolder(); if (p) { PAGES.duplicates.root = p; go('duplicates'); } };
-  $('#dp-cancel').onclick = () => pcm.storage.cancel();
-  storageProgress = (p) => { const el = $('#dp-prog'); if (el && alive(token)) el.textContent = `${p.dirs} dossiers analysés · ${p.current}`; };
-  const groups = await safe(() => pcm.storage.duplicates({ root: root || undefined }));
-  storageProgress = null;
-  if (!groups || !alive(token)) return;
-  const waste = groups.reduce((a, g) => a + g.size * (g.files.length - 1), 0);
-  $('#dp-list').innerHTML = groups.length
-    ? `<p class="muted small">${groups.length} groupe(s) de doublons · ${fmtBytes(waste)} récupérables</p>` +
-      groups.map((g) => `<div class="list dup-group"><div class="dup-head">${g.files.length} fichiers identiques · ${fmtBytes(g.size)} chacun</div>${fileRows(g.files, { showType: false })}</div>`).join('')
-    : '<div class="card empty">Aucun doublon trouvé.</div>';
-  // Garde le plus ancien, sélectionne les copies
-  $('#dp-auto').onclick = () => {
-    $$('.dup-group').forEach((g) => $$('input[data-path]', g).forEach((c, i) => (c.checked = i > 0)));
-    updSel();
+function renderSmartResult(token) {
+  const s = Object.fromEntries(smartResult.steps.map((x) => [x.id, x]));
+  const card = (id, val, sub, state, link) => {
+    const [title, ic, g] = SMART_STEPS[id];
+    return `<div class="result-card glass">
+      <div class="rc-ico ${g}">${micon(id)}</div>
+      <div class="muted small" style="font-weight:800">${title}</div>
+      <div class="rc-val">${val}</div>
+      <div class="rc-sub">${sub}</div>
+      <div class="rc-state">${state}</div>
+      <button class="btn" data-go="${link}">Examiner</button></div>`;
   };
-  const updSel = bindFileActions($('#dp-list'), () => go('duplicates'));
-  loadIcons();
-};
-
-// ===================== Applications =====================
-PAGES.apps = async () => {
-  content.innerHTML = `<div class="page">${header('Applications')}
-    <div class="grid g2">
-      ${tile('process', 'Gestion des processus', 'Affichez et fermez les processus en cours', 'processes')}
-      ${tile('power', 'Applications au démarrage', `Gérez les applications lancées avec ${OS_NAME}`, 'startup')}
-      ${tile('apps', 'Gestion des applications', 'Désinstallez les applications inutilisées', 'uninstall')}
-      ${toolTile('defaultApps', 'settings', 'Applications par défaut', 'Choisissez vos applications par défaut')}
+  const ok = (t) => `<span class="pill ok">${icon('check')} ${t}</span>`;
+  const warn = (t) => `<span class="pill warn">${t}</span>`;
+  const c = s.cleanup || {}, p = s.protection || {}, pe = s.performance || {}, a = s.applications || {}, cl = s.clutter || {};
+  const issues = smartResult.steps.reduce((n, x) => n + (x.issues || 0), 0);
+  const willClean = c.size || 0;
+  const willTasks = (pe.tasks || []).length;
+  page(`${header('smart')}
+    <p class="lead">${issues ? `Nous avons trouvé ${plural(issues, 'point à traiter', 'points à traiter')}.` : 'Votre PC est en pleine forme.'} Les actions sûres seront appliquées en un clic ; le reste est à examiner.</p>
+    <div class="cards c5">
+      ${card('cleanup', c.error ? '–' : fmtBytes(c.size), c.error ? esc(c.error) : 'de fichiers inutiles à supprimer', c.size > 0 ? warn('À nettoyer') : ok('Propre'), 'cleanup')}
+      ${card('protection', p.error ? '–' : plural(p.threats?.length || 0, 'menace', 'menaces'), esc(p.note || (IS_LINUX ? 'Analyse heuristique des points d\'entrée' : '')), p.threats?.length ? `<span class="pill bad">À examiner</span>` : ok('Protégé'), 'protection')}
+      ${card('performance', plural(willTasks, 'tâche', 'tâches'), `de maintenance recommandées · ${plural(pe.startup || 0, 'app', 'apps')} au démarrage`, willTasks ? warn('À exécuter') : ok('Optimisé'), 'performance')}
+      ${card('applications', a.error ? '–' : plural(a.updates || 0, 'mise à jour', 'mises à jour'), a.security ? `dont ${a.security} de sécurité` : (a.pendingReboot ? 'Redémarrage nécessaire' : 'disponibles'), a.updates ? warn('À installer') : ok('À jour'), 'applications/updates')}
+      ${card('clutter', plural(cl.count || 0, 'fichier', 'fichiers'), cl.count ? `${fmtBytes(cl.size)} de gros téléchargements anciens` : 'Aucun gros fichier oublié', cl.count ? warn('À trier') : ok('Rangé'), 'clutter/large')}
     </div>
-    ${toolSection('Outils', [
-      toolTile('software', 'download', 'Logithèque', 'Installez de nouvelles applications'),
-      toolTile('taskmgr', 'task', IS_LINUX ? 'Moniteur système' : 'Gestionnaire des tâches', 'Ressources et processus détaillés'),
-    ])}</div>`;
+    <div class="action-bar">
+      <span class="summary">${willClean || willTasks ? `Nettoyer ${fmtBytes(willClean)} · ${plural(willTasks, 'tâche', 'tâches')}` : 'Rien à exécuter automatiquement'}</span>
+      <button class="btn-main" id="smart-run" ${willClean || willTasks ? '' : 'disabled'}>Exécuter</button>
+      <button class="btn" id="smart-new">${icon('refresh')} Relancer</button>
+    </div>`);
+  $('#smart-new').onclick = () => { smartResult = null; go('smart'); };
+  $('#smart-run').onclick = async () => {
+    page(scanning('smart', 'Exécution…', 'Nettoyage et maintenance'));
+    const r = await safe(() => pcm.v2.smartRun(), 'Exécution');
+    smartResult = null;
+    if (!alive(token)) return;
+    if (!r) return go('smart');
+    page(doneView('smart', 'Entretien terminé', `${fmtBytes(r.freed)} libérés · ${plural(r.tasks, 'tâche effectuée', 'tâches effectuées')}`, 'smart'));
+  };
+}
+
+// ===================== Nettoyage =====================
+PAGES.cleanup = async (token) => {
+  page(intro('cleanup', {
+    lead: 'Supprimez les fichiers système inutiles, les caches, les journaux et les autres fichiers qui encombrent votre disque.',
+    features: [
+      ['file', 'Fichiers système', IS_LINUX ? 'Journaux, cache des paquets, rapports de plantage' : 'Windows Update, rapports d\'erreurs, vidages mémoire'],
+      ['globe', 'Navigateurs', 'Caches de Chrome, Firefox, Edge, Brave…'],
+      ['wrench', 'Développement', 'Caches npm, pip, Yarn, Gradle, Cargo'],
+    ],
+  }));
+  $('#scan').onclick = async () => {
+    page(scanning('cleanup', 'Recherche des fichiers inutiles…', ''));
+    progressHandlers.clean = (p) => alive(token) && setScan(null, `${p.current} (${p.index + 1}/${p.total})`);
+    const r = await safe(() => pcm.clean.scan('deep'), 'Analyse');
+    if (!r || !alive(token)) return go('cleanup');
+    renderCleanResult(r, token);
+  };
 };
 
-PAGES.processes = async (token) => {
-  content.innerHTML = `<div class="page">${header('Gestion des processus', 'apps')}
-    <div class="list-head"><input type="search" id="pr-q" placeholder="Rechercher un processus" style="width:260px"/><div class="grow"></div>
-      <span class="muted small" id="pr-count"></span><button class="btn" id="pr-refresh">${icon('refresh')} Actualiser</button></div>
-    <div id="pr-list">${loading()}</div></div>`;
+function renderCleanResult(r, token) {
+  const total = r.items.reduce((a, i) => a + i.size, 0);
+  const empty = (i) => i.size === 0 && !(i.countOnly && i.files);
+  page(`${header('cleanup')}
+    <div class="card glass" style="display:flex;align-items:center;gap:18px;margin-bottom:14px">
+      <div class="hero-icon" style="width:70px;height:70px;border-radius:20px;margin:0;animation:none">${micon('cleanup')}</div>
+      <div style="flex:1"><div class="big">${fmtBytes(total)}</div><div class="muted">peuvent être nettoyés</div></div>
+      ${r.items.some((i) => i.needsAdmin) && !r.admin ? `<span class="pill warn">${icon('admin')} ${IS_LINUX ? 'Mot de passe demandé pour les éléments système' : 'Certains éléments nécessitent les droits admin'}</span>` : ''}
+    </div>
+    <div class="list glass" id="clean-list">${r.items.map((i) => `
+      <label class="row" style="cursor:pointer"><input type="checkbox" data-id="${i.id}" data-size="${i.size}" ${i.recommended && !empty(i) ? 'checked' : ''} ${empty(i) ? 'disabled' : ''}/>
+        <div class="r-ico tint">${icon('broom')}</div>
+        <div class="r-main"><div class="r-title">${esc(i.name)} ${i.recommended ? '<span class="pill info">Recommandé</span>' : ''}</div><div class="r-sub">${esc(i.desc)}</div></div>
+        <div class="r-meta">${i.countOnly ? `${i.files} élément(s)` : `<b>${fmtBytes(i.size)}</b><div class="small">${i.files || 0} fichier(s)</div>`}</div></label>`).join('')}</div>
+    <div class="action-bar"><span class="summary" id="sel-size"></span><button class="btn-main" id="do-clean">Nettoyer</button></div>`);
+  const upd = () => {
+    const sel = $$('#clean-list input:checked');
+    $('#sel-size').textContent = sel.length ? `Sélection : ${fmtBytes(sel.reduce((a, c) => a + Number(c.dataset.size), 0))}` : 'Sélectionnez des éléments';
+    $('#do-clean').disabled = !sel.length;
+  };
+  $('#clean-list').addEventListener('change', upd);
+  upd();
+  $('#do-clean').onclick = async () => {
+    const ids = $$('#clean-list input:checked').map((c) => c.dataset.id);
+    if ((ids.includes('recycle') || ids.includes('trash')) && !(await confirmBox('Vider la corbeille ?', 'Les fichiers de la corbeille seront supprimés définitivement.', 'Vider'))) return;
+    page(scanning('cleanup', 'Nettoyage en cours…', ''));
+    progressHandlers.clean = (p) => alive(token) && setScan(null, p.current);
+    const res = await safe(() => pcm.clean.run(ids), 'Nettoyage');
+    if (!alive(token)) return;
+    if (!res) return go('cleanup');
+    page(doneView('cleanup', `${fmtBytes(res.freed)} libérés`, `${plural(res.deleted, 'fichier supprimé', 'fichiers supprimés')}${res.failed ? ` · ${res.failed} ignoré(s) car en cours d'utilisation` : ''}${res.adminCancelled ? ' · éléments système non nettoyés (authentification annulée)' : ''}`, 'cleanup'));
+  };
+}
+
+// ===================== Protection =====================
+const PROTECTION_TABS = [['threats', 'Menaces'], ['privacy', 'Confidentialité'], ['permissions', 'Autorisations'], ['status', 'État']];
+let malwareResult = null;
+
+PAGES.protection = async (token, tab = 'threats') => {
+  const top = `${header('protection')}${tabs('protection', PROTECTION_TABS, tab)}`;
+  if (tab === 'privacy') return protectionPrivacy(token, top);
+  if (tab === 'permissions') return protectionPermissions(token, top);
+  if (tab === 'status') return protectionStatus(token, top);
+  if (malwareResult) return renderThreats(token, top);
+  let kind = 'quick';
+  page(`${top}${intro('protection', {
+    title: 'Analyse des menaces',
+    lead: IS_LINUX
+      ? 'Recherchez les programmes malveillants et les modifications suspectes du système. L\'analyse par signatures utilise ClamAV s\'il est installé.'
+      : 'Lancez une analyse Microsoft Defender rapide, de votre dossier personnel ou complète, puis examinez les menaces détectées.',
+    extra: `<div class="tabs glass" id="kinds" style="margin-bottom:24px">
+      <button class="tab active" data-kind="quick">Rapide</button><button class="tab" data-kind="normal">Normale</button><button class="tab" data-kind="deep">Approfondie</button></div>`,
+  })}`);
+  $$('#kinds .tab').forEach((b) => (b.onclick = () => { kind = b.dataset.kind; $$('#kinds .tab').forEach((x) => x.classList.toggle('active', x === b)); }));
+  $('#scan').onclick = async () => {
+    page(`${top}${scanning('protection', 'Analyse des menaces…', 'Cela peut prendre plusieurs minutes')}`);
+    progressHandlers.malware = (p) => alive(token) && setScan(null, p.current);
+    const r = await safe(() => pcm.v2.malwareScan(kind), 'Analyse');
+    if (!alive(token)) return;
+    if (!r) return go('protection');
+    malwareResult = r;
+    renderThreats(token, top);
+  };
+};
+
+function renderThreats(token, top) {
+  const r = malwareResult;
+  const kinds = { quick: 'rapide', normal: 'normale', deep: 'approfondie' };
+  page(`${top}
+    <div class="card glass" style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+      <div class="status-ico ${r.threats.length ? 'bad' : 'ok'}">${icon(r.threats.length ? 'warn' : 'check')}</div>
+      <div style="flex:1"><div class="big">${r.threats.length ? plural(r.threats.length, 'menace détectée', 'menaces détectées') : 'Aucune menace détectée'}</div>
+      <div class="muted small">Analyse ${kinds[r.kind]} · ${esc(r.engine)}</div></div>
+      <button class="btn" id="new-scan">${icon('refresh')} Nouvelle analyse</button>
+    </div>
+    ${IS_LINUX && !r.clamav ? `<div class="card glass small muted" style="margin-bottom:14px">Pour ajouter l'analyse par signatures antivirus, installez ClamAV (par exemple <b>sudo apt install clamav</b>), puis relancez l'analyse.</div>` : ''}
+    ${r.threats.length ? `<div class="list glass" id="threats">${r.threats.map((t) => `<div class="row">
+      ${t.removable && t.path ? `<input type="checkbox" data-path="${esc(t.path)}" data-size="0" checked/>` : '<span style="width:19px"></span>'}
+      <div class="r-ico tint">${icon('virus')}</div>
+      <div class="r-main"><div class="r-title">${esc(t.threat)}</div><div class="r-sub" title="${esc(t.detail)}">${esc(t.path)} · ${esc(t.detail)}</div></div>
+      ${t.path && t.path !== 'crontab' ? `<button class="btn ghost" data-reveal="${esc(t.path)}">${icon('folder')}</button>` : ''}</div>`).join('')}</div>${trashBar('Supprimer les menaces')}` : ''}`);
+  $('#new-scan').onclick = () => { malwareResult = null; go('protection'); };
+  if (r.threats.length) {
+    bindSelection($('#threats'), {
+      confirmText: 'Les fichiers sélectionnés seront placés dans la corbeille. Les entrées non supprimables (crontab, scripts de session) doivent être corrigées à la main.',
+      onDone: () => { malwareResult = null; go('protection'); },
+    });
+  }
+}
+
+async function protectionPrivacy(token, top) {
+  page(`${top}<p class="lead">Effacez l'historique et les traces de navigation. Les mots de passe, favoris et cartes bancaires ne sont jamais touchés.</p><div id="pv">${`<div class="loading"><span class="spinner"></span>Recherche des traces…</div>`}</div>`);
+  const items = await safe(() => pcm.v2.privacyScan(), 'Confidentialité');
+  if (!items || !alive(token)) return;
+  const groups = {};
+  for (const it of items) (groups[it.group] ||= []).push(it);
+  $('#pv').innerHTML = Object.entries(groups).map(([g, list]) => `<h2>${esc(g)}</h2><div class="list glass">${list.map((it) => `
+    <label class="row" style="cursor:${it.blocked ? 'default' : 'pointer'}"><input type="checkbox" data-id="${it.id}" data-size="${it.size}" ${it.blocked ? 'disabled' : it.recommended ? 'checked' : ''}/>
+      <div class="r-ico tint">${icon(g === 'Système' ? 'clock' : 'globe')}</div>
+      <div class="r-main"><div class="r-title">${esc(it.name)}</div><div class="r-sub">${esc(it.blocked || it.desc)}</div></div>
+      ${it.blocked ? '<span class="pill warn">Navigateur ouvert</span>' : `<div class="r-meta">${fmtBytes(it.size)}</div>`}</label>`).join('')}</div>`).join('') +
+    '<div class="action-bar"><span class="summary" id="pv-sel"></span><button class="btn-main" id="pv-go">Effacer</button></div>';
+  const upd = () => { const n = $$('#pv input:checked').length; $('#pv-go').disabled = !n; $('#pv-sel').textContent = n ? plural(n, 'élément sélectionné', 'éléments sélectionnés') : 'Sélectionnez des éléments'; };
+  $('#pv').addEventListener('change', upd);
+  upd();
+  $('#pv-go').onclick = async () => {
+    const ids = $$('#pv input:checked').map((c) => c.dataset.id);
+    if (ids.some((i) => i.endsWith(':cookies')) && !(await confirmBox('Effacer les cookies ?', 'Vous serez déconnecté des sites web dans les navigateurs concernés.', 'Effacer'))) return;
+    const r = await safe(() => pcm.v2.privacyClean(ids), 'Confidentialité');
+    if (!r || !alive(token)) return;
+    toast(`${plural(r.done, 'élément effacé', 'éléments effacés')} · ${fmtBytes(r.freed)}${r.skipped.length ? ` · ${r.skipped[0]}` : ''}`, r.skipped.length > 0 && !r.done);
+    go('protection/privacy');
+  };
+}
+
+async function protectionPermissions(token, top) {
+  page(`${top}<p class="lead">${IS_LINUX ? 'Vérifiez ce que vos applications Flatpak peuvent faire, et retirez les accès inutiles.' : 'Applications ayant accédé à votre caméra, votre micro ou votre position.'}</p><div id="perm"><div class="loading"><span class="spinner"></span>Lecture des autorisations…</div></div>`);
+  const r = await safe(() => pcm.v2.permList(), 'Autorisations');
+  if (!r || !alive(token)) return;
+  if (!r.supported || !r.apps.length) { $('#perm').innerHTML = `<div class="card glass empty">${icon('check')}<div>${esc(r.reason || 'Aucune autorisation à vérifier.')}</div></div>`; return; }
+  const riskCls = { high: 'bad', medium: 'warn', low: 'info' };
+  $('#perm').innerHTML = `${!IS_LINUX ? `<div class="list-head">${['privacyWebcam:Caméra', 'privacyMic:Micro', 'privacyLocation:Localisation'].map((x) => { const [id, l] = x.split(':'); return `<button class="btn" data-tool="${id}">${icon('external')} Gérer : ${l}</button>`; }).join('')}</div>` : ''}
+    <div class="list glass">${r.apps.map((a, i) => `<div class="row">
+      <div class="r-ico">${fileIcon(a.icon, 'apps')}</div>
+      <div class="r-main"><div class="r-title">${esc(a.name)}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${a.perms.length ? a.perms.map((p) => `<span class="pill ${riskCls[p.risk]}">${esc(p.label)}${p.last ? ` · ${new Date(p.last).toLocaleDateString('fr-FR')}` : ''}${IS_LINUX ? ` <button class="btn ghost" style="min-height:0;padding:0 4px" data-revoke="${i}:${p.id}" title="Retirer">${icon('x')}</button>` : ''}</span>`).join('') : '<span class="pill ok">Aucun accès sensible</span>'}</div></div>
+      ${IS_LINUX ? `<button class="btn" data-reset="${i}">Réinitialiser</button>` : ''}</div>`).join('')}</div>`;
+  loadIcons();
+  $$('[data-revoke]').forEach((b) => (b.onclick = async () => {
+    const [i, perm] = b.dataset.revoke.split(':');
+    const a = r.apps[Number(i)];
+    if (!(await confirmBox('Retirer cette autorisation ?', `« ${a.name} » ne pourra plus utiliser : ${a.perms.find((p) => p.id === perm).label}. L'application peut cesser de fonctionner correctement ; « Réinitialiser » annule ce changement.`, 'Retirer'))) return;
+    if (await safe(() => pcm.v2.permRevoke(a.id, perm))) { toast('Autorisation retirée'); go('protection/permissions'); }
+  }));
+  $$('[data-reset]').forEach((b) => (b.onclick = async () => {
+    const a = r.apps[Number(b.dataset.reset)];
+    if (await safe(() => pcm.v2.permReset(a.id))) { toast(`Autorisations de ${a.name} réinitialisées`); go('protection/permissions'); }
+  }));
+}
+
+async function protectionStatus(token, top) {
+  page(`${top}<div class="cards c3" id="sec">${'<div class="loading"><span class="spinner"></span>Lecture de l\'état de sécurité…</div>'}</div>
+    <h2>Raccourcis</h2><div class="cards c2">
+      <button class="row glass" style="border-radius:18px;cursor:pointer" data-go="performance/network"><div class="r-ico tint">${icon('wifi')}</div><div class="r-main"><div class="r-title">Diagnostic réseau</div><div class="r-sub">Analysez et réparez votre connexion</div></div></button>
+      <button class="row glass" style="border-radius:18px;cursor:pointer" data-go="applications/updates"><div class="r-ico tint">${icon('update')}</div><div class="r-main"><div class="r-title">${UPDATES_NAME}</div><div class="r-sub">Installez les mises à jour de sécurité</div></div></button>
+    </div>`);
+  const s = await safe(() => pcm.protect.status(), 'Protection');
+  if (!s || !alive(token)) return;
+  const cards = s.cards || windowsSecurityCards(s);
+  $('#sec').innerHTML = cards.map((c) => `<div class="card glass">
+    <div class="card-title"><div class="status-ico ${c.ok ? (c.warn ? 'warn' : 'ok') : 'bad'}">${icon(c.icon)}</div><div><div>${esc(c.title)}</div><div class="muted small">${esc(c.status)}</div></div></div>
+    ${c.details?.length ? `<div class="kv" style="grid-template-columns:130px 1fr">${c.details.map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}</div>` : ''}
+    ${c.actions?.length ? `<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">${c.actions.map((a) => `<button class="btn ${a.primary ? 'primary' : ''}" data-sec="${a.id}">${esc(a.label)}</button>`).join('')}</div>` : ''}</div>`).join('');
+  $$('[data-sec]').forEach((b) => (b.onclick = async () => {
+    const label = b.textContent;
+    b.disabled = true; b.innerHTML = '<span class="spinner"></span>';
+    const id = b.dataset.sec;
+    const msg = await safe(() => (id === 'winQuick' ? pcm.protect.quickScan().then(() => 'Analyse rapide terminée.') : id === 'winSig' ? pcm.protect.updateSignatures().then(() => 'Signatures à jour.') : pcm.protect.action(id)), label);
+    if (msg) { if (String(msg).includes('\n')) await confirmBox(label, msg, 'OK'); else toast(msg); }
+    if (alive(token)) go('protection/status');
+  }));
+}
+
+function windowsSecurityCards(s) {
+  const d = s.defender;
+  const fwAll = (s.firewall || []).length && s.firewall.every((f) => f.enabled);
+  return [
+    { icon: 'virus', title: 'Antivirus', ok: !!(d && d.enabled && d.realtime), status: d ? (d.realtime ? 'Microsoft Defender actif' : 'Protection en temps réel désactivée') : (s.antivirus || []).join(', ') || 'Inconnu',
+      details: d ? [['Signatures', `${d.signatureVersion} (${d.signatureAge} j)`], ['Dernière analyse', d.lastQuickScan ? new Date(d.lastQuickScan).toLocaleString('fr-FR') : 'Jamais']] : [],
+      actions: d ? [{ id: 'winSig', label: 'Mettre à jour les signatures' }] : [] },
+    { icon: 'firewall', title: 'Pare-feu', ok: !!fwAll, warn: !fwAll, status: fwAll ? 'Activé sur tous les réseaux' : 'Désactivé sur certains profils', details: (s.firewall || []).map((f) => [f.name, f.enabled ? 'Activé' : 'Désactivé']) },
+    { icon: 'shield', title: 'Protection contre la falsification', ok: !!d?.tamper, warn: !d?.tamper, status: d?.tamper ? 'Activée' : 'Désactivée ou inconnue', details: [['Rôle', 'Empêche la désactivation de la sécurité']], actions: [{ id: 'none', label: 'Sécurité Windows' }].filter(() => false) },
+  ];
+}
+
+// ===================== Performances =====================
+const PERF_TABS = [['maintenance', 'Maintenance'], ['startup', 'Démarrage'], ['processes', 'Gros consommateurs'], ['network', 'Réseau']];
+
+PAGES.performance = async (token, tab = 'maintenance') => {
+  const top = `${header('performance')}${tabs('performance', PERF_TABS, tab)}`;
+  if (tab === 'startup') return perfStartup(token, top);
+  if (tab === 'processes') return perfProcesses(token, top);
+  if (tab === 'network') return perfNetwork(token, top);
+  page(`${top}<p class="lead">Des tâches de maintenance qui gardent votre système rapide et stable.</p><div id="mt"><div class="loading"><span class="spinner"></span></div></div>`);
+  const tasks = await safe(() => pcm.v2.maintList(), 'Maintenance');
+  if (!tasks || !alive(token)) return;
+  $('#mt').innerHTML = `<div class="list glass">${tasks.map((t) => `<label class="row" style="cursor:pointer"><input type="checkbox" data-id="${t.id}" ${t.recommended ? 'checked' : ''}/>
+    <div class="r-ico tint">${icon('wrench')}</div><div class="r-main"><div class="r-title">${esc(t.name)} ${t.admin ? `<span class="pill warn">${icon('admin')} ${IS_LINUX ? 'Mot de passe' : 'Admin'}</span>` : ''}</div><div class="r-sub">${esc(t.desc)}</div></div></label>`).join('')}</div>
+    <div class="action-bar"><span class="summary" id="mt-sel"></span><button class="btn-main" id="mt-run">Exécuter</button></div>`;
+  const upd = () => { const n = $$('#mt input:checked').length; $('#mt-run').disabled = !n; $('#mt-sel').textContent = n ? plural(n, 'tâche sélectionnée', 'tâches sélectionnées') : 'Sélectionnez des tâches'; };
+  $('#mt').addEventListener('change', upd);
+  upd();
+  $('#mt-run').onclick = async () => {
+    const ids = $$('#mt input:checked').map((c) => c.dataset.id);
+    page(`${top}${scanning('performance', 'Maintenance en cours…', '')}`);
+    const res = await safe(() => pcm.v2.maintRun(ids), 'Maintenance');
+    if (!alive(token)) return;
+    if (!res) return go('performance');
+    const okN = res.filter((x) => x.ok).length;
+    const failed = res.filter((x) => !x.ok);
+    page(`${top}${doneView('performance', `${plural(okN, 'tâche effectuée', 'tâches effectuées')}`, failed.length ? `Non effectuées : ${failed.map((f) => `${tasks.find((t) => t.id === f.id)?.name} (${f.error || 'échec'})`).join(' · ')}` : 'Votre système est optimisé.', 'performance')}`);
+  };
+};
+
+async function perfStartup(token, top) {
+  page(`${top}<p class="lead">Désactivez les applications lancées à l'ouverture de session pour démarrer plus vite.</p><div id="su"><div class="loading"><span class="spinner"></span></div></div>`);
+  const items = await safe(() => pcm.apps.startup());
+  if (!items || !alive(token)) return;
+  const on = items.filter((i) => i.enabled).length;
+  $('#su').innerHTML = items.length ? `<p class="small muted"><b>${on}</b> sur ${items.length} activée(s)</p><div class="list glass">${items.map((it, i) => `<div class="row">
+    <div class="r-ico">${fileIcon(it.exe, 'power')}</div>
+    <div class="r-main"><div class="r-title">${esc(it.name.replace(/\.lnk$/i, ''))}</div><div class="r-sub" title="${esc(it.command)}">${esc(it.command)}</div></div>
+    <span class="pill ${it.hive === 'HKLM' ? 'info' : 'ok'}">${IS_LINUX ? (it.hive === 'HKLM' ? 'Système' : 'Personnel') : (it.hive === 'HKLM' ? 'Tous les utilisateurs' : 'Utilisateur actuel')}</span>
+    <label class="switch"><input type="checkbox" data-i="${i}" ${it.enabled ? 'checked' : ''}/><span></span></label></div>`).join('')}</div>` : `<div class="card glass empty">${icon('check')}<div>Aucune application au démarrage.</div></div>`;
+  $$('#su input[data-i]').forEach((c) => (c.onchange = async () => {
+    const it = items[Number(c.dataset.i)];
+    const ok = await safe(() => pcm.apps.setStartup(it, c.checked), it.hive === 'HKLM' && !IS_LINUX ? 'Droits administrateur requis' : 'Erreur');
+    if (ok) toast(`${it.name} ${c.checked ? 'activée' : 'désactivée'} au démarrage`); else c.checked = !c.checked;
+  }));
+  loadIcons();
+}
+
+async function perfProcesses(token, top) {
+  page(`${top}<div class="list-head"><input type="search" id="pr-q" placeholder="Rechercher" style="width:260px"/><div class="grow"></div><span class="muted small" id="pr-count"></span><button class="btn" id="pr-refresh">${icon('refresh')} Actualiser</button></div><div id="pr"><div class="loading"><span class="spinner"></span></div></div>`);
   let all = [];
   const render = () => {
     const q = $('#pr-q').value.toLowerCase();
-    const list = all.filter((p) => !q || p.name.toLowerCase().includes(q) || (p.desc || '').toLowerCase().includes(q));
+    const list = all.filter((p) => !q || p.name.toLowerCase().includes(q) || (p.desc || '').toLowerCase().includes(q)).slice(0, 150);
     $('#pr-count').textContent = `${list.length} processus · ${fmtBytes(list.reduce((a, p) => a + p.memory, 0))}`;
-    $('#pr-list').innerHTML = `<div class="list">${list.map((p, i) => `<div class="row">
+    $('#pr').innerHTML = `<div class="list glass">${list.map((p, i) => `<div class="row">
       <div class="r-ico">${fileIcon(p.icon || p.path, 'process')}</div>
-      <div class="r-main"><div class="r-title">${esc(p.desc)}</div><div class="r-sub">${esc(p.name)}${IS_LINUX ? '' : '.exe'}${p.ids.length > 1 ? ` · ${p.ids.length} instances` : ''}${p.hasWindow ? (IS_LINUX ? ' · application' : ' · fenêtre ouverte') : ''}${IS_LINUX && p.mine === false ? ' · système' : ''}</div></div>
-      <div class="r-meta"><b>${fmtBytes(p.memory)}</b></div>
-      <button class="btn" data-kill="${i}">Terminer</button></div>`).join('')}</div>`;
+      <div class="r-main"><div class="r-title">${esc(p.desc)}</div><div class="r-sub">${esc(p.name)}${IS_LINUX ? '' : '.exe'}${p.ids.length > 1 ? ` · ${p.ids.length} instances` : ''}</div></div>
+      <div class="r-meta"><b>${fmtBytes(p.memory)}</b></div><button class="btn" data-kill="${i}">Quitter</button></div>`).join('')}</div>`;
     $$('[data-kill]').forEach((b) => (b.onclick = async () => {
       const p = list[Number(b.dataset.kill)];
-      if (!(await confirmBox('Terminer le processus ?', `« ${p.desc} » sera fermé. Les données non enregistrées seront perdues.`, 'Terminer'))) return;
-      const ok = await safe(() => pcm.apps.kill(p.ids, p.name, { force: true }));
-      if (ok) { toast(`${p.desc} terminé`); load(); }
+      if (!(await confirmBox('Quitter l\'application ?', `« ${p.desc} » sera fermée. Les données non enregistrées seront perdues.`, 'Quitter'))) return;
+      if (await safe(() => pcm.apps.kill(p.ids, p.name, { force: true }))) { toast(`${p.desc} fermée`); load(); }
     }));
     loadIcons();
   };
-  const load = async () => {
-    const r = await safe(() => pcm.apps.processes());
-    if (!r || !alive(token)) return;
-    all = r;
-    render();
-  };
+  const load = async () => { const r = await safe(() => pcm.apps.processes()); if (r && alive(token)) { all = r; render(); } };
   $('#pr-q').oninput = render;
   $('#pr-refresh').onclick = load;
   load();
-};
+}
 
-PAGES.startup = async (token) => {
-  content.innerHTML = `<div class="page">${header('Applications au démarrage', 'apps')}
-    <p class="muted">Désactiver une application l'empêche de se lancer à l'ouverture de session, ce qui accélère le démarrage de ${OS_NAME}.</p>
-    <div id="su-list">${loading()}</div></div>`;
-  const load = async () => {
-    const items = await safe(() => pcm.apps.startup());
-    if (!items || !alive(token)) return;
-    const on = items.filter((i) => i.enabled).length;
-    $('#su-list').innerHTML = items.length ? `<p class="small"><b>${on}</b> application(s) activée(s) sur ${items.length}</p><div class="list">${items.map((it, i) => `<div class="row">
-      <div class="r-ico">${fileIcon(it.exe, 'power')}</div>
-      <div class="r-main"><div class="r-title">${esc(it.name.replace(/\.lnk$/i, ''))}</div><div class="r-sub" title="${esc(it.command)}">${esc(it.command)}</div></div>
-      <span class="pill ${it.hive === 'HKLM' ? 'info' : 'ok'}">${IS_LINUX ? (it.hive === 'HKLM' ? 'Système' : 'Personnel') : (it.hive === 'HKLM' ? 'Tous les utilisateurs' : 'Utilisateur actuel')}</span>
-      <label class="switch" title="${it.enabled ? 'Activée' : 'Désactivée'}"><input type="checkbox" data-i="${i}" ${it.enabled ? 'checked' : ''}/><span></span></label></div>`).join('')}</div>`
-      : '<div class="card empty">Aucune application au démarrage.</div>';
-    $$('#su-list input[data-i]').forEach((c) => (c.onchange = async () => {
-      const it = items[Number(c.dataset.i)];
-      const ok = await safe(() => pcm.apps.setStartup(it, c.checked), it.hive === 'HKLM' && !IS_LINUX ? 'Droits administrateur requis' : 'Erreur');
-      if (ok) toast(`${it.name} ${c.checked ? 'activée' : 'désactivée'} au démarrage`);
-      else c.checked = !c.checked;
-    }));
-    loadIcons();
-  };
-  load();
-};
+async function perfNetwork(token, top) {
+  page(`${top}${scanning('performance', 'Diagnostic du réseau…', 'Carte réseau, adresse IP, routeur, DNS et accès Internet')}`);
+  const r = await safe(() => pcm.net.diagnose(), 'Diagnostic');
+  if (!r || !alive(token)) return;
+  const problems = r.checks.filter((c) => !c.ok);
+  page(`${top}<div class="card glass" style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+      <div class="status-ico ${problems.length ? 'warn' : 'ok'}">${icon(problems.length ? 'warn' : 'check')}</div>
+      <div style="flex:1"><div class="big">${problems.length ? plural(problems.length, 'point à vérifier', 'points à vérifier') : 'Votre réseau fonctionne correctement'}</div>
+      <div class="muted small">${r.latency !== null ? `Latence moyenne : ${r.latency} ms` : 'Internet injoignable'}</div></div>
+      <button class="btn" data-go="performance/network">${icon('refresh')} Relancer</button></div>
+    <div class="list glass">${r.checks.map((c) => `<div class="row"><div class="status-ico ${c.ok ? 'ok' : c.warn ? 'warn' : 'bad'}">${icon(c.ok ? 'check' : c.warn ? 'warn' : 'x')}</div>
+      <div class="r-main"><div class="r-title">${esc(c.name)}</div><div class="r-sub">${esc(c.detail)}</div></div>
+      ${c.fix ? `<button class="btn ${c.ok ? 'ghost' : 'primary'}" data-fix="${c.fix}">${c.ok ? 'Réinitialiser' : 'Réparer'}</button>` : ''}</div>`).join('')}</div>`);
+  $$('[data-fix]').forEach((b) => (b.onclick = async () => {
+    const id = b.dataset.fix;
+    if (id === 'resetwinsock' && !(await confirmBox('Réinitialiser Winsock ?', 'Nécessite les droits administrateur et un redémarrage.', 'Réinitialiser'))) return;
+    if (id === 'restartnm' && !(await confirmBox('Redémarrer NetworkManager ?', 'La connexion sera coupée quelques secondes. Votre mot de passe sera demandé.', 'Redémarrer'))) return;
+    const msg = await safe(() => pcm.net.fix(id), 'Réparation');
+    if (msg) { toast(msg); go('performance/network'); }
+  }));
+}
 
-PAGES.uninstall = async (token) => {
-  content.innerHTML = `<div class="page">${header('Gestion des applications', 'apps')}
-    <div class="list-head"><input type="search" id="un-q" placeholder="Rechercher une application" style="width:260px"/>
-      <select id="un-sort"><option value="name">Trier par nom</option><option value="size">Trier par taille</option><option value="date">Trier par date d'installation</option></select>
+// ===================== Applications =====================
+const APP_TABS = [['uninstall', 'Désinstallation'], ['leftovers', 'Restes'], ['updates', 'Mises à jour']];
+
+PAGES.applications = async (token, tab = 'uninstall') => {
+  const top = `${header('applications')}${tabs('applications', APP_TABS, tab)}`;
+  if (tab === 'leftovers') return appsLeftovers(token, top);
+  if (tab === 'updates') return appsUpdates(token, top);
+  page(`${top}<div class="list-head"><input type="search" id="un-q" placeholder="Rechercher une application" style="width:260px"/>
+      <select id="un-sort"><option value="name">Nom</option><option value="size">Taille</option><option value="date">Date d'installation</option></select>
       <select id="un-type"><option value="">Toutes</option>${Object.entries(APP_TYPES).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select>
       <div class="grow"></div><span class="muted small" id="un-count"></span></div>
-    <div id="un-list">${loading('Lecture des applications installées…')}</div></div>`;
+    <div id="un"><div class="loading"><span class="spinner"></span>Lecture des applications…</div></div>`);
   const all = await safe(() => pcm.apps.installed());
   if (!all || !alive(token)) return;
   const render = () => {
     const q = $('#un-q').value.toLowerCase();
     const t = $('#un-type').value;
-    let list = all.filter((a) => (!q || a.name.toLowerCase().includes(q) || (a.publisher || '').toLowerCase().includes(q)) && (!t || a.type === t));
+    const list = all.filter((a) => (!q || a.name.toLowerCase().includes(q) || (a.publisher || '').toLowerCase().includes(q)) && (!t || a.type === t));
     const s = $('#un-sort').value;
     if (s === 'size') list.sort((a, b) => (b.size || 0) - (a.size || 0));
     if (s === 'date') list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    $('#un-count').textContent = `${list.length} application(s)`;
-    $('#un-list').innerHTML = `<div class="list">${list.map((a, i) => {
+    $('#un-count').textContent = plural(list.length, 'application', 'applications');
+    $('#un').innerHTML = `<div class="list glass">${list.map((a, i) => {
       const ico = a.icon ? a.icon.split(',')[0].replace(/"/g, '') : null;
       const iconRef = IS_LINUX ? ico : (ico && /\.(exe|ico|dll)$/i.test(ico) ? ico : null);
-      const typeLbl = a.type === 'desktop' ? '' : APP_TYPES[a.type] || '';
       return `<div class="row"><div class="r-ico">${fileIcon(iconRef, 'apps')}</div>
-      <div class="r-main"><div class="r-title">${esc(a.name)}</div><div class="r-sub">${[a.publisher, a.version, IS_LINUX && a.pkg && a.type === 'system' ? a.pkg : '', typeLbl].filter(Boolean).map(esc).join(' · ')}</div></div>
-      <div class="r-meta">${a.size ? fmtBytes(a.size) : ''}</div><div class="r-meta">${a.date ? esc(a.date) : ''}</div>
-      <button class="btn" data-un="${i}">Désinstaller</button></div>`;
+        <div class="r-main"><div class="r-title">${esc(a.name)}</div><div class="r-sub">${[a.publisher, a.version, a.type !== 'desktop' ? APP_TYPES[a.type] : ''].filter(Boolean).map(esc).join(' · ')}</div></div>
+        <div class="r-meta">${a.size ? fmtBytes(a.size) : ''}</div><div class="r-meta">${a.date ? esc(a.date) : ''}</div>
+        <button class="btn" data-un="${i}">Désinstaller</button></div>`;
     }).join('')}</div>`;
     $$('[data-un]').forEach((b) => (b.onclick = async () => {
       const a = list[Number(b.dataset.un)];
-      const how = {
-        desktop: '\nLe programme de désinstallation de l\'application va s\'ouvrir.',
-        system: `\nLe paquet « ${a.pkg} » sera supprimé (mot de passe requis).`,
-        snap: '\nLe snap sera supprimé (mot de passe requis).',
-        flatpak: '\nL\'application Flatpak et ses données d\'exécution seront supprimées.',
-        user: '\nSeul le raccourci du menu sera supprimé.',
-      }[a.type] || '';
-      if (!(await confirmBox('Désinstaller ?', `« ${a.name} » va être désinstallée.${how}`, 'Désinstaller'))) return;
+      const how = { desktop: '\nLe programme de désinstallation va s\'ouvrir.', system: `\nLe paquet « ${a.pkg} » sera supprimé (mot de passe requis).`, snap: '\nMot de passe requis.', flatpak: '', user: '\nSeul le raccourci du menu sera supprimé.' }[a.type] || '';
+      if (!(await confirmBox('Désinstaller ?', `« ${a.name} » va être désinstallée.${how}\nPensez ensuite à vérifier l'onglet « Restes ».`, 'Désinstaller'))) return;
       b.disabled = true; b.innerHTML = '<span class="spinner"></span>';
       const r = await safe(() => pcm.apps.uninstall(a), 'Désinstallation');
       if (r) toast(r.finished ? `${a.name} a été désinstallée` : `Désinstallation de ${a.name} lancée`);
@@ -553,142 +631,394 @@ PAGES.uninstall = async (token) => {
   render();
 };
 
-// ===================== Protection =====================
-PAGES.protection = async (token) => {
-  content.innerHTML = `<div class="page">${header('Protection')}
-    <div class="grid g3" id="sec-cards">${loading('Lecture de l\'état de sécurité…')}</div>
-    <h2>Sécurité et mises à jour</h2>
-    <div class="grid g2">
-      ${tile('update', UPDATES_NAME, 'Recherchez les mises à jour disponibles', 'updates')}
-      ${tile('wifi', 'Diagnostic réseau', 'Analysez et réparez votre connexion', 'network')}
-      ${toolTile('windowsSecurity', 'shield', 'Sécurité Windows', 'Ouvrir le centre de sécurité')}
-      ${toolTile('firewallSettings', 'firewall', 'Configuration du pare-feu', 'Règles et profils réseau')}
-      ${toolTile('privacy', 'shield', 'Confidentialité', 'Paramètres de confidentialité du bureau')}
-      ${toolTile('defaultApps', 'globe', 'Navigateur par défaut', 'Protégez votre navigateur par défaut')}
-    </div></div>`;
-  const s = await safe(() => pcm.protect.status());
-  if (!s || !alive(token)) return;
-  if (s.cards) return renderSecurityCards(s.cards, token);
-  const d = s.defender;
-  const fwAll = (s.firewall || []).length && s.firewall.every((f) => f.enabled);
-  const defOk = d && d.enabled && d.realtime;
-  $('#sec-cards').innerHTML = `
-    <div class="card"><div class="meter-row"><div class="status-ico ${defOk ? 'ok' : 'bad'}">${icon('virus')}</div><div><div class="t-title">Protection antivirus</div>
-      <div class="muted small">${d ? (defOk ? 'Microsoft Defender actif' : 'Protection en temps réel désactivée') : esc((s.antivirus || []).join(', ') || 'Inconnu')}</div></div></div>
-      ${d ? `<div class="kv" style="margin-top:14px"><div>Signatures</div><div>${esc(d.signatureVersion)} (${d.signatureAge} j)</div><div>Dernière analyse</div><div>${d.lastQuickScan ? new Date(d.lastQuickScan).toLocaleString('fr-FR') : 'Jamais'}</div></div>
-      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn primary" id="qscan">Analyse rapide</button><button class="btn" id="sigup">Mettre à jour</button></div>` : ''}</div>
-    <div class="card"><div class="meter-row"><div class="status-ico ${fwAll ? 'ok' : 'warn'}">${icon('firewall')}</div><div><div class="t-title">Pare-feu</div>
-      <div class="muted small">${fwAll ? 'Activé sur tous les réseaux' : 'Désactivé sur certains profils'}</div></div></div>
-      <div class="kv" style="margin-top:14px">${(s.firewall || []).map((f) => `<div>${esc(f.name)}</div><div><span class="pill ${f.enabled ? 'ok' : 'bad'}">${f.enabled ? 'Activé' : 'Désactivé'}</span></div>`).join('')}</div></div>
-    <div class="card"><div class="meter-row"><div class="status-ico ${d?.tamper ? 'ok' : 'warn'}">${icon('shield')}</div><div><div class="t-title">Protection contre la falsification</div>
-      <div class="muted small">${d?.tamper ? 'Activée' : 'Désactivée ou inconnue'}</div></div></div>
-      <p class="small muted" style="margin-top:14px">Empêche les applications malveillantes de modifier les paramètres de sécurité.</p></div>`;
-  $('#qscan') && ($('#qscan').onclick = async (e) => {
-    e.target.disabled = true; e.target.innerHTML = '<span class="spinner"></span> Analyse…';
-    const ok = await safe(() => pcm.protect.quickScan(), 'Analyse');
-    if (ok) toast('Analyse rapide terminée, aucune menace active signalée par Defender.');
-    if (alive(token)) go('protection');
-  });
-  $('#sigup') && ($('#sigup').onclick = async (e) => {
-    e.target.disabled = true; e.target.innerHTML = '<span class="spinner"></span>';
-    const ok = await safe(() => pcm.protect.updateSignatures(), 'Mise à jour');
-    if (ok) toast('Signatures à jour');
-    if (alive(token)) go('protection');
-  });
-};
-
-// Cartes de sécurité génériques (Linux) : { icon, title, ok, warn, status, details, actions }
-function renderSecurityCards(cards, token) {
-  $('#sec-cards').innerHTML = cards.map((c) => `<div class="card">
-    <div class="meter-row"><div class="status-ico ${c.ok ? (c.warn ? 'warn' : 'ok') : 'bad'}">${icon(c.icon)}</div>
-      <div><div class="t-title">${esc(c.title)}</div><div class="muted small">${esc(c.status)}</div></div></div>
-    ${c.details?.length ? `<div class="kv" style="margin-top:14px;grid-template-columns:130px 1fr">${c.details.map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}</div>` : ''}
-    ${c.actions?.length ? `<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">${c.actions.map((a) => `<button class="btn ${a.primary ? 'primary' : ''}" data-sec="${a.id}">${esc(a.label)}</button>`).join('')}</div>` : ''}
-  </div>`).join('');
-  $$('[data-sec]').forEach((b) => (b.onclick = async () => {
-    const label = b.textContent;
-    b.disabled = true; b.innerHTML = '<span class="spinner"></span> En cours…';
-    const msg = await safe(() => pcm.protect.action(b.dataset.sec), label);
-    if (msg) {
-      if (msg.includes('\n')) await confirmBox(label, msg, 'OK'); else toast(msg);
-    }
-    if (alive(token)) go('protection');
-  }));
+async function appsLeftovers(token, top) {
+  page(`${top}${scanning('applications', 'Recherche des restes d\'applications…', 'Dossiers de configuration et de données sans application installée')}`);
+  progressHandlers.leftovers = (p) => alive(token) && setScan(null, p.current);
+  const items = await safe(() => pcm.v2.leftovers(), 'Restes');
+  if (!items || !alive(token)) return;
+  page(`${top}<p class="lead">Dossiers laissés par des applications qui ne sont plus installées et inutilisés depuis plus de 90 jours. Vérifiez la liste : ils iront dans la corbeille.</p>
+    ${items.length ? `<div class="list glass" id="lo">${items.map((f) => `<div class="row"><input type="checkbox" data-path="${esc(f.path)}" data-size="${f.size}"/>
+      <div class="r-ico tint">${icon('box')}</div><div class="r-main"><div class="r-title">${esc(f.name)}</div><div class="r-sub">${esc(f.path)}</div></div>
+      <div class="r-meta">${fmtDate(f.mtime)}</div><div class="r-meta"><b>${fmtBytes(f.size)}</b></div>
+      <button class="btn ghost" data-reveal="${esc(f.path)}">${icon('folder')}</button></div>`).join('')}</div>${trashBar()}`
+    : `<div class="card glass empty">${icon('check')}<div>Aucun reste d'application trouvé.</div></div>`}`);
+  if (items.length) bindSelection($('#lo'), { onDone: () => go('applications/leftovers') });
 }
 
-PAGES.updates = async (token) => {
-  content.innerHTML = `<div class="page">${header(UPDATES_NAME, 'protection')}
-    <div class="card"><div class="loading"><span class="spinner"></span>Recherche des mises à jour (cela peut prendre une minute)…</div><div class="progress-line"></div></div></div>`;
+async function appsUpdates(token, top) {
+  page(`${top}${scanning('applications', 'Recherche des mises à jour…', 'Cela peut prendre une minute')}`);
   const r = await safe(() => pcm.protect.updates(), UPDATES_NAME);
   if (!alive(token)) return;
-  if (IS_LINUX && r) return renderLinuxUpdates(r, token);
-  const page = $('.page');
-  if (!r) {
-    page.innerHTML = header(UPDATES_NAME, 'protection') + (IS_LINUX
-      ? `<div class="card empty">Impossible de vérifier les mises à jour.<br><br>${toolTile('softwareUpdates', 'download', '', '') ? '<button class="btn primary" data-tool="softwareUpdates">Ouvrir la logithèque</button>' : ''}</div>`
-      : `<div class="card empty">Impossible de contacter Windows Update.<br><br><button class="btn primary" data-tool="windowsUpdate">Ouvrir Windows Update</button></div>`);
-    return;
-  }
-  page.innerHTML = header('Windows Update', 'protection') + `
-    <div class="card result-banner"><div class="status-ico ${r.updates.length ? 'warn' : 'ok'}">${icon(r.updates.length ? 'update' : 'check')}</div>
-      <div style="flex:1"><div class="big">${r.updates.length ? `${r.updates.length} mise(s) à jour disponible(s)` : 'Votre PC est à jour'}</div>
-      <div class="muted small">${r.pendingReboot ? 'Un redémarrage est nécessaire pour terminer l\'installation.' : 'Dernière vérification : à l\'instant'}</div></div>
-      <button class="btn primary" data-tool="windowsUpdate">${icon('external')} Installer via Windows Update</button></div>
-    ${r.updates.length ? `<h2>Mises à jour</h2><div class="list">${r.updates.map((u) => `<div class="row"><div class="r-ico">${icon('update')}</div>
-      <div class="r-main"><div class="r-title">${esc(u.title)}</div><div class="r-sub">${esc(u.category || '')}${u.kb ? ' · KB' + esc(u.kb) : ''}${u.reboot ? ' · redémarrage requis' : ''}</div></div>
-      <div class="r-meta">${u.size ? fmtBytes(u.size) : ''}</div></div>`).join('')}</div>` : ''}`;
-};
-
-function renderLinuxUpdates(r, token) {
+  if (!r) return page(`${top}<div class="card glass empty">Impossible de vérifier les mises à jour.</div>`);
   const groups = {};
-  for (const u of r.updates) (groups[u.category] ||= []).push(u);
-  const security = (groups['Sécurité'] || []).length;
-  $('.page').innerHTML = header(UPDATES_NAME, 'protection') + `
-    <div class="card result-banner"><div class="status-ico ${r.updates.length ? 'warn' : 'ok'}">${icon(r.updates.length ? 'update' : 'check')}</div>
-      <div style="flex:1"><div class="big">${r.updates.length ? `${r.updates.length} mise(s) à jour disponible(s)` : 'Votre système est à jour'}</div>
-      <div class="muted small">${r.pendingReboot ? 'Un redémarrage est nécessaire pour terminer une mise à jour.' : `Gestionnaire : ${esc(r.manager || '–')}${security ? ` · ${security} mise(s) à jour de sécurité` : ''}`}</div></div>
-      ${r.updates.length ? `<button class="btn primary lg" id="upd-install">Tout mettre à jour</button>` : ''}
-      ${toolTile('softwareUpdates', 'download', '', '') ? `<button class="btn" data-tool="softwareUpdates">${icon('external')} Logithèque</button>` : ''}</div>
-    ${Object.entries(groups).map(([cat, list]) => `<h2>${esc(cat)} <span class="muted small">(${list.length})</span></h2><div class="list">${list.slice(0, 200).map((u) => `<div class="row">
-      <div class="r-ico">${icon(cat === 'Sécurité' ? 'shield' : 'update')}</div>
-      <div class="r-main"><div class="r-title">${esc(u.title)}</div><div class="r-sub">${u.from ? `${esc(u.from)} → ` : ''}${esc(u.version || '')}</div></div></div>`).join('')}${list.length > 200 ? `<div class="row muted small">… et ${list.length - 200} autres</div>` : ''}</div>`).join('')}`;
-  $('#upd-install') && ($('#upd-install').onclick = async (e) => {
-    if (!(await confirmBox('Installer les mises à jour ?', 'Les paquets du système, Snap et Flatpak vont être mis à jour. Votre mot de passe sera demandé ; l\'opération peut durer plusieurs minutes.', 'Mettre à jour'))) return;
-    e.target.disabled = true; e.target.innerHTML = '<span class="spinner"></span> Installation…';
-    const ok = await safe(() => pcm.protect.installUpdates(), 'Mise à jour');
-    if (ok) toast('Mises à jour installées');
-    if (alive(token)) go('updates');
+  for (const u of r.updates) (groups[u.category || 'Système'] ||= []).push(u);
+  page(`${top}<div class="card glass" style="display:flex;align-items:center;gap:16px;margin-bottom:6px">
+      <div class="status-ico ${r.updates.length ? 'warn' : 'ok'}">${icon(r.updates.length ? 'update' : 'check')}</div>
+      <div style="flex:1"><div class="big">${r.updates.length ? plural(r.updates.length, 'mise à jour disponible', 'mises à jour disponibles') : 'Tout est à jour'}</div>
+      <div class="muted small">${r.pendingReboot ? 'Un redémarrage est nécessaire pour terminer une mise à jour.' : esc(IS_LINUX ? `Gestionnaire : ${r.manager || '–'}` : 'Windows Update')}</div></div></div>
+    ${Object.entries(groups).map(([cat, list]) => `<h2>${esc(cat)} <span class="muted small">(${list.length})</span></h2><div class="list glass">${list.slice(0, 200).map((u) => `<div class="row">
+      <div class="r-ico tint">${icon(/sécurité/i.test(cat) ? 'shield' : 'update')}</div>
+      <div class="r-main"><div class="r-title">${esc(u.title)}</div><div class="r-sub">${u.from ? `${esc(u.from)} → ` : ''}${esc(u.version || u.kb || '')}</div></div>
+      <div class="r-meta">${u.size ? fmtBytes(u.size) : ''}</div></div>`).join('')}</div>`).join('')}
+    ${r.updates.length ? `<div class="action-bar">${IS_LINUX ? '<button class="btn-main" id="upd-go">Tout mettre à jour</button>' : '<button class="btn-main" data-tool="windowsUpdate">Ouvrir Windows Update</button>'}</div>` : ''}`);
+  $('#upd-go') && ($('#upd-go').onclick = async () => {
+    if (!(await confirmBox('Installer les mises à jour ?', 'Les paquets du système, Snap et Flatpak vont être mis à jour. Votre mot de passe sera demandé.', 'Mettre à jour'))) return;
+    page(`${top}${scanning('applications', 'Installation des mises à jour…', 'Ne fermez pas FastBoost')}`);
+    if (await safe(() => pcm.protect.installUpdates(), 'Mise à jour')) toast('Mises à jour installées');
+    if (alive(token)) go('applications/updates');
   });
 }
 
-PAGES.network = async (token) => {
-  content.innerHTML = `<div class="page">${header('Diagnostic réseau', 'protection')}
-    <div class="card"><div class="loading"><span class="spinner"></span>Analyse de la connexion réseau…</div><div class="progress-line"></div></div></div>`;
-  const r = await safe(() => pcm.net.diagnose(), 'Diagnostic');
-  if (!r || !alive(token)) return;
-  const problems = r.checks.filter((c) => !c.ok);
-  $('.page').innerHTML = header('Diagnostic réseau', 'protection') + `
-    <div class="card result-banner"><div class="status-ico ${problems.length ? 'warn' : 'ok'}">${icon(problems.length ? 'warn' : 'check')}</div>
-      <div style="flex:1"><div class="big">${problems.length ? `${problems.length} point(s) à vérifier` : 'Votre réseau fonctionne correctement'}</div>
-      <div class="muted small">${r.latency !== null ? `Latence moyenne : ${r.latency} ms` : 'Internet injoignable'}</div></div>
-      <button class="btn" data-go="network">${icon('refresh')} Relancer</button></div>
-    <h2>Résultats</h2>
-    <div class="list">${r.checks.map((c) => `<div class="row"><div class="status-ico ${c.ok ? 'ok' : c.warn ? 'warn' : 'bad'}">${icon(c.ok ? 'check' : c.warn ? 'warn' : 'x')}</div>
-      <div class="r-main"><div class="r-title">${esc(c.name)}</div><div class="r-sub">${esc(c.detail)}</div></div>
-      ${c.fix ? `<button class="btn ${c.ok ? 'subtle' : 'primary'}" data-fix="${c.fix}">${c.ok ? 'Réinitialiser' : 'Réparer'}</button>` : ''}</div>`).join('')}</div>
-    <h2>Outils</h2><div class="grid g2">
-      <button class="tile" data-fixtile="flushdns"><div class="t-ico">${icon('refresh')}</div><div><div class="t-title">Vider le cache DNS</div><div class="t-sub">Résout certains sites inaccessibles</div></div></button>
-      ${toolTile('networkSettings', 'wifi', 'Paramètres réseau', 'Ouvrir les paramètres du système')}</div>`;
-  $$('[data-fix],[data-fixtile]').forEach((b) => (b.onclick = async () => {
-    const id = b.dataset.fix || b.dataset.fixtile;
-    if (id === 'resetwinsock' && !(await confirmBox('Réinitialiser Winsock ?', 'Cette opération nécessite les droits administrateur et un redémarrage.', 'Réinitialiser'))) return;
-    if (id === 'restartnm' && !(await confirmBox('Redémarrer NetworkManager ?', 'La connexion sera coupée quelques secondes. Votre mot de passe sera demandé.', 'Redémarrer'))) return;
-    const msg = await safe(() => pcm.net.fix(id), 'Réparation');
-    if (msg) { toast(msg); if (b.dataset.fix) go('network'); }
+// ===================== Encombrement =====================
+const CLUTTER_TABS = [['duplicates', 'Doublons'], ['similar', 'Images similaires'], ['large', 'Gros & anciens fichiers'], ['downloads', 'Téléchargements']];
+const clutterRoots = {};
+
+function rootPicker(key, def) {
+  const root = clutterRoots[key] || def;
+  return `<span class="muted small">Dossier :</span><b class="small">${esc(root)}</b><button class="btn" data-pick="${key}">${icon('folder')} Changer</button>`;
+}
+function bindRootPicker(key, route) {
+  $$(`[data-pick="${key}"]`).forEach((b) => (b.onclick = async () => {
+    const p = await pcm.storage.pickFolder();
+    if (p) { clutterRoots[key] = p; go(route); }
   }));
+}
+
+PAGES.clutter = async (token, tab = 'duplicates') => {
+  const top = `${header('clutter')}${tabs('clutter', CLUTTER_TABS, tab)}`;
+  if (tab === 'similar') return clutterSimilar(token, top);
+  if (tab === 'large') return clutterLarge(token, top);
+  if (tab === 'downloads') return clutterDownloads(token, top);
+  const root = clutterRoots.dup || PATHS.home;
+  page(`${top}${intro('clutter', { title: 'Doublons', lead: `Trouvez les fichiers identiques (comparaison du contenu) dans <b>${esc(root)}</b>.`, extra: `<div class="list-head" style="justify-content:center;margin-bottom:22px">${rootPicker('dup', PATHS.home)}</div>`, button: 'Rechercher' })}`);
+  bindRootPicker('dup', 'clutter/duplicates');
+  $('#scan').onclick = async () => {
+    page(`${top}${scanning('clutter', 'Recherche des doublons…', '', { stop: true })}`);
+    $('#scan-stop').onclick = () => pcm.storage.cancel();
+    progressHandlers.storage = (p) => alive(token) && setScan(`${p.dirs} dossiers analysés`, p.current);
+    const groups = await safe(() => pcm.storage.duplicates({ root }));
+    if (!groups || !alive(token)) return;
+    const waste = groups.reduce((a, g) => a + g.size * (g.files.length - 1), 0);
+    page(`${top}${groups.length ? `<div class="list-head"><span class="big" style="font-size:20px">${fmtBytes(waste)}</span><span class="muted">récupérables dans ${plural(groups.length, 'groupe', 'groupes')}</span><div class="grow"></div><button class="btn" id="dp-auto">Sélectionner les copies</button></div>
+      <div id="dp">${groups.map((g) => `<div class="list glass dup-group" style="margin-bottom:10px"><div class="row" style="min-height:0"><b>${g.files.length} fichiers identiques · ${fmtBytes(g.size)} chacun</b></div>${fileRows(g.files, { showType: false })}</div>`).join('')}</div>${trashBar()}`
+      : `<div class="card glass empty">${icon('check')}<div>Aucun doublon trouvé.</div></div>`}`);
+    if (!groups.length) return;
+    const upd = bindSelection($('#dp'), { onDone: () => go('clutter/duplicates') });
+    $('#dp-auto').onclick = () => { $$('.dup-group').forEach((g) => $$('input[data-path]', g).forEach((c, i) => (c.checked = i > 0))); upd(); };
+    loadIcons();
+  };
 };
 
-// ===================== Boîte à outils =====================
+async function clutterSimilar(token, top) {
+  const root = clutterRoots.sim || PATHS.pictures;
+  page(`${top}${intro('clutter', { title: 'Images similaires', lead: `Repérez les photos presque identiques (rafales, recadrages, copies compressées) dans <b>${esc(root)}</b>. La meilleure version est conservée.`, extra: `<div class="list-head" style="justify-content:center;margin-bottom:22px">${rootPicker('sim', PATHS.pictures)}</div>`, button: 'Rechercher' })}`);
+  bindRootPicker('sim', 'clutter/similar');
+  $('#scan').onclick = async () => {
+    page(`${top}${scanning('clutter', 'Comparaison des images…', '', { pct: 0, stop: true })}`);
+    $('#scan-stop').onclick = () => pcm.v2.similarCancel();
+    progressHandlers.similar = (p) => {
+      if (!alive(token)) return;
+      const c = $('.ring-big circle:nth-of-type(2)');
+      if (c && p.total) c.style.strokeDashoffset = c.getTotalLength() * (1 - p.done / p.total);
+      setScan(`${p.done} / ${p.total} images`, p.current);
+    };
+    const r = await safe(() => pcm.v2.similarFind(root), 'Images similaires');
+    if (!r || !alive(token)) return;
+    const waste = r.groups.reduce((a, g) => a + g.waste, 0);
+    page(`${top}${r.groups.length ? `<div class="list-head"><span class="big" style="font-size:20px">${fmtBytes(waste)}</span><span class="muted">récupérables · ${plural(r.groups.length, 'groupe', 'groupes')} parmi ${r.scanned} images${r.truncated ? ' (limite atteinte)' : ''}</span></div>
+      <div id="sim">${r.groups.map((g) => `<div class="sim-group glass"><div class="sim-grid">${g.files.map((f, i) => `<div class="sim-item">
+        <input type="checkbox" data-path="${esc(f.path)}" data-size="${f.size}" ${i > 0 ? 'checked' : ''}/>${i === 0 ? '<span class="pill ok keep">Meilleure</span>' : ''}
+        <img data-thumb="${esc(f.path)}" alt=""/><div class="sim-meta"><b title="${esc(f.path)}">${esc(f.name)}</b>${f.width}×${f.height} · ${fmtBytes(f.size)}</div></div>`).join('')}</div></div>`).join('')}</div>${trashBar()}`
+      : `<div class="card glass empty">${icon('check')}<div>Aucune image similaire parmi ${r.scanned} images.</div></div>`}`);
+    if (!r.groups.length) return;
+    bindSelection($('#sim'), { onDone: () => go('clutter/similar') });
+    // Vignettes chargées progressivement
+    for (const img of $$('img[data-thumb]')) {
+      if (!alive(token)) return;
+      const url = await pcm.v2.thumb(img.dataset.thumb).catch(() => null);
+      if (url) img.src = url;
+    }
+  };
+}
+
+async function clutterLarge(token, top) {
+  const root = clutterRoots.large || PATHS.home;
+  const minMb = clutterRoots.largeMin || 100;
+  const age = clutterRoots.largeAge ?? 180;
+  page(`${top}<div class="list-head">${rootPicker('large', PATHS.home)}
+      <select id="lg-min">${[50, 100, 500, 1024].map((m) => `<option value="${m}" ${m === minMb ? 'selected' : ''}>&gt; ${m >= 1024 ? '1 Go' : m + ' Mo'}</option>`).join('')}</select>
+      <select id="lg-age">${[[0, 'Toutes dates'], [90, 'Non modifiés depuis 3 mois'], [180, 'depuis 6 mois'], [365, 'depuis 1 an']].map(([v, l]) => `<option value="${v}" ${v === age ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div id="lg">${scanning('clutter', 'Recherche des gros fichiers…', '', { stop: true })}</div>`);
+  bindRootPicker('large', 'clutter/large');
+  $('#lg-min').onchange = (e) => { clutterRoots.largeMin = Number(e.target.value); pcm.storage.cancel(); go('clutter/large'); };
+  $('#lg-age').onchange = (e) => { clutterRoots.largeAge = Number(e.target.value); pcm.storage.cancel(); go('clutter/large'); };
+  $('#scan-stop').onclick = () => pcm.storage.cancel();
+  progressHandlers.storage = (p) => alive(token) && setScan(`${p.dirs} dossiers analysés`, p.current);
+  const items = await safe(() => pcm.storage.large({ root, minSize: minMb * 1024 * 1024, olderThanDays: age }));
+  if (!items || !alive(token)) return;
+  $('#lg').innerHTML = items.length ? `<div class="list glass" id="lg-list">${fileRows(items)}</div>${trashBar()}` : `<div class="card glass empty">${icon('check')}<div>Aucun fichier correspondant.</div></div>`;
+  if (items.length) { bindSelection($('#lg-list'), { onDone: () => go('clutter/large') }); loadIcons(); }
+}
+
+async function clutterDownloads(token, top) {
+  page(`${top}<div class="list-head"><select id="dl-sort"><option value="date">Plus récents</option><option value="size">Plus gros</option></select><select id="dl-type"><option value="">Tous les types</option></select></div><div id="dl"><div class="loading"><span class="spinner"></span></div></div>`);
+  const r = await safe(() => pcm.storage.downloads());
+  if (!r || !alive(token)) return;
+  [...new Set(r.items.map((i) => i.type))].forEach((t) => $('#dl-type').insertAdjacentHTML('beforeend', `<option>${esc(t)}</option>`));
+  let upd = null;
+  const render = () => {
+    let items = [...r.items];
+    const t = $('#dl-type').value;
+    if (t) items = items.filter((i) => i.type === t);
+    if ($('#dl-sort').value === 'size') items.sort((a, b) => b.size - a.size);
+    $('#dl').innerHTML = items.length ? `<p class="small muted">${plural(items.length, 'fichier', 'fichiers')} · ${fmtBytes(items.reduce((a, i) => a + i.size, 0))} dans ${esc(r.dir)}</p><div class="list glass" id="dl-list">${fileRows(items)}</div>${trashBar()}`
+      : `<div class="card glass empty">${icon('check')}<div>Aucun fichier téléchargé.</div></div>`;
+    if (items.length) { upd = bindSelection($('#dl-list'), { onDone: () => go('clutter/downloads') }); loadIcons(); }
+  };
+  $('#dl-sort').onchange = $('#dl-type').onchange = render;
+  render();
+}
+
+// ===================== Carte du disque =====================
+let lensData = null;
+let lensPath = [];
+
+PAGES.lens = async (token) => {
+  if (lensData) return renderLens(token);
+  page(intro('lens', {
+    lead: 'Visualisez ce qui occupe votre disque sous forme de carte interactive. Cliquez sur un dossier pour l\'explorer, supprimez ce qui ne sert plus.',
+    extra: `<div class="list-head" style="justify-content:center;margin-bottom:22px"><button class="btn" data-root="${esc(PATHS.home)}">${icon('home')} Dossier personnel</button>
+      <button class="btn" data-root="${esc(PATHS.root)}">${icon('storage')} Disque entier</button><button class="btn" id="lens-pick">${icon('folder')} Autre dossier…</button></div>`,
+    button: 'Analyser',
+  }));
+  let root = PATHS.home;
+  const start = async (r) => {
+    root = r;
+    page(scanning('lens', 'Cartographie du disque…', root, { stop: true }));
+    $('#scan-stop').onclick = () => pcm.v2.lensCancel();
+    progressHandlers.lens = (p) => alive(token) && setScan(`${p.dirs} dossiers · ${p.files} fichiers`, p.current);
+    const res = await safe(() => pcm.v2.lensScan(root), 'Carte du disque');
+    if (!res || !alive(token)) return go('lens');
+    lensData = res;
+    lensPath = [res.tree];
+    renderLens(token);
+  };
+  $$('[data-root]').forEach((b) => (b.onclick = () => start(b.dataset.root)));
+  $('#lens-pick').onclick = async () => { const p = await pcm.storage.pickFolder(); if (p) start(p); };
+  $('#scan').onclick = () => start(root);
+};
+
+// Treemap « squarified » : découpe le rectangle en tuiles de proportions proches du carré
+function squarify(items, x, y, w, h) {
+  const total = items.reduce((a, i) => a + i.size, 0);
+  if (!total || w <= 0 || h <= 0) return [];
+  const area = w * h;
+  const nodes = items.map((i) => ({ item: i, a: (i.size / total) * area }));
+  const out = [];
+  let rect = { x, y, w, h };
+  let row = [];
+  const worst = (r, side) => {
+    const s = r.reduce((a, n) => a + n.a, 0);
+    const mx = Math.max(...r.map((n) => n.a)), mn = Math.min(...r.map((n) => n.a));
+    return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn));
+  };
+  const layoutRow = (r) => {
+    const s = r.reduce((a, n) => a + n.a, 0);
+    if (rect.w >= rect.h) {
+      const cw = s / rect.h; let cy = rect.y;
+      for (const n of r) { const ch = n.a / cw; out.push({ ...n, x: rect.x, y: cy, w: cw, h: ch }); cy += ch; }
+      rect = { x: rect.x + cw, y: rect.y, w: rect.w - cw, h: rect.h };
+    } else {
+      const ch = s / rect.w; let cx = rect.x;
+      for (const n of r) { const cw = n.a / ch; out.push({ ...n, x: cx, y: rect.y, w: cw, h: ch }); cx += cw; }
+      rect = { x: rect.x, y: rect.y + ch, w: rect.w, h: rect.h - ch };
+    }
+  };
+  for (const n of nodes) {
+    const side = Math.min(rect.w, rect.h);
+    if (!row.length || worst([...row, n], side) <= worst(row, side)) row.push(n);
+    else { layoutRow(row); row = [n]; }
+  }
+  if (row.length) layoutRow(row);
+  return out;
+}
+
+// Palette de la carte du disque : dégradés choisis à la main, harmonieux sur le fond violet
+const LENS_PALETTE = [
+  ['#7C5CFF', '#B59BFF'], // lavande
+  ['#FF4F9A', '#FF9CC9'], // rose
+  ['#18B9C4', '#7EECDD'], // aqua
+  ['#FF9F2E', '#FFD27A'], // ambre
+  ['#3D7DFF', '#8FC1FF'], // ciel
+  ['#B44CE0', '#E79BFF'], // orchidée
+  ['#1FBF74', '#93F2BF'], // menthe
+  ['#FF6A4D', '#FFB29E'], // corail
+  ['#5865F2', '#A3ACFF'], // pervenche
+  ['#E83E8C', '#F7A1C4'], // framboise
+];
+// Couleur des fichiers selon leur type
+const LENS_TYPES = [
+  ['Vidéos', /\.(mp4|mkv|mov|avi|webm|wmv|m4v|flv|mpe?g)$/i, LENS_PALETTE[1]],
+  ['Images', /\.(jpe?g|png|gif|webp|heic|raw|psd|tiff?|bmp|svg)$/i, LENS_PALETTE[3]],
+  ['Audio', /\.(mp3|flac|wav|ogg|m4a|aac|wma)$/i, LENS_PALETTE[5]],
+  ['Archives', /\.(zip|rar|7z|tar|gz|xz|bz2|zst|iso|img|dmg)$/i, LENS_PALETTE[2]],
+  ['Programmes', /\.(exe|msi|deb|rpm|appimage|apk|bin|run|dll|so|jar)$/i, LENS_PALETTE[4]],
+  ['Documents', /\.(pdf|docx?|xlsx?|pptx?|odt|ods|txt|md|csv|epub)$/i, LENS_PALETTE[6]],
+];
+function lensColor(item, rank) {
+  if (item.other) return null;
+  if (item.dir) return LENS_PALETTE[rank % LENS_PALETTE.length];
+  const t = LENS_TYPES.find(([, re]) => re.test(item.name));
+  return t ? t[2] : LENS_PALETTE[8];
+}
+const grad = (c) => `linear-gradient(140deg, ${c[0]}, ${c[1]})`;
+
+function renderLens(token) {
+  const node = lensPath[lensPath.length - 1];
+  const kids = (node.children || []).filter((c) => c.size > 0);
+  let dirRank = 0;
+  const colors = kids.map((c) => lensColor(c, c.dir ? dirRank++ : 0));
+  const usedTypes = new Set(kids.filter((c) => !c.dir && !c.other).map((c) => (LENS_TYPES.find(([, re]) => re.test(c.name)) || ['Autres fichiers'])[0]));
+  page(`${header('lens')}
+    <div class="crumbs">${lensPath.map((n, i) => `<button class="crumb ${i === lensPath.length - 1 ? 'current' : ''}" data-crumb="${i}">${esc(i === 0 ? n.path : n.name)}</button>`).join('')}
+      <div class="grow"></div><span class="muted small">${fmtBytes(node.size)} · ${node.files.toLocaleString('fr-FR')} fichiers</span><button class="btn" id="lens-new">${icon('refresh')} Nouvelle analyse</button></div>
+    <div class="lens-wrap"><div><div class="treemap" id="tm"></div>
+      <div class="tm-legend">${kids.some((c) => c.dir) ? `<span><i style="background:${grad(LENS_PALETTE[0])}"></i>Dossiers (cliquez pour explorer)</span>` : ''}
+        ${LENS_TYPES.filter(([n]) => usedTypes.has(n)).map(([n, , c]) => `<span><i style="background:${grad(c)}"></i>${n}</span>`).join('')}
+        ${usedTypes.has('Autres fichiers') ? `<span><i style="background:${grad(LENS_PALETTE[8])}"></i>Autres fichiers</span>` : ''}
+        ${kids.some((c) => c.other) ? '<span><i class="tm-other-chip"></i>Petits éléments regroupés</span>' : ''}</div></div>
+      <div class="list glass lens-list" id="lens-list">${kids.map((c, i) => `<div class="row">
+        ${c.path && !c.other ? `<input type="checkbox" data-path="${esc(c.path)}" data-size="${c.size}"/>` : '<span style="width:19px"></span>'}
+        <span class="lens-dot" style="background:${colors[i] ? grad(colors[i]) : 'var(--track)'}"></span>
+        <div class="r-main"><div class="r-title" ${c.dir ? `data-open="${i}" style="cursor:pointer"` : ''}>${esc(c.name)}</div>
+        <div class="bar lens-bar"><div style="width:${Math.max(2, Math.round((c.size / node.size) * 100))}%;${colors[i] ? `background:${grad(colors[i])}` : ''}"></div></div></div>
+        <div class="r-meta"><b>${fmtBytes(c.size)}</b><div class="small">${Math.round((c.size / node.size) * 100)} %</div></div></div>`).join('')}</div></div>
+    ${trashBar()}`);
+  const tm = $('#tm');
+  const W = tm.clientWidth, H = Math.max(440, tm.clientHeight);
+  const GAP = 4;
+  const tiles = squarify(kids, 0, 0, W, H);
+  tm.innerHTML = tiles.map((t) => {
+    const idx = kids.indexOf(t.item);
+    const c = colors[idx];
+    const x = t.x + GAP / 2, y = t.y + GAP / 2, w = Math.max(0, t.w - GAP), h = Math.max(0, t.h - GAP);
+    const big = w > 150 && h > 90;
+    const label = w > 64 && h > 40;
+    // Aperçu des sous-dossiers dans les grandes tuiles (deuxième niveau)
+    let inner = '';
+    if (t.item.dir && w > 170 && h > 140 && t.item.children?.length > 1) {
+      const pad = 10, top = 46;
+      inner = squarify(t.item.children.filter((s) => s.size > 0 && !s.other).slice(0, 16), pad, top, w - pad * 2, h - top - 30)
+        .map((s) => `<span class="tm-sub" style="left:${s.x + 1.5}px;top:${s.y + 1.5}px;width:${Math.max(0, s.w - 3)}px;height:${Math.max(0, s.h - 3)}px">${s.w > 70 && s.h > 26 ? esc(s.item.name) : ''}</span>`).join('');
+    }
+    return `<div class="tm-cell ${t.item.dir ? 'dir' : 'file'} ${t.item.other ? 'other' : ''} ${big ? 'big' : ''}" data-tile="${idx}" title="${esc(t.item.name)} — ${fmtBytes(t.item.size)}"
+      style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;${c ? `background:${grad(c)};--glow:${c[0]}` : ''}">
+      ${label ? `<div class="tm-label">${t.item.dir ? icon('folder') : t.item.other ? '' : icon('file')}<span class="tm-name">${esc(t.item.name)}</span></div><span class="tm-size">${fmtBytes(t.item.size)}</span>` : ''}${inner}</div>`;
+  }).join('');
+  const open = (c) => { if (c?.dir && c.children?.length) { lensPath.push(c); renderLens(token); } };
+  $$('[data-tile]').forEach((el) => (el.onclick = () => open(kids[Number(el.dataset.tile)])));
+  $$('[data-open]').forEach((el) => (el.onclick = () => open(kids[Number(el.dataset.open)])));
+  $$('[data-crumb]').forEach((b) => (b.onclick = () => { lensPath = lensPath.slice(0, Number(b.dataset.crumb) + 1); renderLens(token); }));
+  $('#lens-new').onclick = () => { lensData = null; go('lens'); };
+  bindSelection($('#lens-list'), {
+    onDone: () => {
+      // Retire les éléments supprimés de la carte et recalcule les tailles des parents
+      const removed = new Set($$('#lens-list input[data-path]:checked').map((c) => c.dataset.path));
+      const freed = node.children.filter((c) => removed.has(c.path)).reduce((a, c) => a + c.size, 0);
+      node.children = node.children.filter((c) => !removed.has(c.path));
+      for (const n of lensPath) n.size -= freed;
+      renderLens(token);
+    },
+  });
+}
+
+// ===================== Nettoyage cloud =====================
+PAGES.cloud = async (token) => {
+  page(`${header('cloud', 'Faites le tri dans vos dossiers OneDrive, Dropbox, Google Drive ou Nextcloud synchronisés sur ce PC.')}<div id="cl"><div class="loading"><span class="spinner"></span>Recherche des dossiers cloud…</div></div>`);
+  const folders = await safe(() => pcm.v2.cloudDetect(), 'Cloud');
+  if (!folders || !alive(token)) return;
+  if (!folders.length) {
+    $('#cl').innerHTML = `<div class="intro"><div class="hero-icon">${micon('cloud')}</div><h1>Aucun dossier cloud détecté</h1>
+      <p class="lead">FastBoost recherche les dossiers synchronisés de OneDrive, Dropbox, Google Drive, Nextcloud, ownCloud, pCloud, MEGA, iCloud Drive et Proton Drive dans votre dossier personnel.</p>
+      <button class="btn" id="cl-pick">${icon('folder')} Choisir un dossier synchronisé</button></div>`;
+    $('#cl-pick').onclick = async () => { const p = await pcm.storage.pickFolder(); if (p) analyzeCloud(token, { service: 'Dossier choisi', path: p }); };
+    return;
+  }
+  $('#cl').innerHTML = `<div class="cards c3">${folders.map((f, i) => `<button class="result-card glass" style="border:1px solid var(--glass-border);cursor:pointer;text-align:left" data-cloud="${i}">
+    <div class="rc-ico g-cloud">${micon('cloud')}</div><div class="rc-val">${esc(f.service)}</div><div class="rc-sub">${esc(f.path)}</div><span class="btn primary" style="align-self:flex-start">Analyser</span></button>`).join('')}</div>`;
+  $$('[data-cloud]').forEach((b) => (b.onclick = () => analyzeCloud(token, folders[Number(b.dataset.cloud)])));
+};
+
+async function analyzeCloud(token, f) {
+  page(scanning('cloud', `Analyse de ${f.service}…`, f.path, { stop: true }));
+  $('#scan-stop').onclick = () => pcm.v2.cloudCancel();
+  progressHandlers.cloud = (p) => alive(token) && setScan(`${p.count} fichiers analysés`, p.current);
+  const r = await safe(() => pcm.v2.cloudAnalyze(f.path), 'Cloud');
+  if (!r || !alive(token)) return;
+  const section = (title, items) => (items.length ? `<h2>${title} <span class="muted small">(${items.length})</span></h2><div class="list glass">${fileRows(items, { showType: false })}</div>` : '');
+  page(`${header('cloud')}
+    <div class="card glass" style="display:flex;align-items:center;gap:16px;margin-bottom:6px">
+      <div class="rc-ico g-cloud" style="width:52px;height:52px;border-radius:15px;display:flex;align-items:center;justify-content:center;color:#fff">${micon('cloud')}</div>
+      <div style="flex:1"><div class="big">${fmtBytes(r.total)}</div><div class="muted small">${esc(f.service)} · ${plural(r.count, 'fichier', 'fichiers')} · ${esc(r.folder)}</div></div>
+      <button class="btn" data-go="cloud">${icon('back')} Dossiers</button></div>
+    <p class="small muted">Supprimer un fichier ici le supprime aussi du cloud lors de la prochaine synchronisation.${!IS_LINUX && /OneDrive/.test(f.service) ? ' « Libérer l\'espace local » garde le fichier en ligne et retire seulement la copie sur ce PC.' : ''}</p>
+    <div id="cl-lists">${section('Gros fichiers (25 Mo et plus)', r.large)}${section('Fichiers anciens (non modifiés depuis 1 an)', r.old)}</div>
+    ${r.large.length || r.old.length ? `<div class="action-bar" id="file-actions"><span class="summary sel"></span>
+      ${!IS_LINUX && /OneDrive/.test(f.service) ? '<button class="btn" id="cl-free">Libérer l\'espace local</button>' : ''}<button class="btn-main del" disabled>Placer dans la corbeille</button></div>`
+    : `<div class="card glass empty">${icon('check')}<div>Rien à trier dans ce dossier.</div></div>`}`);
+  if (!r.large.length && !r.old.length) return;
+  bindSelection($('#cl-lists'), { onDone: () => analyzeCloud(token, f), confirmText: 'Les fichiers iront dans la corbeille et seront aussi supprimés du cloud à la prochaine synchronisation.' });
+  $('#cl-free') && ($('#cl-free').onclick = async () => {
+    const paths = $$('#cl-lists input[data-path]:checked').map((c) => c.dataset.path);
+    if (!paths.length) return toast('Sélectionnez des fichiers');
+    const res = await safe(() => pcm.v2.cloudFreeUp(paths), 'OneDrive');
+    if (res) toast(`${plural(res.done, 'fichier libéré', 'fichiers libérés')} localement (toujours disponibles en ligne)`);
+  });
+  loadIcons();
+}
+
+// ===================== Broyeur =====================
+let shredList = [];
+PAGES.shredder = async (token) => {
+  const render = () => {
+    page(`${header('shredder', 'Supprimez définitivement des fichiers sensibles : ils sont écrasés par des données aléatoires avant d\'être effacés, sans passer par la corbeille.')}
+      <div class="dropzone glass" id="dz">${icon('upload')}<h2 style="margin:10px 0 4px">Déposez des fichiers ou des dossiers ici</h2>
+        <p class="muted small" style="margin:0 0 14px">ou</p><button class="btn" id="pick-files">${icon('file')} Choisir des fichiers</button> <button class="btn" id="pick-dir">${icon('folder')} Choisir un dossier</button></div>
+      ${shredList.length ? `<h2>À broyer (${shredList.length})</h2><div class="list glass">${shredList.map((p, i) => `<div class="row"><div class="r-ico">${fileIcon(p)}</div>
+        <div class="r-main"><div class="r-title">${esc(p.split(/[\\/]/).pop())}</div><div class="r-sub">${esc(p)}</div></div>
+        <button class="btn ghost" data-rm="${i}">${icon('x')}</button></div>`).join('')}</div>` : ''}
+      <p class="small muted" style="margin-top:14px">Sur un SSD, le contrôleur peut conserver d'anciennes copies des blocs : pour une sécurité maximale, utilisez aussi le chiffrement du disque.</p>
+      <div class="action-bar"><select id="passes"><option value="1">1 passe (rapide)</option><option value="3">3 passes</option><option value="7">7 passes (lent)</option></select>
+        <button class="btn-main" id="shred" ${shredList.length ? '' : 'disabled'}>Broyer</button></div>`);
+    const dz = $('#dz');
+    dz.ondragover = (e) => { e.preventDefault(); dz.classList.add('over'); };
+    dz.ondragleave = () => dz.classList.remove('over');
+    dz.ondrop = (e) => {
+      e.preventDefault();
+      dz.classList.remove('over');
+      for (const f of e.dataTransfer.files) { const p = pcm.v2.filePath(f); if (p && !shredList.includes(p)) shredList.push(p); }
+      render();
+    };
+    $('#pick-files').onclick = async () => { (await pcm.v2.pick({ files: true, title: 'Fichiers à broyer' })).forEach((p) => !shredList.includes(p) && shredList.push(p)); render(); };
+    $('#pick-dir').onclick = async () => { (await pcm.v2.pick({ title: 'Dossier à broyer' })).forEach((p) => !shredList.includes(p) && shredList.push(p)); render(); };
+    $$('[data-rm]').forEach((b) => (b.onclick = () => { shredList.splice(Number(b.dataset.rm), 1); render(); }));
+    loadIcons();
+    $('#shred').onclick = async () => {
+      if (!(await confirmBox('Broyer définitivement ?', `${plural(shredList.length, 'élément sera détruit', 'éléments seront détruits')}. Cette action est irréversible : aucune récupération ne sera possible.`, 'Broyer'))) return;
+      const passes = Number($('#passes').value);
+      page(scanning('shredder', 'Broyage en cours…', ''));
+      progressHandlers.shred = (p) => alive(token) && setScan(null, p.current);
+      const r = await safe(() => pcm.v2.shred(shredList, { passes }), 'Broyeur');
+      if (!alive(token)) return;
+      shredList = [];
+      if (!r) return render();
+      page(doneView('shredder', `${plural(r.files, 'fichier broyé', 'fichiers broyés')}`, `${fmtBytes(r.bytes)} détruits${r.failed.length ? ` · non traités : ${r.failed.join(' ; ')}` : ''}`, 'shredder'));
+    };
+  };
+  render();
+};
+
+// ===================== Outils =====================
 const TOOLS = [
   ['screenshot', 'screenshot', 'Capture d\'écran', 'Capturer une zone de l\'écran'],
   ['screenshotFolder', 'folder', 'Dossier des captures', 'Ouvrir vos captures d\'écran'],
@@ -698,81 +1028,101 @@ const TOOLS = [
   ['recorder', 'mic', 'Enregistreur vocal', 'Enregistrer de l\'audio'],
   ['captions', 'captions', 'Sous-titres en direct', 'Transcrire l\'audio en temps réel'],
   ['calendar', 'calendar', 'Calendrier', 'Vos rendez-vous'],
-  ['translator', 'translate', 'Traducteur', 'Bing Traduction'],
-  ['currency', 'currency', 'Convertisseur de devises', 'Taux de change'],
-  ['dictionary', 'book', 'Dictionnaire', 'Définitions'],
-  ['imageSearch', 'search', 'Recherche d\'image', 'Recherche visuelle Bing'],
-  ['weather', 'weather', 'Météo', 'Prévisions locales'],
-  ['edge', 'edge', 'Microsoft Edge', 'Ouvrir le navigateur'],
   ['terminal', 'task', 'Terminal', 'Ligne de commande'],
   ['files', 'folder', 'Fichiers', 'Gestionnaire de fichiers'],
-  ['taskmgr', 'task', 'Gestionnaire des tâches', 'Outil Windows', 'Moniteur système', 'Processus et ressources'],
+  ['taskmgr', 'task', IS_LINUX ? 'Moniteur système' : 'Gestionnaire des tâches', 'Processus et ressources'],
   ['devmgmt', 'chip', 'Gestionnaire de périphériques', 'Pilotes et matériel'],
   ['hardware', 'chip', 'Informations matériel', 'Détails du matériel'],
-  ['diskUsage', 'storage', 'Utilisation des disques', 'Ce qui occupe votre espace'],
+  ['diskUsage', 'storage', 'Utilisation des disques', 'Analyseur du système'],
+  ['disks', 'chip', 'Disques', 'Santé SMART et partitions'],
   ['software', 'download', 'Logithèque', 'Installer des applications'],
+  ['translator', 'translate', 'Traducteur', 'Bing Traduction'],
+  ['weather', 'weather', 'Météo', 'Prévisions locales'],
   ['display', 'screenshot', 'Affichage', 'Paramètres d\'écran'],
   ['power', 'power', 'Alimentation', 'Mise en veille et batterie'],
 ];
-PAGES.toolbox = async () => {
-  const list = TOOLS.filter(([id]) => CAPS.tools.includes(id));
-  content.innerHTML = `<div class="page">${header('Boîte à outils')}
-    <div class="grid g3">${list.map(([id, ic, t, s, lt, ls]) => `<button class="tile" data-tool="${id}"><div class="t-ico">${icon(ic)}</div><div><div class="t-title">${esc(IS_LINUX && lt ? lt : t)}</div><div class="t-sub">${esc(IS_LINUX && ls ? ls : s)}</div></div></button>`).join('')}</div>
-    ${IS_LINUX ? `<p class="muted small" style="margin-top:18px">Les outils affichés dépendent des applications installées sur votre bureau (${esc(CAPS.desktop || 'Linux')}).</p>` : ''}</div>`;
+
+PAGES.tools = async (token) => {
+  page(`${header('tools', 'Vos outils système, rassemblés au même endroit.')}
+    <div class="cards c3" id="live"></div>
+    <h2>Raccourcis</h2>
+    <div class="cards c3">${TOOLS.filter(([id]) => CAPS.tools.includes(id)).map(([id, ic, t, s]) => `<button class="row glass" style="border-radius:18px;cursor:pointer;text-align:left" data-tool="${id}">
+      <div class="r-ico tint">${icon(ic)}</div><div class="r-main"><div class="r-title">${esc(t)}</div><div class="r-sub">${esc(s)}</div></div></button>`).join('')}</div>`);
+  const refresh = async () => {
+    const s = await pcm.system.stats().catch(() => null);
+    if (!s || !alive(token) || !$('#live')) return;
+    $('#live').innerHTML = `
+      <div class="card glass" style="display:flex;align-items:center;gap:16px">${gauge(s.cpu)}<div><b>Processeur</b><div class="muted small">${s.load != null ? `Charge ${s.load.toFixed(2)}` : 'Utilisation'}</div></div></div>
+      <div class="card glass" style="display:flex;align-items:center;gap:16px">${gauge(s.memory.percent)}<div><b>Mémoire</b><div class="muted small">${fmtBytes(s.memory.used)} / ${fmtBytes(s.memory.total)}</div></div></div>
+      <div class="card glass"><b>Réseau</b><div class="muted small" style="margin-top:8px">↓ ${fmtBytes(s.net.down)}/s · ↑ ${fmtBytes(s.net.up)}/s</div>
+        <button class="btn primary" style="margin-top:10px" id="boost">${icon('rocket')} Boost</button></div>`;
+    $('#boost').onclick = async (e) => {
+      e.currentTarget.disabled = true;
+      const r = await safe(() => pcm.system.boost(), 'Boost');
+      if (r) toast(`Boost terminé : ${fmtBytes(r.freed)} de mémoire libérée`);
+    };
+  };
+  refresh();
+  const timer = setInterval(() => (alive(token) ? refresh() : clearInterval(timer)), 3000);
 };
-document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-tool]');
-  if (t) safe(() => pcm.tool.launch(t.dataset.tool), 'Outil');
-});
 
 // ===================== Paramètres =====================
 PAGES.settings = async (token) => {
   const [p, info, admin] = await Promise.all([pcm.prefs.get(), pcm.system.info().catch(() => ({})), pcm.system.isAdmin().catch(() => false)]);
   if (!alive(token)) return;
-  content.innerHTML = `<div class="page">${header('Paramètres')}
-    <div class="list">
-      <div class="row"><div class="r-ico">${icon('image')}</div><div class="r-main"><div class="r-title">Thème</div><div class="r-sub">Apparence de l'application</div></div>
-        <select id="s-theme"><option value="system">Système</option><option value="light">Clair</option><option value="dark">Sombre</option></select></div>
-      <div class="row"><div class="r-ico">${icon('power')}</div><div class="r-main"><div class="r-title">Lancer à l'ouverture de session</div><div class="r-sub">FastBoost démarre réduit dans la zone de notification</div></div>
-        <label class="switch"><input type="checkbox" id="s-startup" ${p.startup ? 'checked' : ''}/><span></span></label></div>
-      <div class="row"><div class="r-ico">${icon('apps')}</div><div class="r-main"><div class="r-title">Réduire dans la zone de notification</div><div class="r-sub">La fermeture de la fenêtre laisse l'application active</div></div>
-        <label class="switch"><input type="checkbox" id="s-tray" ${p.minimizeToTray ? 'checked' : ''}/><span></span></label></div>
+  const row = (ic, title, sub, ctrl) => `<div class="row"><div class="r-ico tint">${icon(ic)}</div><div class="r-main"><div class="r-title">${title}</div><div class="r-sub" style="white-space:normal">${sub}</div></div>${ctrl}</div>`;
+  const sw = (id, on) => `<label class="switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}/><span></span></label>`;
+  page(`${header('settings')}
+    <div class="list glass">
+      ${row('image', 'Thème', 'Apparence de l\'application', '<select id="s-theme"><option value="system">Système</option><option value="dark">Sombre</option><option value="light">Clair</option></select>')}
+      ${row('sparkle', 'Effets visuels', 'Verre dépoli et animations. « Automatique » les désactive si la carte graphique n\'est pas accélérée.', '<select id="s-fx"><option value="auto">Automatique</option><option value="on">Activés</option><option value="off">Désactivés</option></select>')}
+      ${row('power', 'Lancer à l\'ouverture de session', 'FastBoost démarre réduit dans la zone de notification', sw('s-startup', p.startup))}
+      ${row('apps', 'Réduire dans la zone de notification', 'La fermeture de la fenêtre laisse l\'application active', sw('s-tray', p.minimizeToTray))}
       ${IS_LINUX ? `
-      <div class="row"><div class="r-ico">${icon('warn')}</div><div class="r-main"><div class="r-title">Alertes</div><div class="r-sub">Notifications quand la mémoire sature, le disque se remplit, la corbeille grossit ou une mise à jour de sécurité arrive</div></div>
-        <label class="switch"><input type="checkbox" id="s-alerts" ${p.alerts !== false ? 'checked' : ''}/><span></span></label></div>
-      <div class="row"><div class="r-ico">${icon('apps')}</div><div class="r-main"><div class="r-title">Mini-panneau</div><div class="r-sub">Cliquez sur l'icône de la barre supérieure. Sans zone de notification (GNOME sans extension AppIndicator), associez un raccourci clavier à la commande <b>fastboost --mini</b></div></div></div>
-      <div class="row"><div class="r-ico">${icon('memory')}</div><div class="r-main"><div class="r-title">Boost avancé</div><div class="r-sub">Vide aussi le cache de pages du noyau (mot de passe demandé à chaque Boost)</div></div>
-        <label class="switch"><input type="checkbox" id="s-drop" ${p.boostDropCaches ? 'checked' : ''}/><span></span></label></div>
-      <div class="row"><div class="r-ico">${icon('admin')}</div><div class="r-main"><div class="r-title">Droits administrateur</div><div class="r-sub">Les actions système (paquets, journaux, pare-feu) demandent votre mot de passe via polkit</div></div>
-        <span class="pill ${admin ? 'ok' : 'info'}">${admin ? 'root' : 'À la demande'}</span></div>` : `
-      <div class="row"><div class="r-ico">${icon('admin')}</div><div class="r-main"><div class="r-title">Mode administrateur</div><div class="r-sub">${admin ? 'L\'application s\'exécute avec les droits administrateur' : 'Nécessaire pour nettoyer les fichiers système'}</div></div>
-        ${admin ? '<span class="pill ok">Actif</span>' : '<button class="btn" id="s-admin">Redémarrer en administrateur</button>'}</div>`}
+      ${row('warn', 'Alertes', 'Mémoire saturée, disque plein, corbeille volumineuse, mises à jour de sécurité', sw('s-alerts', p.alerts !== false))}
+      ${row('apps', 'Mini-panneau', 'Cliquez sur l\'icône de la barre supérieure, ou associez un raccourci clavier à <b>fastboost --mini</b>', '')}
+      ${row('memory', 'Boost avancé', 'Vide aussi le cache de pages du noyau (mot de passe à chaque Boost)', sw('s-drop', p.boostDropCaches))}
+      ${row('admin', 'Droits administrateur', 'Les actions système demandent votre mot de passe via polkit', `<span class="pill ${admin ? 'ok' : 'info'}">${admin ? 'root' : 'À la demande'}</span>`)}`
+      : row('admin', 'Mode administrateur', admin ? 'FastBoost s\'exécute avec les droits administrateur' : 'Nécessaire pour certaines tâches système', admin ? '<span class="pill ok">Actif</span>' : '<button class="btn" id="s-admin">Redémarrer en administrateur</button>')}
     </div>
     <h2>Informations système</h2>
-    <div class="card"><div class="kv">
+    <div class="card glass"><div class="kv">
       <div>Appareil</div><div>${esc(info.hostname)} · ${esc([info.maker, info.model].filter(Boolean).join(' '))}</div>
       <div>Système</div><div>${esc(info.os)} (${IS_LINUX ? 'noyau' : 'build'} ${esc(info.build)})</div>
       ${IS_LINUX ? `<div>Bureau</div><div>${esc([info.desktop, info.session].filter(Boolean).join(' · ') || '–')}</div>` : ''}
       <div>Processeur</div><div>${esc(info.cpu)} · ${info.cores} cœurs</div>
       <div>Mémoire</div><div>${fmtBytes(info.totalMem)}</div>
       <div>Carte graphique</div><div>${esc(info.gpu)}</div>
-      <div>Utilisateur</div><div>${esc(info.user)}</div>
     </div></div>
     <h2>À propos</h2>
-    <div class="card small muted">FastBoost 1.2.0 — reconstruit à partir de l'analyse REA de Microsoft PC Manager 3.23. Projet indépendant, non affilié à Microsoft.</div></div>`;
+    <div class="card glass small muted">FastBoost 2.0.0 — interface inspirée de la palette de CleanMyMac et fonctions reconstruites à partir de l'analyse REA de Microsoft PC Manager. Projet indépendant, non affilié à Microsoft ni à MacPaw.</div>`);
   $('#s-theme').value = p.theme;
+  $('#s-fx').value = p.effects || 'auto';
+  $('#s-fx').onchange = async (e) => {
+    await pcm.prefs.set({ effects: e.target.value });
+    CAPS = await pcm.caps();
+    document.body.classList.toggle('lite', !!CAPS.lite);
+  };
   $('#s-theme').onchange = (e) => pcm.prefs.set({ theme: e.target.value });
   $('#s-startup').onchange = (e) => pcm.prefs.set({ startup: e.target.checked });
   $('#s-tray').onchange = (e) => pcm.prefs.set({ minimizeToTray: e.target.checked });
-  $('#s-drop') && ($('#s-drop').onchange = (e) => pcm.prefs.set({ boostDropCaches: e.target.checked }));
   $('#s-alerts') && ($('#s-alerts').onchange = (e) => pcm.prefs.set({ alerts: e.target.checked }));
+  $('#s-drop') && ($('#s-drop').onchange = (e) => pcm.prefs.set({ boostDropCaches: e.target.checked }));
   $('#s-admin') && ($('#s-admin').onclick = () => safe(() => pcm.system.relaunchAdmin()));
 };
+
+// ===================== Actions externes (zone de notification, mini-panneau) =====================
+pcm.onAction((a) => {
+  if (a === 'boost') { safe(() => pcm.system.boost()).then((r) => r && toast(`Boost terminé : ${fmtBytes(r.freed)} libérés`)); }
+  else if (typeof a === 'string' && a.startsWith('go:')) go(a.slice(3));
+});
 
 // ===================== Démarrage =====================
 (async () => {
   try { CAPS = await pcm.caps(); } catch {}
+  try { PATHS = await pcm.v2.paths(); } catch {}
+  document.body.classList.toggle('lite', !!CAPS.lite);
   $('#admin-badge').textContent = IS_LINUX ? 'root' : 'Administrateur';
   $('#admin-badge').classList.toggle('hidden', !CAPS.isAdmin);
-  go('home');
+  go('smart');
 })();

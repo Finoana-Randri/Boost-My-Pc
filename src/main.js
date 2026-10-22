@@ -21,7 +21,7 @@ let quitting = false;
 
 // ---------- Préférences ----------
 const prefsFile = () => path.join(app.getPath('userData'), 'preferences.json');
-const defaultPrefs = { theme: 'system', minimizeToTray: true, startup: false, boostDropCaches: false, alerts: true };
+const defaultPrefs = { theme: 'system', minimizeToTray: true, startup: false, boostDropCaches: false, alerts: true, effects: 'auto' };
 function loadPrefs() {
   try { return { ...defaultPrefs, ...JSON.parse(fs.readFileSync(prefsFile(), 'utf8')) }; } catch { return { ...defaultPrefs }; }
 }
@@ -79,7 +79,7 @@ function titleBarColors() {
 function createTray() {
   if (!fs.existsSync(iconPath)) return;
   try {
-    tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: isLinux ? 22 : 16, height: isLinux ? 22 : 16 }));
+    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'tray.png')).resize({ width: isLinux ? 22 : 16, height: isLinux ? 22 : 16, quality: 'best' }));
   } catch { tray = null; return; } // certains bureaux Linux n'ont pas de zone de notification
   tray.setToolTip('FastBoost');
   tray.setContextMenu(Menu.buildFromTemplate([
@@ -114,6 +114,14 @@ function setStartup(on) {
   fs.writeFileSync(linuxAutostartFile, `[Desktop Entry]\nType=Application\nName=FastBoost\nExec=${exec}\nIcon=${iconPath}\nX-GNOME-Autostart-enabled=true\n`);
 }
 
+// Mode léger : sans composition GPU, le verre dépoli et les animations coûtent trop cher
+function liteMode() {
+  if (prefs.effects === 'off') return true;
+  if (prefs.effects === 'on') return false;
+  const gpu = app.getGPUFeatureStatus?.() || {};
+  return !String(gpu.gpu_compositing || '').startsWith('enabled');
+}
+
 // ---------- Capacités (l'interface s'adapte au système) ----------
 async function capabilities() {
   const info = await system.getSystemInfo().catch(() => ({}));
@@ -123,6 +131,7 @@ async function capabilities() {
     distroId: info.distroId,
     desktop: info.desktop,
     isAdmin: await cleaner.isAdmin().catch(() => false),
+    lite: liteMode(),
     tools: tools.available(),
     packageManager: isLinux ? require('./services/linux/sh').packageManager() : null,
     hasFlatpak: isLinux && !!require('./services/linux/sh').which('flatpak'),
@@ -232,6 +241,7 @@ function registerIpc() {
     return img.isEmpty() ? null : img.toDataURL();
   });
 
+  registerV2();
   handle('tool:launch', (id) => tools.launch(id));
   handle('prefs:get', () => ({ ...prefs, startup: getStartup() }));
   handle('prefs:set', (p) => {
@@ -241,6 +251,59 @@ function registerIpc() {
     if ('startup' in p) setStartup(!!p.startup);
     return prefs;
   });
+}
+
+// ---------- Modules v2 (inspirés de CleanMyMac) ----------
+function registerV2() {
+  const maintenance = require('./services/v2/maintenance');
+  const privacy = require('./services/v2/privacy');
+  const permissions = require('./services/v2/permissions');
+  const leftovers = require('./services/v2/leftovers');
+  const malware = require('./services/v2/malware');
+  const shredder = require('./services/v2/shredder');
+  const lens = require('./services/v2/spacelens');
+  const similar = require('./services/v2/similar');
+  const cloud = require('./services/v2/cloud');
+  const { createSmartCare } = require('./services/v2/smartcare');
+  const boost = () => system.boostMemory({ dropCaches: false });
+  const smart = createSmartCare({ cleaner, protection, apps, storage, maintenance, malware, boost });
+
+  handle('v2:smart:scan', () => smart.scan(progress('smart')));
+  handle('v2:smart:run', () => smart.run(progress('smart')));
+  handle('v2:maint:list', () => maintenance.list());
+  handle('v2:maint:run', (ids) => maintenance.run(ids || [], { boost }));
+  handle('v2:privacy:scan', () => privacy.scan());
+  handle('v2:privacy:clean', (ids) => privacy.clean(ids || []));
+  handle('v2:perm:list', () => permissions.list());
+  handle('v2:perm:revoke', (appId, permId) => permissions.revoke(appId, permId));
+  handle('v2:perm:reset', (appId) => permissions.reset(appId));
+  handle('v2:leftovers:scan', () => leftovers.scan(progress('leftovers')));
+  handle('v2:malware:scan', (kind) => {
+    if (!['quick', 'normal', 'deep'].includes(kind)) throw new Error('Type d\'analyse inconnu');
+    return malware.scan(kind, progress('malware'));
+  });
+  handle('v2:shred', (paths, opts) => shredder.shred(paths || [], opts || {}, progress('shred')));
+  handle('v2:lens:scan', (root) => lens.scan(root || os.homedir(), progress('lens')));
+  handle('v2:lens:cancel', () => lens.cancel());
+  handle('v2:similar:find', (root) => similar.find(root || app.getPath('pictures'), progress('similar')));
+  handle('v2:similar:cancel', () => similar.cancel());
+  handle('v2:cloud:detect', () => cloud.detect());
+  handle('v2:cloud:analyze', (folder) => cloud.analyze(folder, progress('cloud')));
+  handle('v2:cloud:freeUp', (paths) => cloud.freeUp(paths || []));
+  handle('v2:cloud:cancel', () => cloud.cancel());
+  handle('file:pick', async (opts = {}) => {
+    const props = opts.files ? ['openFile', 'multiSelections'] : ['openDirectory'];
+    if (opts.files && opts.dirs) props.push('openDirectory');
+    const r = await dialog.showOpenDialog(win, { properties: props, title: opts.title });
+    return r.canceled ? [] : r.filePaths;
+  });
+  // Vignette d'image (images similaires)
+  handle('file:thumb', async (p) => {
+    const img = nativeImage.createFromPath(p);
+    if (img.isEmpty()) return null;
+    return img.resize({ width: 220, quality: 'good' }).toDataURL();
+  });
+  handle('app:paths', () => ({ home: os.homedir(), pictures: app.getPath('pictures'), downloads: app.getPath('downloads'), root: path.parse(os.homedir()).root }));
 }
 
 // ---------- Cycle de vie ----------

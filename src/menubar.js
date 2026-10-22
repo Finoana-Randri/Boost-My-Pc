@@ -104,7 +104,7 @@ function createMenubar({ iconPath, showMain, sendToMain, services, getPrefs, onQ
   function createTray() {
     if (!fs.existsSync(iconPath)) return null;
     try {
-      tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: 22, height: 22 }));
+      tray = new Tray(nativeImage.createFromPath(path.join(path.dirname(iconPath), 'tray.png')).resize({ width: 22, height: 22, quality: 'best' }));
     } catch { tray = null; return null; } // bureau sans zone de notification
     tray.setToolTip('FastBoost');
     // Certains bureaux Linux n'envoient que le menu : la première entrée ouvre donc le mini-panneau

@@ -57,7 +57,19 @@ const CATEGORIES = [
   {
     id: 'appcache', name: 'Cache des applications', scenes: ['deep'], recommended: false,
     desc: 'Autres caches dans ~/.cache et caches des applications Flatpak (recréés automatiquement).',
-    targets: [{ dir: CACHE, skip: /^(thumbnails|mozilla|google-chrome|chromium|BraveSoftware|microsoft-edge|vivaldi|opera)$/ }, { dir: path.join(HOME, '.var', 'app', '*', 'cache') }],
+    targets: [{ dir: CACHE, skip: /^(thumbnails|mozilla|google-chrome|chromium|BraveSoftware|microsoft-edge|vivaldi|opera|pip|yarn|go-build)$/ }, { dir: path.join(HOME, '.var', 'app', '*', 'cache') }],
+  },
+  {
+    id: 'devjunk', name: 'Fichiers de développement', scenes: ['deep'], recommended: false,
+    desc: 'Caches de npm, pip, Yarn, Gradle, Cargo et Go (retéléchargés si besoin).',
+    targets: [
+      { dir: path.join(HOME, '.npm', '_cacache') },
+      { dir: path.join(CACHE, 'pip') },
+      { dir: path.join(CACHE, 'yarn') },
+      { dir: path.join(CACHE, 'go-build') },
+      { dir: path.join(HOME, '.gradle', 'caches') },
+      { dir: path.join(HOME, '.cargo', 'registry', 'cache') },
+    ],
   },
   {
     id: 'crash', name: 'Rapports de plantage', scenes: ['health', 'deep'], recommended: true,

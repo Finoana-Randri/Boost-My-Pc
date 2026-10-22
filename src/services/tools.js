@@ -28,6 +28,9 @@ const WINDOWS = {
   windowsSecurity: url('windowsdefender:'),
   defaultApps: url('ms-settings:defaultapps'),
   networkSettings: url('ms-settings:network-status'),
+  privacyWebcam: url('ms-settings:privacy-webcam'),
+  privacyMic: url('ms-settings:privacy-microphone'),
+  privacyLocation: url('ms-settings:privacy-location'),
   display: url('ms-settings:display'),
   power: url('ms-settings:powersleep'),
 };
