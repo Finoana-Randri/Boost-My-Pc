@@ -17,12 +17,12 @@ const KEEP = new Set([
   'icons', 'themes', 'trash', 'keyrings', 'mime', 'user-dirs.dirs', 'user-dirs.locale', 'mimeapps.list', 'ibus', 'fcitx', 'environment.d',
   'gnome-session', 'gnome-shell', 'gnome-control-center', 'nautilus', 'evolution', 'tracker', 'tracker3', 'gvfs-metadata', 'xdg-desktop-portal',
   'kde', 'kdeconnect', 'plasma', 'kwin', 'xfce4', 'cinnamon', 'mate', 'lxsession', 'openbox', 'sway', 'hypr', 'nvim', 'vim', 'git', 'ssh', 'gnupg',
-  'flatpak', 'snap', 'containers', 'docker', 'npm', 'node', 'pip', 'mesa_shader_cache', 'mesa_shader_cache_db', 'thumbnails', 'fastboost',
+  'flatpak', 'snap', 'containers', 'docker', 'npm', 'node', 'pip', 'mesa_shader_cache', 'mesa_shader_cache_db', 'thumbnails', 'fastboost', 'boost-my-pc', 'boost my pc',
   'recently-used.xbel', 'sounds', 'backgrounds', 'nano', 'session', 'sessions', 'desktop-directories', 'org.gnome', 'goa-1.0', 'gnome-online-accounts',
   // Windows
   'microsoft', 'packages', 'temp', 'connecteddevicesplatform', 'comms', 'publishers', 'virtualstore', 'd3dscache', 'crashdumps', 'programs',
   'microsoft_corporation', 'windows', 'intel', 'nvidia', 'nvidia corporation', 'amd', 'realtek', 'adobe', 'google', 'mozilla', 'apple', 'apple computer',
-  'peerdistrepub', 'placeholdertilelogofolder', 'history', 'onedrive', 'squirreltemp', 'electron', 'pip', 'npm-cache', 'fastboost', 'pc manager',
+  'peerdistrepub', 'placeholdertilelogofolder', 'history', 'onedrive', 'squirreltemp', 'electron', 'pip', 'npm-cache', 'fastboost', 'boost my pc', 'boost-my-pc-updater', 'pc manager',
 ]);
 
 const norm = (s) => String(s || '').toLowerCase().replace(/\.(desktop|exe)$/, '').replace(/[^a-z0-9]/g, '');

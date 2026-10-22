@@ -1482,7 +1482,7 @@ PAGES.settings = async (token) => {
       ${row('apps', 'Réduire dans la zone de notification', 'La fermeture de la fenêtre laisse l\'application active', sw('s-tray', p.minimizeToTray))}
       ${IS_LINUX ? `
       ${row('warn', 'Alertes', 'Mémoire saturée, disque plein, corbeille volumineuse, mises à jour de sécurité', sw('s-alerts', p.alerts !== false))}
-      ${row('apps', 'Mini-panneau', 'Cliquez sur l\'icône de la barre supérieure, ou associez un raccourci clavier à <b>fastboost --mini</b>', '')}
+      ${row('apps', 'Mini-panneau', 'Cliquez sur l\'icône de la barre supérieure, ou associez un raccourci clavier à <b>boost-my-pc --mini</b>', '')}
       ${row('memory', 'Boost avancé', 'Vide aussi le cache de pages du noyau (mot de passe à chaque Boost)', sw('s-drop', p.boostDropCaches))}
       ${row('admin', 'Droits administrateur', 'Les actions système demandent votre mot de passe via polkit', `<span class="pill ${admin ? 'ok' : 'info'}">${admin ? 'root' : 'À la demande'}</span>`)}`
       : row('admin', 'Mode administrateur', admin ? 'Boost My Pc s\'exécute avec les droits administrateur' : 'Nécessaire pour certaines tâches système', admin ? '<span class="pill ok">Actif</span>' : '<button class="btn" id="s-admin">Redémarrer en administrateur</button>')}

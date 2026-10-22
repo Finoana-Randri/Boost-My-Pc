@@ -9,9 +9,9 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
   fonts-cantarell adwaita-icon-theme iproute2 iputils-ping ufw cron xterm galculator >/dev/null 2>&1
 id alix >/dev/null 2>&1 || useradd -m alix
 H=/home/alix
-mkdir -p $H/app "$H/.config/FastBoost" $H/Downloads $H/Pictures/vacances $H/Dropbox/projets $H/.config/autostart $H/.config/vieille-appli-supprimee $H/.cache/thumbnails/large
+mkdir -p $H/app "$H/.config/Boost My Pc" $H/Downloads $H/Pictures/vacances $H/Dropbox/projets $H/.config/autostart $H/.config/vieille-appli-supprimee $H/.cache/thumbnails/large
 cp -r /src/src /src/assets /src/package.json /src/scripts $H/app/
-echo "{\"theme\":\"$THEME\"}" > "$H/.config/FastBoost/preferences.json"
+echo "{\"theme\":\"$THEME\"}" > "$H/.config/Boost My Pc/preferences.json"
 # Images: identical and near-identical copies (including a renamed copy) for Similar Images.
 for f in /src/docs/screenshots/*.png; do cp "$f" $H/Pictures/; cp "$f" "$H/Pictures/vacances/copie-$(basename "$f")"; done
 # Cloud: a Dropbox folder with a large old file.

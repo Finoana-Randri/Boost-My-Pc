@@ -7,9 +7,9 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
   xvfb xauth libnss3 libgtk-3-0 libgbm1 libasound2 libxss1 libxtst6 libatk-bridge2.0-0 libdrm2 \
   fonts-cantarell adwaita-icon-theme dbus-x11 iproute2 iputils-ping xterm galculator mousepad >/dev/null 2>&1
 id alix >/dev/null 2>&1 || useradd -m alix
-mkdir -p /home/alix/app /home/alix/Downloads /home/alix/.config/FastBoost
+mkdir -p /home/alix/app /home/alix/Downloads /home/alix/.config/Boost My Pc
 cp -r /src/src /src/assets /src/package.json /home/alix/app/
-[ "$1" = "dark" ] && echo '{"theme":"dark"}' > /home/alix/.config/FastBoost/preferences.json
+[ "$1" = "dark" ] && echo '{"theme":"dark"}' > /home/alix/.config/Boost My Pc/preferences.json
 head -c 3000000 /dev/urandom > /home/alix/Downloads/ubuntu-24.04.iso
 head -c 400000 /dev/urandom > /home/alix/Downloads/facture.pdf
 chown -R alix /home/alix

@@ -29,17 +29,48 @@
     "electron@33.4.11": true
   },
   "build": {
-    "appId": "com.fastboost.app",
+    "appId": "com.boostmypc.app",
     "productName": "Boost My Pc",
-    "files": ["src/**/*", "assets/icon.png", "assets/tray.png", "package.json"],
-    "directories": { "output": "dist" },
+    "files": [
+      "src/**/*",
+      "assets/icon.png",
+      "assets/tray.png",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
     "win": {
       "artifactName": "Boost-My-Pc-Setup-${version}.${ext}",
-      "icon": "assets/icon.png"
+      "icon": "build/icon.ico",
+      "executableName": "Boost My Pc",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Boost My Pc",
+      "uninstallDisplayName": "Boost My Pc",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "language": "1036"
     },
     "linux": {
       "artifactName": "Boost-My-Pc-${version}.${ext}",
@@ -52,11 +83,26 @@
         "Name": "Boost My Pc",
         "Comment": "Optimisez, nettoyez et protégez votre PC",
         "Keywords": "boost;nettoyage;cleaner;system;monitor;",
-        "StartupWMClass": "FastBoost"
+        "StartupWMClass": "Boost My Pc"
       }
     },
     "deb": {
-      "depends": ["libgtk-3-0", "libnotify4", "libnss3", "libxss1", "libxtst6", "xdg-utils", "libatspi2.0-0", "libuuid1", "libsecret-1-0", "libgbm1", "libdrm2", "libasound2 | libasound2t64", "policykit-1 | pkexec"]
-    }
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libgbm1",
+        "libdrm2",
+        "libasound2 | libasound2t64",
+        "policykit-1 | pkexec"
+      ]
+    },
+    "copyright": "© 2026 Finoana Randri"
   }
 }

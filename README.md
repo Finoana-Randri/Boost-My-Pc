@@ -40,7 +40,7 @@ One scan checks five areas; one click applies safe actions.
 |---|---|---|
 | ![Shredder](docs/screenshots/v2/11-broyeur.png) | ![Tools](docs/screenshots/v2/12-outils.png) | ![Settings](docs/screenshots/v2/13-parametres.png) |
 
-> Screenshots were captured on Debian 12 (Xvfb) with test data; the desktop panel and window controls are not shown.
+> Screenshots were captured on Debian 12 (Xvfb) with test data; the desktop panel and window controls are not shown. They predate the card overviews described below.
 
 ## Modules
 
@@ -56,6 +56,10 @@ One scan checks five areas; one click applies safe actions.
 | **Cloud Cleanup** | Finds large and old files in OneDrive, Dropbox, Google Drive, Nextcloud, and other synced folders. Includes **Free up local space** for OneDrive. |
 | **Shredder** | Permanently deletes files by overwriting them with random data (1, 3, or 7 passes). Supports drag and drop. |
 | **Mini panel** | On Linux, click the top-bar icon to open a compact panel with system status, Boost, trash, and updates. Run `boost-my-pc --mini` to open it from a keyboard shortcut. |
+
+### Card overviews and list view
+
+Protection, Performance, Applications, and Storage open on a **card overview** after their scan: a headline, one large card, and smaller cards, each with a counter and **Review** / **Delete** buttons. **Review** opens the detail view, shown as a **list by default**. Use the **List / Cards** toggle in the top-right corner of a detail view to switch layouts; your choice is remembered. Maintenance tasks, startup apps, apps, leftovers, privacy items, and permissions can all be shown either way.
 
 Nothing is deleted without confirmation. Deletions go through the trash, except when you explicitly use the Shredder. System folders are protected, and Linux system actions request your password through polkit.
 
@@ -77,7 +81,11 @@ On standard GNOME desktops (Fedora, Debian), install the *AppIndicator and KStat
 
 ### Windows
 
-Run `Boost-My-Pc-Setup-2.0.1.exe` from the latest release.
+1. Download `Boost-My-Pc-Setup-2.0.1.exe` from the latest release.
+2. Run it. The setup wizard (in French) lets you choose the install folder, then creates **Boost My Pc** shortcuts on the desktop and in the Start menu, and launches the app.
+3. The installer is not code-signed yet, so Windows SmartScreen may show *Windows protected your PC*. Select **More info**, then **Run anyway**.
+
+The app installs for the current user (no administrator rights needed). Some system tasks, such as SSD TRIM, ask for administrator rights when you run them. To uninstall, open **Settings → Apps → Installed apps → Boost My Pc → Uninstall**; your preferences are kept unless you delete `%APPDATA%\Boost My Pc`.
 
 ### From source
 
@@ -90,7 +98,15 @@ npm start
 
 ```bash
 npm run dist:linux   # AppImage + .deb
-npm run dist:win     # Windows installer
+npm run dist:win     # Windows installer (dist/Boost-My-Pc-Setup-<version>.exe)
+```
+
+The Windows installer uses the resources in `build/`: `icon.ico` (installer, uninstaller, and app icon, 16 to 256 px) and the wizard side banners `installerSidebar.bmp` / `uninstallerSidebar.bmp` (164 × 314).
+
+If `npm run dist:win` fails with *Cannot create symbolic link* while extracting `winCodeSign`, either turn on Windows Developer Mode, or extract the archive once without its macOS folder:
+
+```bash
+node_modules/7zip-bin/win/x64/7za.exe x "%LOCALAPPDATA%/electron-builder/Cache/winCodeSign/<number>.7z" -o"%LOCALAPPDATA%/electron-builder/Cache/winCodeSign/winCodeSign-2.6.0" -xr!darwin
 ```
 
 ## Performance
@@ -116,6 +132,7 @@ src/services/v2/            v2 modules: Smart Care, maintenance, privacy, permis
                             leftovers, threats, shredder, Disk Map, similar images, cloud
 src/renderer/               App interface and mini panel
 assets/                     App and tray icons
+build/                      Windows installer resources (icon.ico, wizard banners)
 scripts/                    Tests and Docker builds
 docs/                       REA analyses and screenshots
 ```

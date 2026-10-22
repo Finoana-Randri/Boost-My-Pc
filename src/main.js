@@ -98,7 +98,7 @@ function applyTheme() {
 }
 
 // ---------- Launch at startup ----------
-const linuxAutostartFile = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'autostart', 'fastboost.desktop');
+const linuxAutostartFile = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'autostart', 'boost-my-pc.desktop');
 function getStartup() {
   if (isLinux) return fs.existsSync(linuxAutostartFile);
   return app.getLoginItemSettings().openAtLogin;
@@ -143,7 +143,7 @@ const appDir = path.dirname(process.execPath).toLowerCase();
 function isSelf(a) {
   if (!a) return false;
   if (a.pkg === 'boost-my-pc' || a.pkg === 'fastboost') return true;
-  if (/fastboost\.desktop$/.test(a.desktopFile || '')) return true;
+  if (/(fastboost|boost-my-pc)\.desktop$/.test(a.desktopFile || '')) return true;
   if (app.isPackaged && [a.uninstall, a.location].some((s) => s && String(s).toLowerCase().includes(appDir))) return true;
   return false;
 }
@@ -317,7 +317,7 @@ if (!app.requestSingleInstanceLock()) {
     else showWindow();
   });
   app.whenReady().then(() => {
-    if (!isLinux) app.setAppUserModelId('com.fastboost.app');
+    if (!isLinux) app.setAppUserModelId('com.boostmypc.app');
     prefs = loadPrefs();
     applyTheme();
     registerIpc();
