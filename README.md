@@ -71,17 +71,17 @@ Download the installers from the [latest release](https://github.com/Finoana-Ran
 
 ```bash
 # Debian / Ubuntu / Mint / Pop!_OS
-sudo apt install ./Boost-My-Pc-2.0.2.deb
+sudo apt install ./Boost-My-Pc-2.0.3.deb
 
 # All distributions
-chmod +x Boost-My-Pc-2.0.2.AppImage && ./Boost-My-Pc-2.0.2.AppImage
+chmod +x Boost-My-Pc-2.0.3.AppImage && ./Boost-My-Pc-2.0.3.AppImage
 ```
 
 On standard GNOME desktops (Fedora, Debian), install the *AppIndicator and KStatusNotifierItem Support* extension to show the top-bar icon.
 
 ### Windows
 
-1. Download `Boost-My-Pc-Setup-2.0.2.exe` from the latest release.
+1. Download `Boost-My-Pc-Setup-2.0.3.exe` from the latest release.
 2. Run it. The setup wizard (in French) lets you choose the install folder, then creates **Boost My Pc** shortcuts on the desktop and in the Start menu, and launches the app.
 3. The installer is not code-signed yet, so Windows SmartScreen may show *Windows protected your PC*. Select **More info**, then **Run anyway**.
 
