@@ -6,8 +6,8 @@ const fs = require('fs');
 const [out, port, ...flows] = process.argv.slice(2);
 
 const FLOWS = {
-  smart: { route: 'smart', click: '#scan', until: '.sc-btn.ready', timeout: 300000 },
-  cleanup: { route: 'cleanup', click: '#scan', until: '#do-clean', timeout: 120000 },
+  smart: { reset: 'smartResult = null; smartDone = null', route: 'smart', click: '#scan', until: '.sc-btn.ready', timeout: 300000 },
+  cleanup: { reset: 'cleanResult = null', route: 'cleanup', click: '#scan', until: '#do-clean', timeout: 120000 },
   threats: { route: 'protection', click: '#scan', until: '.ov-grid', timeout: 900000 },
   privacy: { route: 'protection/privacy', until: '#pv-go', timeout: 60000 },
   permissions: { route: 'protection/permissions', until: '#perm .pick-card, #perm .empty', timeout: 60000 },
@@ -17,7 +17,7 @@ const FLOWS = {
   network: { route: 'performance/network', until: '.list .row', timeout: 90000 },
   leftovers: { route: 'applications/leftovers', until: '#lo, .empty', timeout: 180000 },
   updates: { route: 'applications/updates', until: '.big', timeout: 300000 },
-  lens: { route: 'lens', click: '#scan', until: '.bubble', timeout: 600000 },
+  lens: { reset: 'lensData = null', route: 'lens', click: '#scan', until: '.bubble', timeout: 600000 },
   similar: { route: 'clutter/similar', click: '#scan', until: '#sim, .empty', timeout: 600000 },
   large: { route: 'clutter/large', until: '#lg-list, #lg .empty', timeout: 600000 },
   downloads: { route: 'clutter/downloads', until: '#dl-list, #dl .empty', timeout: 60000 },
@@ -47,6 +47,8 @@ const FLOWS = {
   for (const name of flows) {
     const f = FLOWS[name];
     const t0 = Date.now();
+    // Modules keep their last result: start from the home screen.
+    if (f.reset) await ev(f.reset);
     await ev(`go('${f.route}')`);
     await new Promise((r) => setTimeout(r, 800));
     if (f.click) {

@@ -1951,7 +1951,8 @@ PAGES.tools = async (token) => {
     if (Math.abs((el.pct ?? -10) - pct) < 2) return;
     el.pct = pct;
     const c = el.querySelector('circle:nth-of-type(2)');
-    c.style.transitionDuration = '.35s';
+    c.style.transitionDuration = el.pct0 ? '0s' : '.5s';
+    el.pct0 = true;
     c.style.strokeDashoffset = c.getTotalLength() * (1 - pct / 100);
     el.querySelector('.g-val').textContent = `${pct}%`;
   };
@@ -1986,115 +1987,337 @@ PAGES.tools = async (token) => {
 };
 
 // ===================== Welcome screen =====================
-// Shown once, at the first launch (or after a voluntary reset in the settings).
-const WELCOME_FEATURES = [
-  ['smart', 'Entretien intelligent', 'Une analyse, un clic'],
-  ['cleanup', 'Nettoyage', 'Fichiers inutiles et caches'],
-  ['protection', 'Protection', 'Menaces et confidentialité'],
-  ['performance', 'Performances', 'Maintenance et démarrage'],
-  ['applications', 'Applications', 'Désinstallation et mises à jour'],
-  ['lens', 'Carte du disque', 'Ce qui occupe votre disque'],
+// Shown once, at the first launch (or after a voluntary reset in the settings): three short
+// animated steps, then a transition into the app.
+const WELCOME_ORBIT = ['cleanup', 'protection', 'performance', 'applications', 'clutter', 'lens'];
+const WELCOME_TRUST = { ok: 'check', src: 'download', local: 'lock' };
+const WELCOME_STEPS = [
+  {
+    eyebrow: 'Bienvenue',
+    title: 'Votre PC, <span>comme au premier jour.</span>',
+    lead: 'Boost My Pc réunit tout ce qu\'il faut pour garder un ordinateur propre, sûr et rapide, dans une seule application.',
+    next: 'Découvrir',
+  },
+  {
+    eyebrow: 'Tout-en-un',
+    title: 'Trois gestes, <span>un seul clic.</span>',
+    lead: 'L\'Entretien intelligent analyse votre PC en une fois et propose les actions utiles.',
+    points: [
+      ['cleanup', 'Nettoyer', 'Fichiers inutiles, caches, doublons et gros fichiers oubliés.'],
+      ['protection', 'Protéger', 'Menaces, traces de navigation et autorisations des applications.'],
+      ['performance', 'Accélérer', 'Maintenance, démarrage, mémoire et mises à jour des pilotes.'],
+    ],
+    next: 'Continuer',
+  },
+  {
+    eyebrow: 'En toute confiance',
+    title: 'Vous gardez <span>le contrôle.</span>',
+    lead: 'Chaque action vous est présentée avant d\'être appliquée.',
+    points: [
+      ['ok', 'Rien n\'est supprimé sans votre accord', 'Les fichiers passent par la corbeille, sauf avec le Broyeur.'],
+      ['src', 'Sources officielles uniquement', 'Pilotes et mises à jour viennent de Windows Update ou de votre distribution.'],
+      ['local', 'Vos données restent sur ce PC', 'Aucune analyse n\'est envoyée sur Internet.'],
+    ],
+    next: 'Commencer',
+  },
 ];
+
+function welcomeVisual(i) {
+  if (i === 0) {
+    return `<div class="wv wv-orbit" data-v="0">
+      <div class="wv-halo"></div><div class="wv-ring r1"></div><div class="wv-ring r2"></div>
+      <div class="wv-spin">${WELCOME_ORBIT.map((m, k) => `<div class="wv-planet" style="--a:${k * 60}deg"><div class="wv-moon g-${m}">${micon(m)}</div></div>`).join('')}</div>
+      <img class="wv-logo" src="../../assets/icon.png" alt=""/></div>`;
+  }
+  if (i === 1) {
+    return `<div class="wv wv-bento" data-v="1">${['smart', 'cleanup', 'protection', 'performance', 'applications', 'clutter', 'lens', 'shredder'].map((m, k) => `
+      <div class="wv-tile ${k === 0 ? 'big' : ''}" style="--d:${k * 70}ms"><div class="wv-moon g-${m}">${micon(m)}</div><b>${esc(MODULES[m].title)}</b></div>`).join('')}</div>`;
+  }
+  return `<div class="wv wv-shield" data-v="2"><div class="wv-halo green"></div><div class="wv-ring r1"></div><div class="wv-ring r2"></div>
+    <div class="wv-badge g-protection">${micon('protection')}</div>
+    <div class="wv-check">${icon('check')}</div></div>`;
+}
 
 function showWelcome() {
   const el = document.createElement('div');
   el.id = 'welcome';
   el.className = 'welcome';
-  el.innerHTML = `<div class="wl-glow"></div>
-    <div class="wl-stage">
-      <div class="wl-logo"><span class="wl-ring"></span><span class="wl-ring r2"></span><img src="../../assets/icon.png" alt=""/></div>
-      <h1 class="wl-title">Bienvenue dans <span>Boost My Pc</span></h1>
-      <p class="wl-lead">Nettoyez, protégez et accélérez votre PC en quelques clics. Rien n'est supprimé sans votre accord.</p>
-      <div class="wl-features">${WELCOME_FEATURES.map(([mod, t, s], i) => `<div class="wl-feature glass" style="animation-delay:${1.05 + i * 0.08}s">
-        <div class="wl-ico g-${mod}">${micon(mod)}</div><div><b>${t}</b><span>${s}</span></div></div>`).join('')}</div>
-      <button class="scan-btn wl-start" id="wl-start">Commencer</button>
+  el.innerHTML = `
+    <div class="wl-bg"><i></i><i></i></div>
+    <button class="wl-skip" id="wl-skip">Passer</button>
+    <div class="wl-main">
+      <div class="wl-visual">${WELCOME_STEPS.map((_, i) => welcomeVisual(i)).join('')}</div>
+      <div class="wl-copy">${WELCOME_STEPS.map((s, i) => `<section class="wl-step" data-step="${i}">
+        <span class="wl-eyebrow">${s.eyebrow}</span>
+        <h1>${s.title}</h1>
+        <p class="wl-lead">${s.lead}</p>
+        ${s.points ? `<ul class="wl-points">${s.points.map(([ic, t, d], k) => `<li style="--d:${120 + k * 90}ms">
+          <span class="wl-pt-ico ${MODULES[ic] ? `g-${ic}` : `t-${ic}`}">${MODULES[ic] ? micon(ic) : icon(WELCOME_TRUST[ic])}</span><div><b>${t}</b><span>${d}</span></div></li>`).join('')}</ul>` : ''}
+      </section>`).join('')}
+        <div class="wl-nav">
+          <button class="wl-back" id="wl-back" aria-label="Précédent">${icon('chevron')}</button>
+          <div class="wl-dots">${WELCOME_STEPS.map((_, i) => `<button class="wl-dot" data-go-step="${i}" aria-label="Étape ${i + 1}"></button>`).join('')}</div>
+          <button class="wl-next" id="wl-next"><span></span>${icon('chevron')}</button>
+        </div>
+      </div>
     </div>`;
   document.body.appendChild(el);
   document.body.classList.add('welcoming');
-  $('#wl-start').onclick = () => {
+  let step = -1;
+  const show = (n) => {
+    if (n < 0 || n >= WELCOME_STEPS.length || n === step) return;
+    const back = n < step;
+    step = n;
+    el.dataset.step = n;
+    el.classList.toggle('backwards', back);
+    $$('.wl-step', el).forEach((s) => s.classList.toggle('on', Number(s.dataset.step) === n));
+    $$('.wv', el).forEach((v) => v.classList.toggle('on', Number(v.dataset.v) === n));
+    $$('.wl-dot', el).forEach((d) => d.classList.toggle('on', Number(d.dataset.goStep) === n));
+    $('#wl-next span').textContent = WELCOME_STEPS[n].next;
+    $('#wl-next').classList.toggle('final', n === WELCOME_STEPS.length - 1);
+    $('#wl-back').classList.toggle('hidden-soft', n === 0);
+  };
+  const finish = () => {
+    document.removeEventListener('keydown', onKey);
     pcm.prefs.set({ welcomed: true }).catch(() => {});
     el.classList.add('out');
     document.body.classList.remove('welcoming');
-    setTimeout(() => el.remove(), document.body.classList.contains('lite') ? 0 : 700);
+    setTimeout(() => el.remove(), document.body.classList.contains('lite') ? 0 : 800);
   };
+  const onKey = (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'Enter') step === WELCOME_STEPS.length - 1 ? finish() : show(step + 1);
+    else if (e.key === 'ArrowLeft') show(step - 1);
+    else if (e.key === 'Escape') finish();
+  };
+  document.addEventListener('keydown', onKey);
+  $('#wl-next').onclick = () => (step === WELCOME_STEPS.length - 1 ? finish() : show(step + 1));
+  $('#wl-back').onclick = () => show(step - 1);
+  $('#wl-skip').onclick = finish;
+  $$('.wl-dot', el).forEach((d) => (d.onclick = () => show(Number(d.dataset.goStep))));
+  show(0);
 }
 
 // ===================== PC health =====================
-// Real measurements (processor, memory, storage, battery, system) and a score with recommendations.
-let healthResult = null; // Kept for a minute so that the settings open instantly
+// Real measurements (processor, memory, storage, battery, system), a score out of 100 with
+// recommendations, and live processor and memory curves while the tab is open.
+let healthResult = null; // Kept for a minute so that the tab opens instantly
+const healthSeries = { cpu: [], mem: [] }; // Recent live samples (percent)
 
-const HEALTH_CARDS = ['cpu', 'memory', 'storage', 'battery', 'system'];
+const HEALTH_TITLES = {
+  Excellent: 'Votre PC est en excellente forme',
+  Bon: 'Votre PC est en bonne santé',
+  'À surveiller': 'Quelques points à surveiller',
+  Critique: 'Votre PC a besoin d\'attention',
+};
+const lvlOf = (pct, warn = 75, bad = 90) => (pct >= bad ? 'bad' : pct >= warn ? 'warn' : 'ok');
+
+// Half-circle gauge (0–100 %).
+function arcGauge(id, pct) {
+  const len = Math.PI * 80;
+  return `<svg class="hx-arc" viewBox="0 0 200 112" id="${id}">
+    <defs><linearGradient id="${id}-g" x1="0" x2="1"><stop offset="0" stop-color="#4be3a0"/><stop offset=".6" stop-color="#ffc53d"/><stop offset="1" stop-color="#ff6a88"/></linearGradient></defs>
+    <path d="M20 100 A80 80 0 0 1 180 100" class="hx-arc-track"/>
+    <path d="M20 100 A80 80 0 0 1 180 100" class="hx-arc-val" stroke="url(#${id}-g)" stroke-dasharray="${len}" stroke-dashoffset="${len * (1 - pct / 100)}"/>
+  </svg>`;
+}
+
+// Area chart of recent samples.
+function sparkPath(values) {
+  if (values.length < 2) return { line: '', area: '' };
+  const n = values.length, step = 100 / (n - 1);
+  const pts = values.map((v, i) => `${(i * step).toFixed(2)},${(38 - (Math.min(100, v) / 100) * 34).toFixed(2)}`);
+  return { line: `M${pts.join(' L')}`, area: `M0,40 L${pts.join(' L')} L100,40 Z` };
+}
+function spark(id, cls) {
+  return `<svg class="hx-spark ${cls}" id="${id}" viewBox="0 0 100 40" preserveAspectRatio="none"><path class="a"/><path class="l"/></svg>`;
+}
+function setSpark(id, values) {
+  const svg = $(`#${id}`);
+  if (!svg) return;
+  const { line, area } = sparkPath(values);
+  svg.querySelector('.l').setAttribute('d', line);
+  svg.querySelector('.a').setAttribute('d', area);
+}
+
 function healthSkeleton() {
-  return `<div class="hl-score glass loading-card"><span class="spinner"></span><div class="muted">Mesure de l'état du PC…</div></div>${HEALTH_CARDS.map(() => '<div class="hl-card glass loading-card"></div>').join('')}`;
+  return `<div class="hx"><section class="hx-hero glass loading"><div class="hx-orb"><span class="spinner"></span></div>
+    <div class="hx-head"><span class="hx-eyebrow">Indice de santé</span><h2>Mesure de l'état du PC…</h2><p class="muted">Processeur, mémoire, stockage, batterie et système.</p></div></section>
+    <div class="hx-body"><div class="hx-cards">${'<div class="hx-card glass shimmer"></div>'.repeat(4)}</div><aside class="hx-side glass shimmer"></aside></div></div>`;
 }
 
 async function loadHealth(token) {
   if (!healthResult || Date.now() - healthResult.at > 60000) {
     const r = await pcm.v2.health().catch((e) => ({ error: e.message }));
+    if (!alive(token)) return;
     if (r.error) {
-      if (alive(token) && $('#health')) $('#health').innerHTML = `<div class="card glass empty">${icon('warn')}<div>Mesure impossible : ${esc(r.error)}</div></div>`;
+      $('#health').innerHTML = `<div class="card glass empty">${icon('warn')}<div>Mesure impossible : ${esc(r.error)}</div><button class="btn" id="hx-retry">${icon('refresh')} Réessayer</button></div>`;
+      $('#hx-retry').onclick = () => { $('#health').innerHTML = healthSkeleton(); loadHealth(token); };
       return;
     }
     healthResult = r;
+    if (!healthSeries.cpu.length) { healthSeries.cpu.push(r.cpu.usage); healthSeries.mem.push(r.memory.percent); }
   }
-  if (alive(token) && $('#health')) renderHealth(healthResult);
+  if (!alive(token) || !$('#health')) return;
+  renderHealth(token, healthResult);
+  liveHealth(token);
 }
 
-// meter: percentage used (high is bad), or { pct, good: true } when a high value is good.
-function hlCard(cls, ic, title, value, sub, meter, extra = '') {
-  const wide = cls.includes('wide');
-  cls = cls.replace(' wide', '');
-  const good = typeof meter === 'object' && meter !== null;
-  if (good) meter = meter.pct;
-  const lvl = meter == null ? '' : good ? (meter < 60 ? 'bad' : meter < 80 ? 'warn' : 'ok') : meter >= 90 ? 'bad' : meter >= 75 ? 'warn' : 'ok';
-  return `<div class="hl-card glass${wide ? ' wide' : ''}">
-    <div class="hl-top"><div class="hl-ico ${cls}">${ficon(ic)}</div><b>${title}</b></div>
-    <div class="hl-val">${value}</div><div class="hl-sub">${sub}</div>
-    ${meter == null ? '' : `<div class="hl-meter ${lvl}"><i style="width:${Math.max(2, Math.min(100, meter))}%"></i></div>`}${extra}</div>`;
-}
-
-function renderHealth(h) {
+function renderHealth(token, h) {
   const days = Math.floor(h.system.uptime / 86400), hours = Math.floor((h.system.uptime % 86400) / 3600);
-  const up = days ? `${plural(days, 'jour', 'jours')}${hours ? ` ${hours} h` : ''}` : `${hours} h`;
-  const main = h.volumes.find((v) => /^(C:|\/)$/i.test(v.id)) || h.volumes[0];
-  const used = main ? main.size - main.free : 0;
-  const diskPills = h.disks.map((d) => {
-    const st = d.health === 'bad' ? ['bad', 'Défaillant'] : d.health === 'warn' ? ['warn', 'À surveiller'] : d.health === 'good' ? ['ok', 'Bon état'] : null;
-    return `<div class="hl-line"><span>${esc([d.type, d.name].filter(Boolean).join(' · '))}</span>${st ? `<span class="pill ${st[0]}">${st[1]}${d.wear != null ? ` · usure ${d.wear} %` : ''}</span>` : '<span class="muted small">État non communiqué</span>'}</div>`;
-  }).join('');
-  const sysLines = [
-    h.system.antivirus ? `<div class="hl-line"><span>Protection en temps réel</span><span class="pill ${h.system.antivirus.on ? 'ok' : 'bad'}">${h.system.antivirus.on ? 'Active' : 'Désactivée'}</span></div>` : '',
-    `<div class="hl-line"><span>Redémarrage requis</span><span class="pill ${h.system.reboot ? 'warn' : 'ok'}">${h.system.reboot ? 'Oui' : 'Non'}</span></div>`,
-    IS_LINUX ? `<div class="hl-line"><span>Services en échec</span><span class="pill ${h.system.failed.length ? 'warn' : 'ok'}">${h.system.failed.length || 'Aucun'}</span></div>` : '',
-  ].join('');
+  const mins = Math.floor((h.system.uptime % 3600) / 60);
+  const up = days ? `${plural(days, 'jour', 'jours')}${hours ? ` ${hours} h` : ''}` : hours ? `${hours} h ${String(mins).padStart(2, '0')}` : `${mins} min`;
+  const at = new Date(h.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const vols = [...h.volumes].sort((a, b) => (/^(C:|\/)$/i.test(a.id) ? -1 : /^(C:|\/)$/i.test(b.id) ? 1 : 0));
+  const usedPct = (v) => (v.size ? Math.round(((v.size - v.free) / v.size) * 100) : 0);
+  const main = vols[0];
   const b = h.battery;
-  const ringCls = h.level;
-  $('#health').innerHTML = `
-    <div class="hl-score glass ${ringCls}">
-      <div class="hl-ring">${gauge(h.score, 104, 9)}</div>
-      <div class="hl-score-text"><div class="hl-ico g-protection">${ficon('heart')}</div><div class="hl-grade">${h.label}</div>
-        <div class="muted small">Indice calculé à partir des mesures réelles de ce PC.</div></div>
-      <div class="hl-tips">${h.tips.length ? h.tips.map((t) => `<div class="hl-tip ${t.level}"><span class="sc-dot"></span><span>${esc(t.text)}</span>${t.route ? `<button class="link" data-go="${t.route}">Corriger</button>` : ''}</div>`).join('') : `<div class="hl-tip ok"><span class="sc-dot"></span><span>Aucun problème détecté. Votre PC est en bonne santé.</span></div>`}</div>
+  const batLvl = b?.health == null ? 'ok' : b.health < 60 ? 'bad' : b.health < 80 ? 'warn' : 'ok';
+  const chips = [
+    ['process', 'Processeur', `<b id="hx-chip-cpu">${h.cpu.usage} %</b>`, lvlOf(h.cpu.usage, 80, 95), 'hx-chip-cpu-l'],
+    ['memory', 'Mémoire', `<b id="hx-chip-mem">${h.memory.percent} %</b>`, lvlOf(h.memory.percent, 80, 90), 'hx-chip-mem-l'],
+    ['storage', 'Stockage', `<b>${main ? `${usedPct(main)} %` : '–'}</b>`, main ? lvlOf(usedPct(main), 80, 90) : 'ok'],
+    ...(b ? [['battery', 'Batterie', `<b>${b.health ?? b.charge ?? '–'} %</b>`, batLvl]] : []),
+  ];
+  const tipIcon = { bad: 'warn', warn: 'warn', info: 'clock', ok: 'check' };
+  const sysRows = [
+    h.system.antivirus ? ['shield', 'Protection en temps réel', h.system.antivirus.on ? 'Active' : 'Désactivée', h.system.antivirus.on ? 'ok' : 'bad'] : null,
+    h.system.antivirus ? ['update', 'Signatures antivirus', h.system.antivirus.signatureAge > 0 ? `${plural(h.system.antivirus.signatureAge, 'jour', 'jours')}` : 'À jour', h.system.antivirus.signatureAge > 7 ? 'warn' : 'ok'] : null,
+    ['refresh', 'Redémarrage requis', h.system.reboot ? 'Oui' : 'Non', h.system.reboot ? 'warn' : 'ok'],
+    IS_LINUX ? ['warn', 'Services en échec', h.system.failed.length ? String(h.system.failed.length) : 'Aucun', h.system.failed.length ? 'warn' : 'ok'] : null,
+    ['clock', 'Allumé depuis', up, h.system.uptime > 14 * 86400 ? 'warn' : 'ok'],
+  ].filter(Boolean);
+  const R = 74, C = 2 * Math.PI * R;
+  $('#health').innerHTML = `<div class="hx ${h.level}">
+    <section class="hx-hero glass">
+      <div class="hx-orb">
+        <svg viewBox="0 0 180 180"><defs><linearGradient id="hx-ring-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="s1"/><stop offset="1" class="s2"/></linearGradient></defs>
+          <circle cx="90" cy="90" r="${R}" class="hx-ring-track"/><circle cx="90" cy="90" r="${R}" class="hx-ring-val" id="hx-ring" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg>
+        <div class="hx-score"><b id="hx-score">0</b><span>/100</span></div>
+      </div>
+      <div class="hx-head">
+        <span class="hx-eyebrow"><i class="hx-led"></i>Indice de santé · ${esc(h.label)}</span>
+        <h2>${HEALTH_TITLES[h.label] || h.label}</h2>
+        <p>${h.tips.length ? `${plural(h.tips.length, 'recommandation', 'recommandations')} pour l'améliorer.` : 'Aucun problème détecté.'} Mesuré à ${at} · ${esc(h.system.os || '')}</p>
+        <div class="hx-chips">${chips.map(([ic, t, v, l, id]) => `<span class="hx-chip ${l}" ${id ? `id="${id}"` : ''}>${ficon(ic)}<span>${t}</span>${v}</span>`).join('')}</div>
+      </div>
+      <button class="btn hx-refresh" id="hl-refresh">${icon('refresh')} Actualiser</button>
+    </section>
+    <div class="hx-body">
+      <div class="hx-cards">
+        <div class="hx-card glass">
+          <div class="hx-card-head"><span class="hx-ico g-performance">${ficon('process')}</span><div><b>Processeur</b><span title="${esc(h.cpu.name || '')}">${esc(h.cpu.name || '')}</span></div></div>
+          <div class="hx-gauge">${arcGauge('hx-cpu-arc', h.cpu.usage)}<div class="hx-gauge-val"><b id="hx-cpu">${h.cpu.usage}</b><span>%</span></div></div>
+          ${spark('hx-cpu-spark', 'cpu')}
+          <div class="hx-meta"><span>${plural(h.cpu.cores, 'cœur', 'cœurs')}</span>${h.cpu.temp != null ? `<span class="hx-pill ${lvlOf(h.cpu.temp, 80, 90)}">${h.cpu.temp} °C</span>` : '<span class="muted">Température non communiquée</span>'}</div>
+        </div>
+        <div class="hx-card glass">
+          <div class="hx-card-head"><span class="hx-ico g-applications">${ficon('memory')}</span><div><b>Mémoire</b><span>${fmtBytes(h.memory.total)} au total</span></div></div>
+          <div class="hx-big"><b id="hx-mem-used">${fmtBytes(h.memory.used)}</b><span>utilisés</span></div>
+          <div class="hx-seg"><i id="hx-mem-bar" class="${lvlOf(h.memory.percent, 80, 90)}" style="width:${h.memory.percent}%"></i></div>
+          <div class="hx-legend"><span><i class="u ${lvlOf(h.memory.percent, 80, 90)}" id="hx-mem-dot"></i>Utilisée <b id="hx-mem-pct">${h.memory.percent} %</b></span><span><i class="f"></i>Disponible <b id="hx-mem-free">${fmtBytes(h.memory.free)}</b></span></div>
+          ${spark('hx-mem-spark', 'mem')}
+        </div>
+        <div class="hx-card glass">
+          <div class="hx-card-head"><span class="hx-ico g-clutter">${ficon('storage')}</span><div><b>Stockage</b><span>${plural(vols.length, 'volume', 'volumes')} · ${plural(h.disks.length, 'disque', 'disques')}</span></div></div>
+          <div class="hx-vols">${vols.slice(0, 3).map((v) => `<div class="hx-vol">
+            <div class="hx-vol-top"><b>${esc(v.id)}</b><span>${fmtBytes(v.free)} libres sur ${fmtBytes(v.size)}</span></div>
+            <div class="hx-seg thin"><i class="${lvlOf(usedPct(v), 80, 90)}" style="width:${usedPct(v)}%"></i></div></div>`).join('')}</div>
+          <div class="hx-disks">${h.disks.map((d) => {
+            const st = d.health === 'bad' ? ['bad', 'Défaillant'] : d.health === 'warn' ? ['warn', 'À surveiller'] : d.health === 'good' ? ['ok', 'Bon état'] : null;
+            return `<span class="hx-disk" title="${esc(d.name)}"><i class="${st ? st[0] : ''}"></i><span>${esc(d.type || 'Disque')} · ${esc(d.name)}</span>${st ? ` <em>${st[1]}${d.wear != null ? ` · usure ${d.wear} %` : ''}</em>` : ''}</span>`;
+          }).join('')}</div>
+        </div>
+        <div class="hx-card glass">
+          <div class="hx-card-head"><span class="hx-ico g-cleanup">${ficon('battery')}</span><div><b>Batterie</b><span>${b ? (b.charging ? 'En charge' : 'Sur batterie') : 'Aucune batterie'}</span></div></div>
+          ${b ? `<div class="hx-bat ${batLvl}">
+              <div class="hx-bat-body"><i style="width:${b.charge ?? 0}%"></i><span>${b.charge ?? '–'} %</span>${b.charging ? `<em>${ficon('bolt')}</em>` : ''}</div><div class="hx-bat-cap"></div></div>
+            <div class="hx-big small"><b class="${batLvl}">${b.health != null ? `${b.health} %` : '–'}</b><span>de la capacité d'origine</span></div>
+            <div class="hx-meta"><span>${b.health == null ? 'Usure non communiquée' : b.health >= 80 ? 'Batterie en bon état' : b.health >= 60 ? 'Usure normale' : 'Batterie usée'}</span>${b.cycles ? `<span>${b.cycles} cycles</span>` : ''}</div>`
+            : `<div class="hx-plug">${ficon('power')}<span>Ce PC fonctionne sur secteur.</span></div>`}
+        </div>
+      </div>
+      <aside class="hx-side glass">
+        <div class="hx-side-head"><b>Recommandations</b>${h.tips.length ? `<span class="hx-count">${h.tips.length}</span>` : ''}</div>
+        ${h.tips.length ? `<div class="hx-tips">${h.tips.map((t) => `<div class="hx-tip ${t.level}"><span class="hx-tip-ico">${icon(tipIcon[t.level] || 'warn')}</span><p>${esc(t.text)}</p>${t.route ? `<button class="btn" data-go="${t.route}">Corriger</button>` : ''}</div>`).join('')}</div>`
+          : `<div class="hx-allgood"><span>${icon('check')}</span><b>Tout est en ordre</b><p>Aucune action n'est nécessaire pour le moment.</p></div>`}
+        <div class="hx-side-head sys"><b>Système</b></div>
+        <div class="hx-sys">${sysRows.map(([ic, t, v, l]) => `<div class="hx-sys-row"><span class="hx-sys-ico">${icon(ic)}</span><span>${t}</span><b class="${l}">${esc(v)}</b></div>`).join('')}</div>
+      </aside>
     </div>
-    ${hlCard('g-performance', 'process', 'Processeur', `${h.cpu.usage} %`, `${h.cpu.temp != null ? `${h.cpu.temp} °C · ` : ''}${plural(h.cpu.cores, 'cœur', 'cœurs')}${h.cpu.temp == null ? ' · température non communiquée' : ''}`, h.cpu.usage)}
-    ${hlCard('g-applications', 'memory', 'Mémoire', fmtBytes(h.memory.used), `${fmtBytes(h.memory.free)} disponibles sur ${fmtBytes(h.memory.total)}`, h.memory.percent)}
-    ${hlCard('g-clutter', 'storage', 'Stockage', main ? `${fmtBytes(main.free)} libres` : '–', main ? `${fmtBytes(used)} utilisés sur ${fmtBytes(main.size)} (${esc(main.id)})${h.volumes.length > 1 ? ` · ${plural(h.volumes.length - 1, 'autre volume', 'autres volumes')}` : ''}` : '', main ? Math.round((used / main.size) * 100) : null, diskPills)}
-    ${b ? hlCard('g-cleanup', 'battery', 'Batterie', b.health != null ? `${b.health} %` : `${b.charge ?? '–'} %`, `${b.health != null ? 'de la capacité d\'origine · ' : ''}charge ${b.charge ?? '–'} %${b.charging ? ' · en charge' : ''}${b.cycles ? ` · ${b.cycles} cycles` : ''}`, b.health != null ? { pct: b.health, good: true } : null)
-      : hlCard('g-cleanup', 'battery', 'Batterie', 'Aucune', 'Ce PC fonctionne sur secteur.', null)}
-    ${hlCard('g-lens wide', 'shieldCheck', 'Système', h.tips.length ? plural(h.tips.length, 'point à surveiller', 'points à surveiller') : 'Aucun problème', `${esc(h.system.os || '')} · allumé depuis ${up}`, null, sysLines)}`;
-  $('.hl-ring .g-val').innerHTML = `${h.score}<small>/100</small>`;
+  </div>`;
+  $('#hl-refresh').onclick = () => { healthResult = null; $('#health').innerHTML = healthSkeleton(); loadHealth(token); };
+  setSpark('hx-cpu-spark', healthSeries.cpu);
+  setSpark('hx-mem-spark', healthSeries.mem);
+  // After the opening animation, live values change without transitions: animating them every
+  // few seconds would keep redrawing the frosted glass.
+  setTimeout(() => $('.hx')?.classList.add('hx-live'), 1500);
+  // Fill the ring and count the score up.
+  const ring = $('#hx-ring'), scoreEl = $('#hx-score');
+  const lite = document.body.classList.contains('lite');
+  requestAnimationFrame(() => { ring.style.strokeDashoffset = C * (1 - h.score / 100); });
+  if (lite) scoreEl.textContent = h.score;
+  else {
+    const t0 = performance.now();
+    const tick = (t) => {
+      const k = Math.min(1, (t - t0) / 1100);
+      scoreEl.textContent = Math.round(h.score * (1 - Math.pow(1 - k, 3)));
+      if (k < 1 && scoreEl.isConnected) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+}
+
+// Live processor and memory values while the tab is open (values updated in place).
+function liveHealth(token) {
+  const len = Math.PI * 80;
+  let busy = false;
+  const tick = async () => {
+    if (busy || document.hidden || !alive(token) || !$('#hx-cpu')) return;
+    busy = true;
+    const s = await pcm.system.stats().catch(() => null);
+    busy = false;
+    if (!s || !alive(token) || !$('#hx-cpu')) return;
+    for (const [k, v] of [['cpu', s.cpu], ['mem', s.memory.percent]]) {
+      healthSeries[k].push(v);
+      if (healthSeries[k].length > 40) healthSeries[k].shift();
+    }
+    $('#hx-cpu').textContent = s.cpu;
+    // Move the gauge only for visible changes: each transition redraws the glass behind it.
+    const arc = $('#hx-cpu-arc .hx-arc-val');
+    if (Math.abs((arc.pct ?? -10) - s.cpu) >= 3) { arc.pct = s.cpu; arc.style.strokeDashoffset = len * (1 - s.cpu / 100); }
+    $('#hx-chip-cpu').textContent = `${s.cpu} %`;
+    $('#hx-chip-cpu-l').className = `hx-chip ${lvlOf(s.cpu, 80, 95)}`;
+    $('#hx-mem-used').textContent = fmtBytes(s.memory.used);
+    $('#hx-mem-pct').textContent = `${s.memory.percent} %`;
+    $('#hx-mem-free').textContent = fmtBytes(s.memory.total - s.memory.used);
+    $('#hx-chip-mem').textContent = `${s.memory.percent} %`;
+    $('#hx-chip-mem-l').className = `hx-chip ${lvlOf(s.memory.percent, 80, 90)}`;
+    const bar = $('#hx-mem-bar');
+    bar.style.width = `${s.memory.percent}%`;
+    bar.className = lvlOf(s.memory.percent, 80, 90);
+    $('#hx-mem-dot').className = `u ${bar.className}`;
+    setSpark('hx-cpu-spark', healthSeries.cpu);
+    setSpark('hx-mem-spark', healthSeries.mem);
+  };
+  const timer = setInterval(() => (alive(token) && $('#hx-cpu') ? tick() : clearInterval(timer)), 3000);
 }
 
 // ===================== Settings =====================
-PAGES.settings = async (token) => {
-  const [p, info, admin] = await Promise.all([pcm.prefs.get(), pcm.system.info().catch(() => ({})), pcm.system.isAdmin().catch(() => false)]);
+const SETTINGS_TABS = [['health', 'État de santé'], ['prefs', 'Préférences'], ['about', 'À propos']];
+
+PAGES.settings = async (token, tab = 'health') => {
+  if (!SETTINGS_TABS.some(([id]) => id === tab)) tab = 'health';
+  const top = `${header('settings')}${tabs('settings', SETTINGS_TABS, tab)}`;
+  if (tab === 'health') {
+    page(`${top}<div id="health">${healthSkeleton()}</div>`);
+    return loadHealth(token);
+  }
+  if (tab === 'about') return settingsAbout(token, top);
+  const [p, admin] = await Promise.all([pcm.prefs.get(), pcm.system.isAdmin().catch(() => false)]);
   if (!alive(token)) return;
   const row = (ic, title, sub, ctrl) => `<div class="row"><div class="r-ico tint">${ficon(ic)}</div><div class="r-main"><div class="r-title">${title}</div><div class="r-sub" style="white-space:normal">${sub}</div></div>${ctrl}</div>`;
   const sw = (id, on) => `<label class="switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}/><span></span></label>`;
-  page(`${header('settings')}
-    <div class="list-head hl-head"><h2>État de santé du PC</h2><div class="grow"></div><button class="btn" id="hl-refresh">${icon('refresh')} Actualiser</button></div>
-    <div id="health" class="hl-grid">${healthSkeleton()}</div>
-    <h2>Préférences</h2>
+  page(`${top}
     <div class="list glass">
       ${row('image', 'Thème', 'Apparence de l\'application', '<select id="s-theme"><option value="system">Système</option><option value="dark">Sombre</option><option value="light">Clair</option></select>')}
       ${row('sparkle', 'Effets visuels', 'Verre dépoli et animations. « Automatique » les désactive si la carte graphique n\'est pas accélérée.', '<select id="s-fx"><option value="auto">Automatique</option><option value="on">Activés</option><option value="off">Désactivés</option></select>')}
@@ -2109,29 +2332,7 @@ PAGES.settings = async (token) => {
       ${row('shield', 'Démarrer en administrateur', '<span id="s-adm-sub">Évite de redemander l\'autorisation pendant l\'utilisation.</span>', `<select id="s-adm">
         <option value="off">Non, à la demande</option><option value="prompt">Oui, demander à l'ouverture</option><option value="task">Toujours, sans demande</option></select>`)}`}
       ${row('refresh', 'Réinitialiser l\'application', 'Rétablit les préférences par défaut et affiche à nouveau l\'écran de bienvenue', '<button class="btn" id="s-reset">Réinitialiser</button>')}
-    </div>
-    <h2>Informations système</h2>
-    <div class="card glass"><div class="kv">
-      <div>Appareil</div><div>${esc([info.hostname, [info.maker, info.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || '–')}</div>
-      <div>Système</div><div>${esc(info.os)} (${IS_LINUX ? 'noyau' : 'build'} ${esc(info.build)})</div>
-      ${IS_LINUX ? `<div>Bureau</div><div>${esc([info.desktop, info.session].filter(Boolean).join(' · ') || '–')}</div>` : ''}
-      <div>Processeur</div><div>${esc(info.cpu)} · ${info.cores} cœurs</div>
-      <div>Mémoire</div><div>${fmtBytes(info.totalMem)}</div>
-      <div>Carte graphique</div><div>${esc(info.gpu || '–')}</div>
-    </div></div>
-    <h2>À propos</h2>
-    <div class="card glass about"><img src="../../assets/icon.png" alt=""/><div><b>Boost My Pc</b><span>Version ${esc(CAPS.version || '')}</span></div><span id="s-latest"></span></div>`);
-  pcm.latest().then((l) => {
-    const el = $('#s-latest');
-    if (!el || !l?.version) return;
-    const newer = l.version.localeCompare(CAPS.version || '', undefined, { numeric: true }) > 0;
-    el.outerHTML = newer
-      ? `<button class="btn" id="s-update">${icon('download')} Version ${esc(l.version)} disponible</button>`
-      : `<span class="pill ok">${icon('check')} À jour</span>`;
-    $('#s-update') && ($('#s-update').onclick = () => window.open(l.url));
-  }).catch(() => {});
-  loadHealth(token);
-  $('#hl-refresh').onclick = () => { healthResult = null; $('#health').innerHTML = healthSkeleton(); loadHealth(token); };
+    </div>`);
   $('#s-theme').value = p.theme;
   $('#s-fx').value = p.effects || 'auto';
   $('#s-fx').onchange = async (e) => {
@@ -2171,6 +2372,29 @@ PAGES.settings = async (token) => {
   }
 };
 
+async function settingsAbout(token, top) {
+  page(`${top}<div class="card glass about"><img src="../../assets/icon.png" alt=""/><div><b>Boost My Pc</b><span>Version ${esc(CAPS.version || '')}</span></div><span id="s-latest"></span></div>
+    <h2>Informations système</h2><div class="card glass" id="s-info"><div class="loading"><span class="spinner"></span></div></div>`);
+  pcm.latest().then((l) => {
+    const el = $('#s-latest');
+    if (!el || !l?.version) return;
+    const newer = l.version.localeCompare(CAPS.version || '', undefined, { numeric: true }) > 0;
+    el.outerHTML = newer
+      ? `<button class="btn" id="s-update">${icon('download')} Version ${esc(l.version)} disponible</button>`
+      : `<span class="pill ok">${icon('check')} À jour</span>`;
+    $('#s-update') && ($('#s-update').onclick = () => window.open(l.url));
+  }).catch(() => {});
+  const info = await pcm.system.info().catch(() => ({}));
+  if (!alive(token)) return;
+  $('#s-info').innerHTML = `<div class="kv">
+    <div>Appareil</div><div>${esc([info.hostname, [info.maker, info.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || '–')}</div>
+    <div>Système</div><div>${esc(info.os)} (${IS_LINUX ? 'noyau' : 'build'} ${esc(info.build)})</div>
+    ${IS_LINUX ? `<div>Bureau</div><div>${esc([info.desktop, info.session].filter(Boolean).join(' · ') || '–')}</div>` : ''}
+    <div>Processeur</div><div>${esc(info.cpu)} · ${info.cores} cœurs</div>
+    <div>Mémoire</div><div>${fmtBytes(info.totalMem)}</div>
+    <div>Carte graphique</div><div>${esc(info.gpu || '–')}</div></div>`;
+}
+
 // ===================== External actions (tray and mini panel) =====================
 pcm.onAction((a) => {
   if (a === 'boost') { safe(() => pcm.system.boost()).then((r) => r && toast(`Boost terminé : ${fmtBytes(r.freed)} libérés`)); }
@@ -2183,7 +2407,11 @@ pcm.onAction((a) => {
 (async () => {
   try { PATHS = await pcm.v2.paths(); } catch {}
   go('smart');
-  pcm.prefs.get().then((p) => { if (!p.welcomed) showWelcome(); }).catch(() => {});
+  // The launch flag only hides the interface early; the saved preference decides.
+  pcm.prefs.get().then((p) => {
+    if (!p.welcomed) showWelcome();
+    else document.body.classList.remove('welcoming');
+  }).catch(() => document.body.classList.remove('welcoming'));
   try { CAPS = await pcm.caps(); } catch {}
   document.body.classList.toggle('lite', !!CAPS.lite);
   $('#admin-badge').textContent = IS_LINUX ? 'root' : 'Administrateur';
