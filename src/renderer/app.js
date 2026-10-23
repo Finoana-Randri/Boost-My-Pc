@@ -7,6 +7,13 @@ document.body.classList.add(IS_LINUX ? 'linux' : 'windows');
 // Detail view mode: list by default, cards if the user chose them
 try { if (localStorage.getItem('detailView') === 'cards') document.body.classList.add('view-cards'); } catch {}
 document.body.classList.toggle('lite', !!pcm.lite);
+// First launch: hide the interface until the welcome screen is dismissed.
+if (pcm.firstRun) document.body.classList.add('welcoming');
+// Pause decorative animations while the window is in the background: they would keep the GPU busy.
+const setPaused = () => document.body.classList.toggle('paused', document.hidden || !document.hasFocus());
+window.addEventListener('blur', setPaused);
+window.addEventListener('focus', setPaused);
+document.addEventListener('visibilitychange', setPaused);
 let CAPS = { platform: pcm.platform, tools: [], isAdmin: false };
 let PATHS = { home: '', pictures: '', downloads: '', root: '/' };
 const UPDATES_NAME = IS_LINUX ? 'Mises à jour du système' : 'Windows Update';
@@ -100,7 +107,7 @@ const PAGES = {};
 let pageToken = 0;
 let currentRoute = 'smart';
 const progressHandlers = {};
-pcm.onProgress((p) => progressHandlers[p.channel]?.(p));
+pcm.onProgress((p) => { progressHandlers[p.channel]?.(p); jobProgress[p.channel]?.(p); });
 
 function go(route) {
   route = LEGACY[route] || route;
@@ -191,6 +198,115 @@ function doneView(mod, title, sub, again) {
     <h1>${esc(title)}</h1><p class="lead">${esc(sub)}</p>
     <button class="btn" data-go="${again}">${icon('refresh')} Nouvelle analyse</button>
   </div>`;
+}
+
+// ---------- Background scans ----------
+// A scan belongs to a page (key such as 'applications' or 'clutter/similar') and keeps running
+// when the user opens another page. Coming back shows its progress, then its result.
+const JOBS = {};
+const jobProgress = {}; // Progress channels listened to by running scans (kept across pages)
+
+// Modal with up to three choices; resolves with the chosen value, or null if dismissed.
+function choiceBox(title, text, choices) {
+  return new Promise((resolve) => {
+    const [ok, alt, cancel] = choices;
+    $('#modal-title').textContent = title;
+    $('#modal-text').textContent = text;
+    $('#modal-ok').textContent = ok[1];
+    $('#modal-alt').textContent = alt ? alt[1] : '';
+    $('#modal-alt').classList.toggle('hidden', !alt);
+    $('#modal-cancel').textContent = cancel ? cancel[1] : 'Annuler';
+    $('#modal').classList.remove('hidden');
+    const done = (v) => {
+      $('#modal').classList.add('hidden');
+      $('#modal-alt').classList.add('hidden');
+      $('#modal-cancel').textContent = 'Annuler';
+      $('#modal-ok').onclick = $('#modal-alt').onclick = $('#modal-cancel').onclick = null;
+      resolve(v);
+    };
+    $('#modal-ok').onclick = () => done(ok[0]);
+    $('#modal-alt').onclick = () => done(alt?.[0] ?? null);
+    $('#modal-cancel').onclick = () => done(cancel?.[0] ?? null);
+  });
+}
+
+// Show a small activity dot on the menu items whose module has a scan running.
+function markBusy() {
+  const busy = new Set(Object.keys(JOBS).map((k) => k.split('/')[0]));
+  $$('.nav-item').forEach((n) => n.classList.toggle('busy', busy.has(n.dataset.page)));
+}
+
+// Start a scan. If another one is running, ask whether to stop it first.
+// `auto` scans (started by opening a page) never ask.
+async function startJob(key, { label, stop, auto = false, keepPartial = false }, work) {
+  const others = Object.values(JOBS).filter((j) => j.key !== key);
+  if (others.length && !auto) {
+    const names = others.map((j) => `« ${j.label} »`).join(', ');
+    const choice = await choiceBox('Une analyse est déjà en cours',
+      `${names} ${others.length > 1 ? 'sont' : 'est'} en cours. Voulez-vous l'arrêter avant de lancer « ${label} » ?`,
+      [['stop', 'Arrêter et lancer'], ['both', 'Ne pas arrêter'], ['cancel', 'Annuler']]);
+    if (!choice || choice === 'cancel') return null;
+    if (choice === 'stop') others.forEach(stopJob);
+  }
+  if (JOBS[key]) stopJob(JOBS[key]);
+  const job = { key, label, stop, keepPartial, status: '', detail: '', pct: null, cancelled: false, listeners: new Set(), channels: [] };
+  job.update = (status, detail, pct) => {
+    if (status != null) job.status = status;
+    if (detail != null) job.detail = detail;
+    if (pct != null) job.pct = pct;
+    job.listeners.forEach((f) => f(job));
+  };
+  // Listen to a progress channel for as long as the scan runs.
+  job.on = (channel, fn) => { job.channels.push(channel); jobProgress[channel] = (p) => !job.cancelled && fn(p); };
+  JOBS[key] = job;
+  markBusy();
+  job.promise = Promise.resolve()
+    .then(() => work(job))
+    .then((r) => (job.cancelled ? null : r), (e) => { if (!job.cancelled) toast(`${label} : ${e.message}`, true); return null; })
+    .then((r) => {
+      finishJob(job);
+      // The user is elsewhere: let them know the result is ready.
+      if (r != null && currentRoute.split('/')[0] !== key.split('/')[0]) toast(`${label} : terminée. Le résultat vous attend dans « ${MODULES[key.split('/')[0]].title} ».`);
+      return r;
+    });
+  return job;
+}
+
+function finishJob(job) {
+  job.channels.forEach((c) => { if (jobProgress[c]) delete jobProgress[c]; });
+  if (JOBS[job.key] === job) delete JOBS[job.key];
+  markBusy();
+}
+
+function stopJob(job) {
+  job.cancelled = true;
+  try { job.stop?.(); } catch {}
+  finishJob(job);
+}
+
+// Scan screen bound to a running scan; `onDone(result)` runs if the page is still open.
+function showJob(token, key, { mod, top = '', into = null }, onDone) {
+  const job = JOBS[key];
+  const html = scanning(mod, job.status, job.detail, { pct: job.pct, stop: true });
+  if (into) into.innerHTML = html; else page(`${top}${html}`);
+  $('#scan-stop').onclick = () => {
+    if (job.keepPartial) { job.stop?.(); setScan('Arrêt…', ''); return; }
+    stopJob(job);
+    go(currentRoute);
+  };
+  const view = (j) => {
+    if (!alive(token)) return job.listeners.delete(view);
+    setScan(j.status, j.detail);
+    const c = $('.ring-big circle:nth-of-type(2)');
+    if (c && j.pct != null) c.style.strokeDashoffset = c.getTotalLength() * (1 - j.pct);
+  };
+  job.listeners.add(view);
+  job.promise.then((r) => {
+    job.listeners.delete(view);
+    if (!alive(token)) return;
+    if (r == null) return go(currentRoute);
+    onDone(r);
+  });
 }
 
 // ---------- Card overview (CleanMyMac style) ----------
@@ -295,8 +411,13 @@ const SMART_STEPS = {
 };
 const SMART_ORDER = Object.keys(SMART_STEPS);
 let smartResult = null;
+let smartDone = null; // Summary of the last run, shown until a new scan
+// Tile states of the current board, kept so that it can be redrawn when the user comes back.
+let smartTiles = {};
 
 PAGES.smart = async (token) => {
+  if (JOBS.smart) return smartWatch(token);
+  if (smartDone) return smartShowDone(token);
   if (smartResult) return smartShowResult(token);
   page(intro('smart', {
     lead: 'Une seule analyse pour nettoyer, protéger et accélérer votre PC. Boost My Pc vérifie cinq points et vous propose les actions utiles.',
@@ -321,9 +442,11 @@ function smartTile(id, cls = '') {
   </div>`;
 }
 
-// Draw the board once; the tiles are then updated in place so the transitions stay smooth.
+const SMART_RING = 2 * Math.PI * 58;
+
+// Draw the board once, with the tiles already known; they are then updated in place
+// so that the transitions stay smooth.
 function smartBoard() {
-  const R = 58, C = 2 * Math.PI * R;
   page(`<div class="sc-head"><h1 id="sc-title">Entretien intelligent</h1><p class="lead" id="sc-lead"></p></div>
     <div class="sc-grid enter">
       ${smartTile('cleanup', 'tall')}
@@ -336,18 +459,22 @@ function smartBoard() {
       ${smartTile('performance')}
       ${smartTile('applications', 'wide')}
       <div class="sc-center">
-        <button class="sc-btn" id="sc-btn"><svg viewBox="0 0 132 132"><circle cx="66" cy="66" r="${R}" class="sc-track"/><circle cx="66" cy="66" r="${R}" class="sc-arc" id="sc-arc" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg><span id="sc-btn-label">Arrêter</span></button>
+        <button class="sc-btn" id="sc-btn"><svg viewBox="0 0 132 132"><circle cx="66" cy="66" r="58" class="sc-track"/><circle cx="66" cy="66" r="58" class="sc-arc" id="sc-arc" stroke-dasharray="${SMART_RING}" stroke-dashoffset="${SMART_RING}"/></svg><span id="sc-btn-label">Arrêter</span></button>
         <div class="sc-hint" id="sc-hint"></div>
       </div>
       ${smartTile('clutter', 'wide')}
     </div>`);
+  for (const [id, t] of Object.entries(smartTiles)) smartSet(id, ...t);
   setTimeout(() => $('.sc-grid')?.classList.remove('enter'), 1000);
-  return {
-    progress(pct) { const a = $('#sc-arc'); if (a) a.style.strokeDashoffset = C * (1 - Math.max(0, Math.min(1, pct))); },
-  };
+}
+
+function smartProgress(pct) {
+  const a = $('#sc-arc');
+  if (a) a.style.strokeDashoffset = SMART_RING * (1 - Math.max(0, Math.min(1, pct)));
 }
 
 function smartSet(id, state, val, sub = '') {
+  smartTiles[id] = [state, val, sub];
   const t = $(`.sc-tile[data-id="${id}"]`);
   if (t) {
     t.dataset.state = state;
@@ -363,55 +490,90 @@ function smartSet(id, state, val, sub = '') {
 }
 
 async function smartScan(token) {
-  smartResult = null;
-  const board = smartBoard();
-  $('#sc-lead').textContent = 'Analyse de votre PC en cours…';
-  $('#sc-hint').textContent = 'Préparation';
-  const btn = $('#sc-btn');
-  btn.classList.add('busy');
-  btn.onclick = () => { btn.disabled = true; $('#sc-btn-label').textContent = 'Arrêt…'; pcm.v2.smartCancel(); };
-  progressHandlers.smart = (p) => {
-    if (!alive(token) || p.index == null) return;
-    SMART_ORDER.forEach((id, i) => {
-      if (i < p.index && $(`.sc-tile[data-id="${id}"]`)?.dataset.state === 'active') smartSet(id, 'scanned', 'Analysé');
+  const job = await startJob('smart', { label: 'Entretien intelligent', stop: () => pcm.v2.smartCancel() }, async (j) => {
+    smartResult = null;
+    smartDone = null;
+    smartTiles = {};
+    j.phase = 'scan';
+    j.update('Analyse de votre PC en cours…', 'Préparation', 0);
+    j.on('smart', (p) => {
+      if (p.index == null) return;
+      SMART_ORDER.forEach((id, i) => { if (i < p.index && smartTiles[id]?.[0] === 'active') smartSet(id, 'scanned', 'Analysé'); });
+      if (p.index < 5) smartSet(p.step, 'active', 'Analyse…');
+      j.update(null, p.index < 5 ? `${SMART_STEPS[p.step][0]} · étape ${p.index + 1} sur 5` : j.detail, p.index / 5);
     });
-    if (p.index < 5) {
-      smartSet(p.step, 'active', 'Analyse…');
-      $('#sc-hint').textContent = `${SMART_STEPS[p.step][0]} · étape ${p.index + 1} sur 5`;
-    }
-    board.progress(p.index / 5);
-  };
-  let r;
-  try { r = await pcm.v2.smartScan(); }
-  catch (e) {
-    if (alive(token)) { if (!/arrêtée/.test(e.message)) toast(`Analyse : ${e.message}`, true); go('smart'); }
-    return;
-  }
-  if (!alive(token)) return;
-  smartResult = r;
-  board.progress(1);
-  await new Promise((res) => setTimeout(res, 350));
-  if (alive(token)) smartShowResult(token, true);
+    const r = await pcm.v2.smartScan();
+    if (!j.cancelled) smartResult = r;
+    return r;
+  });
+  if (job && alive(token)) smartWatch(token);
 }
 
-function smartShowResult(token, animated = false) {
-  if (!animated) smartBoard().progress(1);
+// Board bound to the running scan or run, whether it was just started or the user came back.
+function smartWatch(token) {
+  const job = JOBS.smart;
+  if (!$('.sc-grid')) smartBoard();
+  const btn = $('#sc-btn');
+  btn.classList.remove('ready', 'finished');
+  btn.classList.add('busy');
+  if (job.phase === 'scan') {
+    btn.disabled = false;
+    $('#sc-title').textContent = 'Entretien intelligent';
+    $('#sc-btn-label').textContent = 'Arrêter';
+    btn.onclick = () => { stopJob(job); go('smart'); };
+  } else {
+    btn.disabled = true;
+    $('#sc-title').textContent = 'Entretien en cours…';
+    $('#sc-btn-label').textContent = 'En cours';
+  }
+  const view = (j) => {
+    if (!alive(token)) return job.listeners.delete(view);
+    $('#sc-lead').textContent = j.status;
+    $('#sc-hint').textContent = j.detail;
+    if (job.phase === 'scan') smartProgress(j.pct || 0);
+  };
+  view(job);
+  job.listeners.add(view);
+  job.promise.then(async (r) => {
+    job.listeners.delete(view);
+    if (!alive(token)) return;
+    if (r == null) return go('smart');
+    if (job.phase === 'run') return smartShowDone(token, true);
+    smartProgress(1);
+    await new Promise((res) => setTimeout(res, 350));
+    if (alive(token)) smartShowResult(token, true);
+  });
+}
+
+function smartValues() {
   const s = Object.fromEntries(smartResult.steps.map((x) => [x.id, x]));
   const c = s.cleanup || {}, p = s.protection || {}, pe = s.performance || {}, a = s.applications || {}, cl = s.clutter || {};
   const tasks = (pe.tasks || []).length;
   const threats = p.threats?.length || 0;
-  const values = {
-    cleanup: c.error ? ['bad', 'Indisponible', esc(c.error)] : c.size > 0 ? ['warn', fmtBytes(c.size), 'de fichiers inutiles à nettoyer'] : ['ok', 'Propre', 'Aucun fichier inutile'],
-    protection: p.error ? ['bad', 'Indisponible', esc(p.error)] : threats ? ['bad', plural(threats, 'menace', 'menaces'), 'à examiner'] : ['ok', 'Aucune menace', esc(p.note || (IS_LINUX ? 'Points d\'entrée vérifiés' : ''))],
-    performance: pe.error ? ['bad', 'Indisponible', esc(pe.error)] : tasks ? ['warn', plural(tasks, 'tâche', 'tâches'), `de maintenance · ${plural(pe.startup || 0, 'app', 'apps')} au démarrage`] : ['ok', 'Optimisé', `${plural(pe.startup || 0, 'app', 'apps')} au démarrage`],
-    applications: a.error ? ['bad', 'Indisponible', esc(a.error)] : a.updates ? ['warn', plural(a.updates, 'mise à jour', 'mises à jour'), a.security ? `dont ${a.security} de sécurité` : 'disponibles'] : ['ok', 'À jour', a.pendingReboot ? 'Redémarrage nécessaire' : 'Aucune mise à jour en attente'],
-    clutter: cl.error ? ['bad', 'Indisponible', esc(cl.error)] : cl.count ? ['warn', plural(cl.count, 'gros fichier', 'gros fichiers'), `${fmtBytes(cl.size)} dans les téléchargements`] : ['ok', 'Rangé', 'Aucun gros fichier oublié'],
+  return {
+    s, c, tasks,
+    values: {
+      cleanup: c.error ? ['bad', 'Indisponible', esc(c.error)] : c.size > 0 ? ['warn', fmtBytes(c.size), 'de fichiers inutiles à nettoyer'] : ['ok', 'Propre', 'Aucun fichier inutile'],
+      protection: p.error ? ['bad', 'Indisponible', esc(p.error)] : threats ? ['bad', plural(threats, 'menace', 'menaces'), 'à examiner'] : ['ok', 'Aucune menace', esc(p.note || (IS_LINUX ? 'Points d\'entrée vérifiés' : ''))],
+      performance: pe.error ? ['bad', 'Indisponible', esc(pe.error)] : tasks ? ['warn', plural(tasks, 'tâche', 'tâches'), `de maintenance · ${plural(pe.startup || 0, 'app', 'apps')} au démarrage`] : ['ok', 'Optimisé', `${plural(pe.startup || 0, 'app', 'apps')} au démarrage`],
+      applications: a.error ? ['bad', 'Indisponible', esc(a.error)] : a.updates ? ['warn', plural(a.updates, 'mise à jour', 'mises à jour'), a.security ? `dont ${a.security} de sécurité` : 'disponibles'] : ['ok', 'À jour', a.pendingReboot ? 'Redémarrage nécessaire' : 'Aucune mise à jour en attente'],
+      clutter: cl.error ? ['bad', 'Indisponible', esc(cl.error)] : cl.count ? ['warn', plural(cl.count, 'gros fichier', 'gros fichiers'), `${fmtBytes(cl.size)} dans les téléchargements`] : ['ok', 'Rangé', 'Aucun gros fichier oublié'],
+    },
   };
-  SMART_ORDER.forEach((id, i) => setTimeout(() => alive(token) && smartSet(id, ...values[id]), animated ? i * 120 : 0));
+}
+
+function smartShowResult(token, animated = false) {
+  if (!$('.sc-grid')) smartBoard();
+  smartProgress(1);
+  const { c, tasks, values } = smartValues();
+  SMART_ORDER.forEach((id, i) => {
+    if (animated) setTimeout(() => alive(token) && smartSet(id, ...values[id]), i * 120);
+    else smartSet(id, ...values[id]);
+  });
   const issues = smartResult.steps.reduce((n, x) => n + (x.issues || 0), 0);
   const canRun = c.size > 0 || tasks > 0;
   const btn = $('#sc-btn');
-  btn.classList.remove('busy');
+  btn.classList.remove('busy', 'finished');
   btn.classList.add('ready');
   btn.disabled = false;
   $('#sc-title').textContent = issues ? 'Analyse terminée' : 'Votre PC est en pleine forme';
@@ -426,39 +588,42 @@ function smartShowResult(token, animated = false) {
 }
 
 async function smartRun(token, values) {
-  const s = Object.fromEntries(smartResult.steps.map((x) => [x.id, x]));
-  const btn = $('#sc-btn');
-  btn.classList.remove('ready');
-  btn.classList.add('busy');
-  btn.disabled = true;
-  $('#sc-btn-label').textContent = 'En cours';
-  $('#sc-title').textContent = 'Entretien en cours…';
-  $('#sc-lead').textContent = 'Nettoyage des fichiers inutiles et maintenance du système.';
-  $('#sc-hint').textContent = '';
+  const { s } = smartValues();
   const steps = ['cleanup', 'performance'].filter((id) => (id === 'cleanup' ? s.cleanup?.size > 0 : s.performance?.tasks?.length));
-  steps.forEach((id) => smartSet(id, 'queued', values[id][1], 'en attente…'));
-  progressHandlers.smart = (p) => {
-    if (!alive(token) || !p.step || p.index != null) return;
-    if (p.step === 'performance' && steps.includes('cleanup')) smartSet('cleanup', 'done', 'Nettoyé', `${fmtBytes(s.cleanup.size)} supprimés`);
-    smartSet(p.step, 'active', p.step === 'cleanup' ? 'Nettoyage…' : 'Maintenance…', values[p.step][1]);
-    $('#sc-hint').textContent = p.step === 'cleanup' ? 'Suppression des fichiers inutiles' : 'Tâches de maintenance';
-  };
-  const r = await safe(() => pcm.v2.smartRun(), 'Exécution');
-  smartResult = null;
-  if (!alive(token)) return;
-  if (!r) return go('smart');
-  if (steps.includes('cleanup')) smartSet('cleanup', 'done', 'Nettoyé', `${fmtBytes(r.freed)} libérés`);
-  if (steps.includes('performance')) smartSet('performance', 'done', 'Optimisé', plural(r.tasks, 'tâche effectuée', 'tâches effectuées'));
+  const job = await startJob('smart', { label: 'Entretien intelligent' }, async (j) => {
+    j.phase = 'run';
+    steps.forEach((id) => smartSet(id, 'queued', values[id][1], 'en attente…'));
+    j.update('Nettoyage des fichiers inutiles et maintenance du système.', '');
+    j.on('smart', (p) => {
+      if (!p.step || p.index != null) return;
+      if (p.step === 'performance' && steps.includes('cleanup')) smartSet('cleanup', 'done', 'Nettoyé', `${fmtBytes(s.cleanup.size)} supprimés`);
+      smartSet(p.step, 'active', p.step === 'cleanup' ? 'Nettoyage…' : 'Maintenance…', values[p.step][1]);
+      j.update(null, p.step === 'cleanup' ? 'Suppression des fichiers inutiles' : 'Tâches de maintenance');
+    });
+    const r = await pcm.v2.smartRun();
+    smartResult = null;
+    if (steps.includes('cleanup')) smartSet('cleanup', 'done', 'Nettoyé', `${fmtBytes(r.freed)} libérés`);
+    if (steps.includes('performance')) smartSet('performance', 'done', 'Optimisé', plural(r.tasks, 'tâche effectuée', 'tâches effectuées'));
+    smartDone = { lead: `${fmtBytes(r.freed)} libérés · ${plural(r.tasks, 'tâche effectuée', 'tâches effectuées')}.` };
+    return r;
+  });
+  if (job && alive(token)) smartWatch(token);
+}
+
+function smartShowDone(token, animated = false) {
+  if (!$('.sc-grid')) smartBoard();
+  smartProgress(1);
+  const btn = $('#sc-btn');
   btn.classList.remove('busy');
   btn.classList.add('ready', 'finished');
   btn.disabled = false;
   $('#sc-btn-label').innerHTML = icon('check');
   $('#sc-title').textContent = 'Entretien terminé';
-  $('#sc-lead').textContent = `${fmtBytes(r.freed)} libérés · ${plural(r.tasks, 'tâche effectuée', 'tâches effectuées')}.`;
+  $('#sc-lead').textContent = smartDone.lead;
   $('#sc-hint').innerHTML = '<button class="link" id="sc-new">Nouvelle analyse</button>';
   $('#sc-new').onclick = () => smartScan(token);
   btn.onclick = () => smartScan(token);
-  celebrate(btn);
+  if (animated) celebrate(btn);
 }
 
 // Small burst of particles around an element when a task finishes.
@@ -477,7 +642,11 @@ function celebrate(el) {
 }
 
 // ===================== Cleanup =====================
+let cleanResult = null; // Last scan, kept while the user visits other pages
+
 PAGES.cleanup = async (token) => {
+  if (JOBS.cleanup) return showJob(token, 'cleanup', { mod: 'cleanup' }, (r) => (r.freed != null ? cleanDone(r) : renderCleanResult(r, token)));
+  if (cleanResult) return renderCleanResult(cleanResult, token);
   page(intro('cleanup', {
     lead: 'Supprimez les fichiers système inutiles, les caches, les journaux et les autres fichiers qui encombrent votre disque.',
     features: [
@@ -487,13 +656,18 @@ PAGES.cleanup = async (token) => {
     ],
   }));
   $('#scan').onclick = async () => {
-    page(scanning('cleanup', 'Recherche des fichiers inutiles…', ''));
-    progressHandlers.clean = (p) => alive(token) && setScan(null, `${p.current} (${p.index + 1}/${p.total})`);
-    const r = await safe(() => pcm.clean.scan('deep'), 'Analyse');
-    if (!r || !alive(token)) return go('cleanup');
-    renderCleanResult(r, token);
+    const job = await startJob('cleanup', { label: 'Analyse du nettoyage' }, async (j) => {
+      j.update('Recherche des fichiers inutiles…', '');
+      j.on('clean', (p) => j.update(null, `${p.current} (${p.index + 1}/${p.total})`));
+      return (cleanResult = await pcm.clean.scan('deep'));
+    });
+    if (job && alive(token)) showJob(token, 'cleanup', { mod: 'cleanup' }, (r) => renderCleanResult(r, token));
   };
 };
+
+function cleanDone(res) {
+  page(doneView('cleanup', `${fmtBytes(res.freed)} libérés`, `${plural(res.deleted, 'fichier supprimé', 'fichiers supprimés')}${res.failed ? ` · ${res.failed} ignoré(s) car en cours d'utilisation` : ''}${res.adminCancelled ? ' · éléments système non nettoyés (authentification annulée)' : ''}`, 'cleanup'));
+}
 
 // One icon per cleanup category.
 const CLEAN_ICONS = {
@@ -510,6 +684,7 @@ function renderCleanResult(r, token) {
       <div class="hero-icon" style="width:70px;height:70px;border-radius:20px;margin:0;animation:none">${micon('cleanup')}</div>
       <div style="flex:1"><div class="big">${fmtBytes(total)}</div><div class="muted">peuvent être nettoyés</div></div>
       ${r.items.some((i) => i.needsAdmin) && !r.admin ? `<span class="pill warn">${icon('admin')} ${IS_LINUX ? 'Mot de passe demandé pour les éléments système' : 'Certains éléments nécessitent les droits admin'}</span>` : ''}
+      <button class="btn" id="clean-new">${icon('refresh')} Nouvelle analyse</button>
     </div>
     <div class="list glass" id="clean-list">${r.items.map((i) => `
       <label class="row" style="cursor:pointer"><input type="checkbox" data-id="${i.id}" data-size="${i.size}" ${i.recommended && !empty(i) ? 'checked' : ''} ${empty(i) ? 'disabled' : ''}/>
@@ -524,15 +699,18 @@ function renderCleanResult(r, token) {
   };
   $('#clean-list').addEventListener('change', upd);
   upd();
+  $('#clean-new').onclick = () => { cleanResult = null; go('cleanup'); };
   $('#do-clean').onclick = async () => {
     const ids = $$('#clean-list input:checked').map((c) => c.dataset.id);
     if ((ids.includes('recycle') || ids.includes('trash')) && !(await confirmBox('Vider la corbeille ?', 'Les fichiers de la corbeille seront supprimés définitivement.', 'Vider'))) return;
-    page(scanning('cleanup', 'Nettoyage en cours…', ''));
-    progressHandlers.clean = (p) => alive(token) && setScan(null, p.current);
-    const res = await safe(() => pcm.clean.run(ids), 'Nettoyage');
-    if (!alive(token)) return;
-    if (!res) return go('cleanup');
-    page(doneView('cleanup', `${fmtBytes(res.freed)} libérés`, `${plural(res.deleted, 'fichier supprimé', 'fichiers supprimés')}${res.failed ? ` · ${res.failed} ignoré(s) car en cours d'utilisation` : ''}${res.adminCancelled ? ' · éléments système non nettoyés (authentification annulée)' : ''}`, 'cleanup'));
+    const job = await startJob('cleanup', { label: 'Nettoyage' }, async (j) => {
+      j.update('Nettoyage en cours…', '');
+      j.on('clean', (p) => j.update(null, p.current));
+      const res = await pcm.clean.run(ids);
+      cleanResult = null;
+      return res;
+    });
+    if (job && alive(token)) showJob(token, 'cleanup', { mod: 'cleanup' }, cleanDone);
   };
 }
 
@@ -545,6 +723,7 @@ PAGES.protection = async (token, tab) => {
   if (tab === 'privacy') return protectionPrivacy(token, detailHead('protection', PROTECTION_TABS, 'privacy', 'Effacez l\'historique et les traces de navigation. Les mots de passe, favoris et cartes bancaires ne sont jamais touchés.'));
   if (tab === 'permissions') return protectionPermissions(token, detailHead('protection', PROTECTION_TABS, 'permissions', IS_LINUX ? 'Vérifiez ce que vos applications Flatpak peuvent faire, et retirez les accès inutiles.' : 'Applications ayant accédé à votre caméra, votre micro ou votre position.'));
   if (tab === 'status') return protectionStatus(token, detailHead('protection', PROTECTION_TABS, 'status'));
+  if (JOBS.protection) return showJob(token, 'protection', { mod: 'protection' }, () => renderProtectionOverview(token));
   if (overviewCache.protection) return renderProtectionOverview(token);
   page(intro('protection', {
     lead: 'Recherchez les menaces, effacez vos traces de navigation et vérifiez quelles applications accèdent à votre caméra et à votre micro.',
@@ -555,17 +734,20 @@ PAGES.protection = async (token, tab) => {
     ],
   }));
   $('#scan').onclick = async () => {
-    page(scanning('protection', 'Analyse de la protection…', 'Menaces, confidentialité et autorisations'));
-    const [quick, perms, privacy, status] = await Promise.all([
-      pcm.v2.malwareQuick().catch(() => null),
-      pcm.v2.permList().catch(() => null),
-      pcm.v2.privacyScan().catch(() => []),
-      pcm.protect.status().catch(() => null),
-    ]);
-    if (!alive(token)) return;
-    overviewCache.protection = { quick, perms, privacy, status };
-    if (quick) malwareResult = { kind: 'quick', engine: IS_LINUX ? 'Analyse heuristique' : 'Vérification de Microsoft Defender', threats: quick.threats, clamav: true, fromOverview: true };
-    renderProtectionOverview(token);
+    const job = await startJob('protection', { label: 'Analyse de la protection' }, async (j) => {
+      j.update('Analyse de la protection…', 'Menaces, confidentialité et autorisations');
+      const [quick, perms, privacy, status] = await Promise.all([
+        pcm.v2.malwareQuick().catch(() => null),
+        pcm.v2.permList().catch(() => null),
+        pcm.v2.privacyScan().catch(() => []),
+        pcm.protect.status().catch(() => null),
+      ]);
+      if (j.cancelled) return null;
+      overviewCache.protection = { quick, perms, privacy, status };
+      if (quick) malwareResult = { kind: 'quick', engine: IS_LINUX ? 'Analyse heuristique' : 'Vérification de Microsoft Defender', threats: quick.threats, clamav: true, fromOverview: true };
+      return overviewCache.protection;
+    });
+    if (job && alive(token)) showJob(token, 'protection', { mod: 'protection' }, () => renderProtectionOverview(token));
   };
 };
 
@@ -618,6 +800,7 @@ function renderProtectionOverview(token) {
 }
 
 async function protectionThreats(token, top) {
+  if (JOBS['protection/threats']) return showJob(token, 'protection/threats', { mod: 'protection', top }, () => renderThreats(token, top));
   if (malwareResult) return renderThreats(token, top);
   let kind = 'quick';
   page(`${top}${intro('protection', {
@@ -630,13 +813,14 @@ async function protectionThreats(token, top) {
   })}`);
   $$('#kinds .tab').forEach((b) => (b.onclick = () => { kind = b.dataset.kind; $$('#kinds .tab').forEach((x) => x.classList.toggle('active', x === b)); }));
   $('#scan').onclick = async () => {
-    page(`${top}${scanning('protection', 'Analyse des menaces…', 'Cela peut prendre plusieurs minutes')}`);
-    progressHandlers.malware = (p) => alive(token) && setScan(null, p.current);
-    const r = await safe(() => pcm.v2.malwareScan(kind), 'Analyse');
-    if (!alive(token)) return;
-    if (!r) return go('protection/threats');
-    malwareResult = r;
-    renderThreats(token, top);
+    const job = await startJob('protection/threats', { label: 'Analyse des menaces' }, async (j) => {
+      j.update('Analyse des menaces…', 'Cela peut prendre plusieurs minutes');
+      j.on('malware', (p) => j.update(null, p.current));
+      const r = await pcm.v2.malwareScan(kind);
+      if (!j.cancelled) malwareResult = r;
+      return r;
+    });
+    if (job && alive(token)) showJob(token, 'protection/threats', { mod: 'protection', top }, () => renderThreats(token, top));
   };
 }
 
@@ -762,6 +946,9 @@ PAGES.performance = async (token, tab) => {
   if (tab === 'startup') return perfStartup(token, detailHead('performance', PERF_TABS, 'startup', 'Désactivez les applications lancées à l\'ouverture de session pour démarrer plus vite.'));
   if (tab === 'processes') return perfProcesses(token, detailHead('performance', PERF_TABS, 'processes'));
   if (tab === 'network') return perfNetwork(token, detailHead('performance', PERF_TABS, 'network'));
+  if (JOBS.performance) return showJob(token, 'performance', { mod: 'performance' }, () => renderPerfOverview(token));
+  const mj = JOBS['performance/maintenance'];
+  if (mj) return showJob(token, 'performance/maintenance', { mod: 'performance' }, (res) => maintenanceDone(res, mj.tasks || [], ''));
   if (overviewCache.performance) return renderPerfOverview(token);
   page(intro('performance', {
     lead: 'Gardez un système rapide : tâches de maintenance, applications au démarrage, mémoire et applications gourmandes.',
@@ -772,16 +959,18 @@ PAGES.performance = async (token, tab) => {
     ],
   }));
   $('#scan').onclick = async () => {
-    page(scanning('performance', 'Analyse des performances…', 'Maintenance, démarrage et mémoire'));
-    const [tasks, startup, procs, stats] = await Promise.all([
-      pcm.v2.maintList().catch(() => []),
-      pcm.apps.startup().catch(() => []),
-      pcm.apps.processes().catch(() => []),
-      pcm.system.stats().catch(() => null),
-    ]);
-    if (!alive(token)) return;
-    overviewCache.performance = { tasks, startup, procs, stats };
-    renderPerfOverview(token);
+    const job = await startJob('performance', { label: 'Analyse des performances' }, async (j) => {
+      j.update('Analyse des performances…', 'Maintenance, démarrage et mémoire');
+      const [tasks, startup, procs, stats] = await Promise.all([
+        pcm.v2.maintList().catch(() => []),
+        pcm.apps.startup().catch(() => []),
+        pcm.apps.processes().catch(() => []),
+        pcm.system.stats().catch(() => null),
+      ]);
+      if (j.cancelled) return null;
+      return (overviewCache.performance = { tasks, startup, procs, stats });
+    });
+    if (job && alive(token)) showJob(token, 'performance', { mod: 'performance' }, () => renderPerfOverview(token));
   };
 };
 
@@ -844,17 +1033,26 @@ function renderPerfOverview(token) {
 }
 
 async function runMaintenance(token, ids, tasks, top) {
-  page(`${top}${scanning('performance', 'Maintenance en cours…', '')}`);
-  const res = await safe(() => pcm.v2.maintRun(ids), 'Maintenance');
-  if (!alive(token)) return;
-  if (!res) return go('performance');
-  delete overviewCache.performance;
+  const job = await startJob('performance/maintenance', { label: 'Maintenance' }, async (j) => {
+    j.update('Maintenance en cours…', '');
+    j.tasks = tasks;
+    const res = await pcm.v2.maintRun(ids);
+    delete overviewCache.performance;
+    return res;
+  });
+  if (!job || !alive(token)) return;
+  showJob(token, 'performance/maintenance', { mod: 'performance', top }, (res) => maintenanceDone(res, tasks, top));
+}
+
+function maintenanceDone(res, tasks, top) {
   const okN = res.filter((x) => x.ok).length;
   const failed = res.filter((x) => !x.ok);
-  page(`${top}${doneView('performance', `${plural(okN, 'tâche effectuée', 'tâches effectuées')}`, failed.length ? `Non effectuées : ${failed.map((f) => `${tasks.find((t) => t.id === f.id)?.name} (${f.error || 'échec'})`).join(' · ')}` : 'Votre système est optimisé.', 'performance')}`);
+  page(`${top}${doneView('performance', `${plural(okN, 'tâche effectuée', 'tâches effectuées')}`, failed.length ? `Non effectuées : ${failed.map((f) => `${tasks.find((t) => t.id === f.id)?.name || f.id} (${f.error || 'échec'})`).join(' · ')}` : 'Votre système est optimisé.', 'performance')}`);
 }
 
 async function perfMaintenance(token, top) {
+  const mj = JOBS['performance/maintenance'];
+  if (mj) return showJob(token, 'performance/maintenance', { mod: 'performance', top }, (res) => maintenanceDone(res, mj.tasks || [], top));
   page(`${top}<div id="mt"><div class="loading"><span class="spinner"></span></div></div>`);
   const tasks = overviewCache.performance?.tasks || await safe(() => pcm.v2.maintList(), 'Maintenance');
   if (!tasks || !alive(token)) return;
@@ -951,6 +1149,7 @@ PAGES.applications = async (token, tab) => {
   if (tab === 'uninstall') return appsUninstall(token, detailHead('applications', APP_TABS, 'uninstall'));
   if (tab === 'leftovers') return appsLeftovers(token, detailHead('applications', APP_TABS, 'leftovers', 'Dossiers laissés par des applications qui ne sont plus installées et inutilisés depuis plus de 90 jours. Vérifiez la liste : ils iront dans la corbeille.'));
   if (tab === 'updates') return appsUpdates(token, detailHead('applications', APP_TABS, 'updates'));
+  if (JOBS.applications) return showJob(token, 'applications', { mod: 'applications' }, () => renderAppsOverview(token));
   if (overviewCache.applications) return renderAppsOverview(token);
   page(intro('applications', {
     lead: 'Désinstallez les applications inutiles, supprimez leurs restes et ne manquez aucune mise à jour.',
@@ -961,16 +1160,18 @@ PAGES.applications = async (token, tab) => {
     ],
   }));
   $('#scan').onclick = async () => {
-    page(scanning('applications', 'Analyse des applications…', 'Applications installées, restes et mises à jour'));
-    progressHandlers.leftovers = (p) => alive(token) && setScan(null, p.current);
-    const [installed, leftovers, updates] = await Promise.all([
-      pcm.apps.installed().catch(() => []),
-      pcm.v2.leftovers().catch(() => []),
-      pcm.protect.updates().catch(() => null),
-    ]);
-    if (!alive(token)) return;
-    overviewCache.applications = { installed, leftovers, updates };
-    renderAppsOverview(token);
+    const job = await startJob('applications', { label: 'Analyse des applications' }, async (j) => {
+      j.update('Analyse des applications…', 'Applications installées, restes et mises à jour');
+      j.on('leftovers', (p) => j.update(null, p.current));
+      const [installed, leftovers, updates] = await Promise.all([
+        pcm.apps.installed().catch(() => []),
+        pcm.v2.leftovers().catch(() => []),
+        pcm.protect.updates().catch(() => null),
+      ]);
+      if (j.cancelled) return null;
+      return (overviewCache.applications = { installed, leftovers, updates });
+    });
+    if (job && alive(token)) showJob(token, 'applications', { mod: 'applications' }, () => renderAppsOverview(token));
   };
 };
 
@@ -1088,7 +1289,8 @@ async function appsUpdates(token, top) {
     if (!r) return page(`${top}<div class="card glass empty">Impossible de vérifier les mises à jour.</div>`);
   }
   const groups = {};
-  for (const u of r.updates) (groups[u.category || 'Système'] ||= []).push(u);
+  // Driver updates have their own section below.
+  for (const u of r.updates) if (!/^(drivers|pilotes)$/i.test(u.category || '')) (groups[u.category || 'Système'] ||= []).push(u);
   page(`${top}<div class="card glass" style="display:flex;align-items:center;gap:16px;margin-bottom:6px">
       <div class="status-ico ${r.updates.length ? 'warn' : 'ok'}">${icon(r.updates.length ? 'update' : 'check')}</div>
       <div style="flex:1"><div class="big">${r.updates.length ? plural(r.updates.length, 'mise à jour disponible', 'mises à jour disponibles') : 'Tout est à jour'}</div>
@@ -1097,6 +1299,7 @@ async function appsUpdates(token, top) {
       <div class="pc-ico g-applications">${ficon(/sécurité/i.test(cat) ? 'shield' : 'update')}</div>
       <div class="pc-title">${esc(u.title)}</div><div class="pc-sub">${u.from ? `${esc(u.from)} → ` : ''}${esc(u.version || u.kb || '')}</div>
       ${u.size ? `<div class="pc-foot"><b>${fmtBytes(u.size)}</b></div>` : ''}</div>`).join('')}</div>`).join('')}
+    <h2>Pilotes</h2><div id="drv"></div>
     ${r.updates.length ? `<div class="action-bar">${IS_LINUX ? '<button class="btn-main" id="upd-go">Tout mettre à jour</button>' : '<button class="btn-main" data-tool="windowsUpdate">Ouvrir Windows Update</button>'}</div>` : ''}`);
   $('#upd-go') && ($('#upd-go').onclick = async () => {
     if (!(await confirmBox('Installer les mises à jour ?', 'Les paquets du système, Snap et Flatpak vont être mis à jour. Votre mot de passe sera demandé.', 'Mettre à jour'))) return;
@@ -1105,6 +1308,113 @@ async function appsUpdates(token, top) {
     delete overviewCache.applications;
     if (alive(token)) go('applications/updates');
   });
+  driversSection(token);
+}
+
+// ---------- Drivers ----------
+// Updates come only from official channels: Windows Update on Windows, fwupd (LVFS) on Linux.
+let driversResult = null;
+let driversStatus = {}; // id -> install progress of the last installation
+
+const DRIVER_STATE = {
+  wait: ['info', 'En attente'], download: ['info', 'Téléchargement…'], install: ['info', 'Installation…'],
+  ok: ['ok', 'Installé'], fail: ['bad', 'Échec'],
+};
+
+function driversSection(token) {
+  const box = $('#drv');
+  if (!box) return;
+  const job = JOBS['applications/drivers'];
+  if (job && !driversResult) {
+    box.innerHTML = `<div class="card glass drv-card"><span class="spinner"></span><div><b>Recherche des pilotes…</b><div class="muted small">${IS_LINUX ? 'fwupd interroge le service LVFS' : 'Windows Update interroge le catalogue des fabricants'} ; cela peut prendre une minute.</div></div></div>`;
+    job.promise.then(() => alive(token) && driversSection(token));
+    return;
+  }
+  if (!driversResult) {
+    box.innerHTML = `<div class="card glass drv-card"><div class="pc-ico g-applications">${ficon('process')}</div>
+      <div style="flex:1"><b>Mises à jour de pilotes</b><div class="muted small">${IS_LINUX
+        ? 'Recherche les mises à jour de micrologiciels publiées par les fabricants sur le service officiel LVFS (fwupd).'
+        : 'Recherche les pilotes plus récents publiés par les fabricants sur Windows Update, la source officielle et signée.'}</div></div>
+      <button class="btn primary" id="drv-scan">${icon('search')} Rechercher</button></div>`;
+    $('#drv-scan').onclick = async () => {
+      const j = await startJob('applications/drivers', { label: 'Recherche des pilotes' }, async (jj) => {
+        jj.update('Recherche des pilotes…', '');
+        const r = await pcm.v2.drivers();
+        if (!jj.cancelled) { driversResult = r; driversStatus = {}; }
+        return r;
+      });
+      if (j && alive(token)) driversSection(token);
+    };
+    return;
+  }
+  renderDrivers(token, driversResult);
+}
+
+function renderDrivers(token, r) {
+  const box = $('#drv');
+  if (!box) return;
+  const job = JOBS['applications/drivers'];
+  const installing = job?.label === 'Installation des pilotes';
+  const state = (u) => driversStatus[u.id];
+  const head = r.missing
+    ? `<div class="card glass drv-card"><div class="status-ico warn">${icon('warn')}</div><div style="flex:1"><b>fwupd n'est pas installé</b>
+        <div class="muted small">Installez-le avec votre gestionnaire de paquets (par exemple <b>sudo apt install fwupd</b>) pour recevoir les mises à jour des fabricants.</div></div></div>`
+    : `<div class="card glass drv-card"><div class="status-ico ${r.updates.length ? 'warn' : 'ok'}">${icon(r.updates.length ? 'update' : 'check')}</div>
+        <div style="flex:1"><b>${r.updates.length ? plural(r.updates.length, 'mise à jour de pilote disponible', 'mises à jour de pilotes disponibles') : 'Vos pilotes sont à jour'}</b>
+        <div class="muted small">${plural(r.checked || 0, 'pilote vérifié', 'pilotes vérifiés')} · source : ${esc(r.source)}</div></div>
+        <button class="btn" id="drv-again" ${installing ? 'disabled' : ''}>${icon('refresh')} Rechercher à nouveau</button></div>`;
+  const list = r.updates.length ? `<div class="cards c3" id="drv-list">${r.updates.map((u) => {
+    const st = state(u);
+    const pill = st ? DRIVER_STATE[st.state] : null;
+    return `<label class="pick-card glass ${st ? 'static' : ''}" data-drv="${esc(u.id)}">
+      ${st ? '' : `<input type="checkbox" data-id="${esc(u.id)}" checked/>`}
+      <div class="pc-ico g-applications">${ficon('process')}</div>
+      <div class="pc-title">${esc(u.name)}</div>
+      <div class="pc-sub ${st?.error ? 'drv-err' : ''}" title="${esc(st?.error || '')}">${esc(st?.error || [u.provider, u.class].filter(Boolean).join(' · ') || u.title)}</div>
+      <div class="pc-foot"><span class="drv-ver">${esc(u.current || '?')} ${icon('chevron')} <b>${esc(u.version || '?')}</b></span>
+        ${pill ? `<span class="pill ${pill[0]}">${st.state === 'download' || st.state === 'install' ? '<span class="spinner mini"></span>' : ''}${pill[1]}</span>` : u.size ? `<span class="muted small">${fmtBytes(u.size)}</span>` : ''}</div>
+      </label>`;
+  }).join('')}</div>` : '';
+  const done = Object.values(driversStatus).filter((s) => s.state === 'ok' || s.state === 'fail');
+  const reboot = Object.values(driversStatus).some((s) => s.reboot);
+  const summary = done.length && !installing
+    ? `<div class="card glass drv-card"><div class="status-ico ${done.every((s) => s.state === 'ok') ? 'ok' : 'warn'}">${icon('check')}</div><div style="flex:1"><b>${plural(done.filter((s) => s.state === 'ok').length, 'pilote installé', 'pilotes installés')}${done.some((s) => s.state === 'fail') ? ` · ${done.filter((s) => s.state === 'fail').length} échec(s)` : ''}</b>
+        <div class="muted small">${reboot ? 'Redémarrez le PC pour terminer l\'installation.' : 'Installation terminée.'}</div></div></div>` : '';
+  const actions = r.updates.length && !installing && !done.length
+    ? `<div class="drv-actions"><span class="muted small">${IS_LINUX ? 'Votre mot de passe sera demandé.' : 'Windows demandera une autorisation administrateur une seule fois.'}</span><button class="btn primary" id="drv-install">${icon('download')} Installer la sélection</button></div>` : '';
+  const old = r.old?.length ? `<details class="drv-old glass"><summary>${plural(r.old.length, 'pilote tiers de plus de 3 ans', 'pilotes tiers de plus de 3 ans')} sans mise à jour sur Windows Update</summary>
+      <p class="muted small">Windows Update ne propose pas de version plus récente. Si un périphérique pose problème, consultez le site de son fabricant.</p>
+      <div class="list">${r.old.map((d) => `<div class="row"><div class="r-main"><div class="r-title">${esc(d.device)}</div><div class="r-sub">${esc(d.provider)} · ${esc(d.class || '')}</div></div><div class="r-meta"><b>${esc(d.current || '')}</b><div class="small">${esc(d.currentDate || '')}</div></div></div>`).join('')}</div></details>` : '';
+  box.innerHTML = head + summary + list + actions + old;
+  $('#drv-again') && ($('#drv-again').onclick = () => { driversResult = null; driversStatus = {}; driversSection(token); $('#drv-scan')?.click(); });
+  $('#drv-install') && ($('#drv-install').onclick = () => installDrivers(token, $$('#drv-list input:checked').map((c) => c.dataset.id)));
+  // Follow the installation while this page is open (one listener per page visit).
+  if (installing && job.viewToken !== token) {
+    job.viewToken = token;
+    const view = () => (alive(token) ? renderDrivers(token, r) : job.listeners.delete(view));
+    job.listeners.add(view);
+    job.promise.then(() => { job.listeners.delete(view); if (alive(token)) renderDrivers(token, r); });
+  }
+}
+
+async function installDrivers(token, ids) {
+  if (!ids.length) return toast('Sélectionnez des pilotes');
+  if (!(await confirmBox('Installer les pilotes ?', `${plural(ids.length, 'pilote sera téléchargé', 'pilotes seront téléchargés')} depuis ${IS_LINUX ? 'le service LVFS' : 'Windows Update'} puis installé${ids.length > 1 ? 's' : ''}. Un redémarrage peut être nécessaire.`, 'Installer'))) return;
+  driversStatus = Object.fromEntries(ids.map((id) => [id, { state: 'wait' }]));
+  const job = await startJob('applications/drivers', { label: 'Installation des pilotes' }, async (j) => {
+    j.update('Installation des pilotes…', '');
+    j.on('drivers', (p) => {
+      if (!p.id) return;
+      driversStatus[p.id] = p.phase === 'done' ? { state: p.ok ? 'ok' : 'fail', error: p.ok ? '' : p.error || `Code ${p.code ?? '?'}`, reboot: p.reboot } : { state: p.phase };
+      j.update(null, `${p.index + 1} sur ${p.total}`);
+    });
+    const res = await pcm.v2.driversInstall(ids);
+    for (const x of res) driversStatus[x.id] = { state: x.ok ? 'ok' : 'fail', error: x.ok ? '' : x.error || `Code ${x.code ?? '?'}`, reboot: x.reboot };
+    delete overviewCache.applications;
+    return res;
+  });
+  if (!job) driversStatus = {};
+  if (alive(token)) renderDrivers(token, driversResult);
 }
 
 // ===================== Clutter =====================
@@ -1128,6 +1438,7 @@ PAGES.clutter = async (token, tab) => {
   if (tab === 'similar') return clutterSimilar(token, detailHead('clutter', CLUTTER_TABS, 'similar'));
   if (tab === 'large') return clutterLarge(token, detailHead('clutter', CLUTTER_TABS, 'large'));
   if (tab === 'downloads') return clutterDownloads(token, detailHead('clutter', CLUTTER_TABS, 'downloads'));
+  if (JOBS.clutter) return showJob(token, 'clutter', { mod: 'clutter' }, () => renderClutterOverview(token));
   if (overviewCache.clutter?.done) return renderClutterOverview(token);
   page(intro('clutter', {
     lead: 'Retrouvez les doublons, les images similaires, les gros fichiers oubliés et les téléchargements qui encombrent votre disque.',
@@ -1138,18 +1449,20 @@ PAGES.clutter = async (token, tab) => {
     ],
   }));
   $('#scan').onclick = async () => {
-    page(scanning('clutter', 'Recherche des fichiers à trier…', '', { stop: true }));
-    $('#scan-stop').onclick = () => { pcm.storage.cancel(); pcm.v2.similarCancel(); };
-    progressHandlers.storage = (p) => alive(token) && setScan(`${p.dirs} dossiers analysés`, p.current);
-    progressHandlers.similar = (p) => alive(token) && setScan(`${p.done} / ${p.total} images comparées`, p.current);
-    // Duplicate and large-file scans share one cancellable walker: run them one after the other
-    const downloads = await pcm.storage.downloads().catch(() => ({ dir: PATHS.downloads, items: [] }));
-    const dups = await pcm.storage.duplicates({ root: clutterRoots.dup || downloads.dir }).catch(() => []);
-    const similar = await pcm.v2.similarFind(clutterRoots.sim || PATHS.pictures).catch(() => ({ groups: [], scanned: 0 }));
-    const large = await pcm.storage.large({ root: clutterRoots.large || PATHS.home, minSize: 100 * 1024 * 1024, olderThanDays: 180 }).catch(() => []);
-    if (!alive(token)) return;
-    overviewCache.clutter = { done: true, downloads, dups, similar, large, largeKey: `${clutterRoots.large || PATHS.home}|100|180` };
-    renderClutterOverview(token);
+    const stop = () => { pcm.storage.cancel(); pcm.v2.similarCancel(); };
+    const job = await startJob('clutter', { label: 'Analyse de l\'encombrement', stop }, async (j) => {
+      j.update('Recherche des fichiers à trier…', '');
+      j.on('storage', (p) => j.update(`${p.dirs} dossiers analysés`, p.current));
+      j.on('similar', (p) => j.update(`${p.done} / ${p.total} images comparées`, p.current));
+      // Duplicate and large-file scans share one cancellable walker: run them one after the other
+      const downloads = await pcm.storage.downloads().catch(() => ({ dir: PATHS.downloads, items: [] }));
+      const dups = j.cancelled ? [] : await pcm.storage.duplicates({ root: clutterRoots.dup || downloads.dir }).catch(() => []);
+      const similar = j.cancelled ? null : await pcm.v2.similarFind(clutterRoots.sim || PATHS.pictures).catch(() => ({ groups: [], scanned: 0 }));
+      const large = j.cancelled ? [] : await pcm.storage.large({ root: clutterRoots.large || PATHS.home, minSize: 100 * 1024 * 1024, olderThanDays: 180 }).catch(() => []);
+      if (j.cancelled) return null;
+      return (overviewCache.clutter = { done: true, downloads, dups, similar, large, largeKey: `${clutterRoots.large || PATHS.home}|100|180` });
+    });
+    if (job && alive(token)) showJob(token, 'clutter', { mod: 'clutter' }, () => renderClutterOverview(token));
   };
 };
 
@@ -1220,17 +1533,20 @@ function renderDuplicates(token, top, groups) {
 }
 
 async function clutterDuplicates(token, top) {
+  if (JOBS['clutter/duplicates']) return showJob(token, 'clutter/duplicates', { mod: 'clutter', top }, (g) => renderDuplicates(token, top, g));
   if (overviewCache.clutter?.dups) return renderDuplicates(token, top, overviewCache.clutter.dups);
   const root = clutterRoots.dup || PATHS.downloads || PATHS.home;
   page(`${top}${intro('clutter', { title: 'Doublons', lead: `Trouvez les fichiers identiques (comparaison du contenu) dans <b>${esc(root)}</b>.`, extra: `<div class="list-head" style="justify-content:center;margin-bottom:22px">${rootPicker('dup', root)}</div>`, button: 'Rechercher' })}`);
   bindRootPicker('dup', 'clutter/duplicates');
   $('#scan').onclick = async () => {
-    page(`${top}${scanning('clutter', 'Recherche des doublons…', '', { stop: true })}`);
-    $('#scan-stop').onclick = () => pcm.storage.cancel();
-    progressHandlers.storage = (p) => alive(token) && setScan(`${p.dirs} dossiers analysés`, p.current);
-    const groups = await safe(() => pcm.storage.duplicates({ root }));
-    if (!groups || !alive(token)) return;
-    renderDuplicates(token, top, groups);
+    const job = await startJob('clutter/duplicates', { label: 'Recherche des doublons', stop: () => pcm.storage.cancel() }, async (j) => {
+      j.update('Recherche des doublons…', '');
+      j.on('storage', (p) => j.update(`${p.dirs} dossiers analysés`, p.current));
+      const groups = await pcm.storage.duplicates({ root });
+      if (!j.cancelled) overviewCache.clutter = { ...overviewCache.clutter, dups: groups };
+      return groups;
+    });
+    if (job && alive(token)) showJob(token, 'clutter/duplicates', { mod: 'clutter', top }, (g) => renderDuplicates(token, top, g));
   };
 }
 
@@ -1247,24 +1563,24 @@ function renderSimilar(token, top, r) {
 }
 
 async function clutterSimilar(token, top) {
+  if (JOBS['clutter/similar']) return showJob(token, 'clutter/similar', { mod: 'clutter', top }, (r) => renderSimilar(token, top, r));
   if (overviewCache.clutter?.similar) return renderSimilar(token, top, overviewCache.clutter.similar);
   const root = clutterRoots.sim || PATHS.pictures;
   page(`${top}${intro('clutter', { title: 'Images similaires', lead: `Repérez les photos presque identiques (rafales, recadrages, copies compressées) dans <b>${esc(root)}</b>. La meilleure version est conservée.`, extra: `<div class="list-head" style="justify-content:center;margin-bottom:22px">${rootPicker('sim', PATHS.pictures)}</div>`, button: 'Rechercher' })}`);
   bindRootPicker('sim', 'clutter/similar');
   $('#scan').onclick = async () => {
-    page(`${top}${scanning('clutter', 'Comparaison des images…', '', { pct: 0, stop: true })}`);
-    $('#scan-stop').onclick = () => pcm.v2.similarCancel();
-    progressHandlers.similar = (p) => {
-      if (!alive(token)) return;
-      const c = $('.ring-big circle:nth-of-type(2)');
-      if (c && p.total) c.style.strokeDashoffset = c.getTotalLength() * (1 - p.done / p.total);
-      setScan(`${p.done} / ${p.total} images`, p.current);
-    };
-    const r = await safe(() => pcm.v2.similarFind(root), 'Images similaires');
-    if (!r || !alive(token)) return;
-    renderSimilar(token, top, r);
+    const job = await startJob('clutter/similar', { label: 'Recherche d\'images similaires', stop: () => pcm.v2.similarCancel() }, async (j) => {
+      j.update('Comparaison des images…', '', 0);
+      j.on('similar', (p) => j.update(`${p.done} / ${p.total} images`, p.current, p.total ? p.done / p.total : 0));
+      const r = await pcm.v2.similarFind(root);
+      if (!j.cancelled) overviewCache.clutter = { ...overviewCache.clutter, similar: r };
+      return r;
+    });
+    if (job && alive(token)) showJob(token, 'clutter/similar', { mod: 'clutter', top }, (r) => renderSimilar(token, top, r));
   };
 }
+
+let largeStopped = null; // Criteria of a large-file search the user stopped
 
 async function clutterLarge(token, top) {
   const root = clutterRoots.large || PATHS.home;
@@ -1277,13 +1593,32 @@ async function clutterLarge(token, top) {
   bindRootPicker('large', 'clutter/large');
   $('#lg-min').onchange = (e) => { clutterRoots.largeMin = Number(e.target.value); pcm.storage.cancel(); go('clutter/large'); };
   $('#lg-age').onchange = (e) => { clutterRoots.largeAge = Number(e.target.value); pcm.storage.cancel(); go('clutter/large'); };
-  $('#scan-stop').onclick = () => pcm.storage.cancel();
-  progressHandlers.storage = (p) => alive(token) && setScan(`${p.dirs} dossiers analysés`, p.current);
-  const cached = overviewCache.clutter?.largeKey === `${root}|${minMb}|${age}` ? overviewCache.clutter.large : null;
-  const items = cached || await safe(() => pcm.storage.large({ root, minSize: minMb * 1024 * 1024, olderThanDays: age }));
-  if (!items || !alive(token)) return;
-  $('#lg').innerHTML = items.length ? `<div class="list glass" id="lg-list">${fileRows(items)}</div>${trashBar()}` : `<div class="card glass empty">${icon('check')}<div>Aucun fichier correspondant.</div></div>`;
-  if (items.length) { bindSelection($('#lg-list'), { onDone: () => { delete overviewCache.clutter; go('clutter/large'); } }); loadIcons(); }
+  const key = `${root}|${minMb}|${age}`;
+  const show = (items) => {
+    $('#lg').innerHTML = items.length
+      ? `<div class="list glass" id="lg-list">${fileRows(items)}</div>${trashBar()}`
+      : `<div class="card glass empty">${icon('check')}<div>Aucun fichier correspondant.</div></div>`;
+    if (items.length) { bindSelection($('#lg-list'), { onDone: () => { delete overviewCache.clutter; go('clutter/large'); } }); loadIcons(); }
+  };
+  if (overviewCache.clutter?.largeKey === key) return show(overviewCache.clutter.large);
+  if (largeStopped === key && !JOBS['clutter/large']) {
+    $('#lg').innerHTML = `<div class="card glass empty">${icon('warn')}<div>Recherche arrêtée.</div><button class="btn" id="lg-again">${icon('refresh')} Relancer</button></div>`;
+    $('#lg-again').onclick = () => { largeStopped = null; go('clutter/large'); };
+    return;
+  }
+  // The search keeps running in the background; it restarts only if the criteria changed.
+  if (JOBS['clutter/large']?.largeKey !== key) {
+    const job = await startJob('clutter/large', { label: 'Recherche des gros fichiers', stop: () => { pcm.storage.cancel(); largeStopped = key; }, auto: true }, async (j) => {
+      j.update('Recherche des gros fichiers…', '');
+      j.on('storage', (p) => j.update(`${p.dirs} dossiers analysés`, p.current));
+      const items = await pcm.storage.large({ root, minSize: minMb * 1024 * 1024, olderThanDays: age });
+      if (!j.cancelled) overviewCache.clutter = { ...overviewCache.clutter, large: items, largeKey: key };
+      return items;
+    });
+    job.largeKey = key;
+  }
+  if (!alive(token)) return;
+  showJob(token, 'clutter/large', { mod: 'clutter', into: $('#lg') }, show);
 }
 
 async function clutterDownloads(token, top) {
@@ -1308,21 +1643,8 @@ async function clutterDownloads(token, top) {
 // ===================== Disk Map =====================
 let lensData = null;
 let lensPath = [];
-let lensJob = null; // Scan in progress: { root, promise }
-
-// Scan screen of the Disk Map. If the user leaves and comes back, it picks up the scan in progress.
-async function lensWait(token) {
-  page(scanning('lens', 'Cartographie du disque…', lensJob.root, { stop: true }));
-  $('#scan-stop').onclick = () => pcm.v2.lensCancel();
-  progressHandlers.lens = (p) => alive(token) && setScan(`${p.dirs.toLocaleString('fr-FR')} dossiers · ${p.files.toLocaleString('fr-FR')} fichiers`, p.current);
-  const res = await lensJob.promise;
-  if (!alive(token)) return;
-  if (!res) return go('lens');
-  renderLens(token);
-}
-
 PAGES.lens = async (token) => {
-  if (lensJob) return lensWait(token);
+  if (JOBS.lens) return showJob(token, 'lens', { mod: 'lens' }, () => renderLens(token));
   if (lensData) return renderLens(token);
   page(intro('lens', {
     lead: 'Visualisez ce qui occupe votre disque sous forme de carte interactive. Cliquez sur un dossier pour l\'explorer, supprimez ce qui ne sert plus.',
@@ -1331,16 +1653,17 @@ PAGES.lens = async (token) => {
     button: 'Analyser',
   }));
   let root = PATHS.home;
-  const start = (r) => {
+  const start = async (r) => {
     root = r;
-    const job = { root, promise: null };
-    job.promise = safe(() => pcm.v2.lensScan(root), 'Carte du disque').then((res) => {
-      if (lensJob === job) lensJob = null;
-      if (res) { lensData = res; lensPath = [res.tree]; }
+    // Stop keeps what was already scanned: the map shows the partial result.
+    const job = await startJob('lens', { label: 'Carte du disque', stop: () => pcm.v2.lensCancel(), keepPartial: true }, async (j) => {
+      j.update('Cartographie du disque…', root);
+      j.on('lens', (p) => j.update(`${p.dirs.toLocaleString('fr-FR')} dossiers · ${p.files.toLocaleString('fr-FR')} fichiers`, p.current));
+      const res = await pcm.v2.lensScan(root);
+      if (!j.cancelled) { lensData = res; lensPath = [res.tree]; }
       return res;
     });
-    lensJob = job;
-    lensWait(token);
+    if (job && alive(token)) showJob(token, 'lens', { mod: 'lens' }, () => renderLens(token));
   };
   $$('[data-root]').forEach((b) => (b.onclick = () => start(b.dataset.root)));
   $('#lens-pick').onclick = async () => { const p = await pcm.storage.pickFolder(); if (p) start(p); };
@@ -1617,23 +1940,150 @@ PAGES.tools = async (token) => {
     <h2>Raccourcis</h2>
     <div class="cards c3">${TOOLS.filter(([id]) => CAPS.tools.includes(id)).map(([id, ic, t, s]) => `<button class="row glass" style="border-radius:18px;cursor:pointer;text-align:left" data-tool="${id}">
       <div class="r-ico tint">${ficon(ic)}</div><div class="r-main"><div class="r-title">${esc(t)}</div><div class="r-sub">${esc(s)}</div></div></button>`).join('')}</div>`);
+  // The cards are drawn once; each refresh only changes their values, so nothing flickers.
+  $('#live').innerHTML = `
+    <div class="card glass live-card">${gauge(0)}<div><b>Processeur</b><div class="muted small" id="lv-cpu">Utilisation</div></div></div>
+    <div class="card glass live-card">${gauge(0)}<div><b>Mémoire</b><div class="muted small" id="lv-mem">–</div></div></div>
+    <div class="card glass"><b>Réseau</b><div class="muted small" style="margin-top:8px" id="lv-net">↓ – · ↑ –</div>
+      <button class="btn primary" style="margin-top:10px" id="boost">${icon('rocket')} Boost</button></div>`;
+  // Animate a gauge only when its value really changes: each transition redraws the glass behind it.
+  const setGauge = (el, pct) => {
+    if (Math.abs((el.pct ?? -10) - pct) < 2) return;
+    el.pct = pct;
+    const c = el.querySelector('circle:nth-of-type(2)');
+    c.style.transitionDuration = '.35s';
+    c.style.strokeDashoffset = c.getTotalLength() * (1 - pct / 100);
+    el.querySelector('.g-val').textContent = `${pct}%`;
+  };
+  const [cpuG, memG] = $$('#live .gauge');
+  const setText = (id, text) => { const el = $(id); if (el && el.textContent !== text) el.textContent = text; };
+  let busy = false;
   const refresh = async () => {
+    if (busy || document.hidden) return;
+    busy = true;
     const s = await pcm.system.stats().catch(() => null);
-    if (!s || !alive(token) || !$('#live')) return;
-    $('#live').innerHTML = `
-      <div class="card glass" style="display:flex;align-items:center;gap:16px">${gauge(s.cpu)}<div><b>Processeur</b><div class="muted small">${s.load != null ? `Charge ${s.load.toFixed(2)}` : 'Utilisation'}</div></div></div>
-      <div class="card glass" style="display:flex;align-items:center;gap:16px">${gauge(s.memory.percent)}<div><b>Mémoire</b><div class="muted small">${fmtBytes(s.memory.used)} / ${fmtBytes(s.memory.total)}</div></div></div>
-      <div class="card glass"><b>Réseau</b><div class="muted small" style="margin-top:8px">↓ ${fmtBytes(s.net.down)}/s · ↑ ${fmtBytes(s.net.up)}/s</div>
-        <button class="btn primary" style="margin-top:10px" id="boost">${icon('rocket')} Boost</button></div>`;
-    $('#boost').onclick = async (e) => {
-      e.currentTarget.disabled = true;
-      const r = await safe(() => pcm.system.boost(), 'Boost');
-      if (r) toast(`Boost terminé : ${fmtBytes(r.freed)} de mémoire libérée`);
-    };
+    busy = false;
+    if (!s || !alive(token)) return;
+    setGauge(cpuG, s.cpu);
+    setGauge(memG, s.memory.percent);
+    setText('#lv-cpu', s.load != null ? `Charge ${s.load.toFixed(2)}` : 'Utilisation');
+    setText('#lv-mem', `${fmtBytes(s.memory.used)} / ${fmtBytes(s.memory.total)}`);
+    setText('#lv-net', `↓ ${fmtBytes(s.net.down)}/s · ↑ ${fmtBytes(s.net.up)}/s`);
+  };
+  $('#boost').onclick = async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true;
+    b.innerHTML = `<span class="spinner"></span> Boost…`;
+    const r = await safe(() => pcm.system.boost(), 'Boost');
+    if (r) toast(`Boost terminé : ${fmtBytes(r.freed)} de mémoire libérée`);
+    if (!alive(token)) return;
+    b.disabled = false;
+    b.innerHTML = `${icon('rocket')} Boost`;
+    refresh();
   };
   refresh();
   const timer = setInterval(() => (alive(token) ? refresh() : clearInterval(timer)), 3000);
 };
+
+// ===================== Welcome screen =====================
+// Shown once, at the first launch (or after a voluntary reset in the settings).
+const WELCOME_FEATURES = [
+  ['smart', 'Entretien intelligent', 'Une analyse, un clic'],
+  ['cleanup', 'Nettoyage', 'Fichiers inutiles et caches'],
+  ['protection', 'Protection', 'Menaces et confidentialité'],
+  ['performance', 'Performances', 'Maintenance et démarrage'],
+  ['applications', 'Applications', 'Désinstallation et mises à jour'],
+  ['lens', 'Carte du disque', 'Ce qui occupe votre disque'],
+];
+
+function showWelcome() {
+  const el = document.createElement('div');
+  el.id = 'welcome';
+  el.className = 'welcome';
+  el.innerHTML = `<div class="wl-glow"></div>
+    <div class="wl-stage">
+      <div class="wl-logo"><span class="wl-ring"></span><span class="wl-ring r2"></span><img src="../../assets/icon.png" alt=""/></div>
+      <h1 class="wl-title">Bienvenue dans <span>Boost My Pc</span></h1>
+      <p class="wl-lead">Nettoyez, protégez et accélérez votre PC en quelques clics. Rien n'est supprimé sans votre accord.</p>
+      <div class="wl-features">${WELCOME_FEATURES.map(([mod, t, s], i) => `<div class="wl-feature glass" style="animation-delay:${1.05 + i * 0.08}s">
+        <div class="wl-ico g-${mod}">${micon(mod)}</div><div><b>${t}</b><span>${s}</span></div></div>`).join('')}</div>
+      <button class="scan-btn wl-start" id="wl-start">Commencer</button>
+    </div>`;
+  document.body.appendChild(el);
+  document.body.classList.add('welcoming');
+  $('#wl-start').onclick = () => {
+    pcm.prefs.set({ welcomed: true }).catch(() => {});
+    el.classList.add('out');
+    document.body.classList.remove('welcoming');
+    setTimeout(() => el.remove(), document.body.classList.contains('lite') ? 0 : 700);
+  };
+}
+
+// ===================== PC health =====================
+// Real measurements (processor, memory, storage, battery, system) and a score with recommendations.
+let healthResult = null; // Kept for a minute so that the settings open instantly
+
+const HEALTH_CARDS = ['cpu', 'memory', 'storage', 'battery', 'system'];
+function healthSkeleton() {
+  return `<div class="hl-score glass loading-card"><span class="spinner"></span><div class="muted">Mesure de l'état du PC…</div></div>${HEALTH_CARDS.map(() => '<div class="hl-card glass loading-card"></div>').join('')}`;
+}
+
+async function loadHealth(token) {
+  if (!healthResult || Date.now() - healthResult.at > 60000) {
+    const r = await pcm.v2.health().catch((e) => ({ error: e.message }));
+    if (r.error) {
+      if (alive(token) && $('#health')) $('#health').innerHTML = `<div class="card glass empty">${icon('warn')}<div>Mesure impossible : ${esc(r.error)}</div></div>`;
+      return;
+    }
+    healthResult = r;
+  }
+  if (alive(token) && $('#health')) renderHealth(healthResult);
+}
+
+// meter: percentage used (high is bad), or { pct, good: true } when a high value is good.
+function hlCard(cls, ic, title, value, sub, meter, extra = '') {
+  const wide = cls.includes('wide');
+  cls = cls.replace(' wide', '');
+  const good = typeof meter === 'object' && meter !== null;
+  if (good) meter = meter.pct;
+  const lvl = meter == null ? '' : good ? (meter < 60 ? 'bad' : meter < 80 ? 'warn' : 'ok') : meter >= 90 ? 'bad' : meter >= 75 ? 'warn' : 'ok';
+  return `<div class="hl-card glass${wide ? ' wide' : ''}">
+    <div class="hl-top"><div class="hl-ico ${cls}">${ficon(ic)}</div><b>${title}</b></div>
+    <div class="hl-val">${value}</div><div class="hl-sub">${sub}</div>
+    ${meter == null ? '' : `<div class="hl-meter ${lvl}"><i style="width:${Math.max(2, Math.min(100, meter))}%"></i></div>`}${extra}</div>`;
+}
+
+function renderHealth(h) {
+  const days = Math.floor(h.system.uptime / 86400), hours = Math.floor((h.system.uptime % 86400) / 3600);
+  const up = days ? `${plural(days, 'jour', 'jours')}${hours ? ` ${hours} h` : ''}` : `${hours} h`;
+  const main = h.volumes.find((v) => /^(C:|\/)$/i.test(v.id)) || h.volumes[0];
+  const used = main ? main.size - main.free : 0;
+  const diskPills = h.disks.map((d) => {
+    const st = d.health === 'bad' ? ['bad', 'Défaillant'] : d.health === 'warn' ? ['warn', 'À surveiller'] : d.health === 'good' ? ['ok', 'Bon état'] : null;
+    return `<div class="hl-line"><span>${esc([d.type, d.name].filter(Boolean).join(' · '))}</span>${st ? `<span class="pill ${st[0]}">${st[1]}${d.wear != null ? ` · usure ${d.wear} %` : ''}</span>` : '<span class="muted small">État non communiqué</span>'}</div>`;
+  }).join('');
+  const sysLines = [
+    h.system.antivirus ? `<div class="hl-line"><span>Protection en temps réel</span><span class="pill ${h.system.antivirus.on ? 'ok' : 'bad'}">${h.system.antivirus.on ? 'Active' : 'Désactivée'}</span></div>` : '',
+    `<div class="hl-line"><span>Redémarrage requis</span><span class="pill ${h.system.reboot ? 'warn' : 'ok'}">${h.system.reboot ? 'Oui' : 'Non'}</span></div>`,
+    IS_LINUX ? `<div class="hl-line"><span>Services en échec</span><span class="pill ${h.system.failed.length ? 'warn' : 'ok'}">${h.system.failed.length || 'Aucun'}</span></div>` : '',
+  ].join('');
+  const b = h.battery;
+  const ringCls = h.level;
+  $('#health').innerHTML = `
+    <div class="hl-score glass ${ringCls}">
+      <div class="hl-ring">${gauge(h.score, 104, 9)}</div>
+      <div class="hl-score-text"><div class="hl-ico g-protection">${ficon('heart')}</div><div class="hl-grade">${h.label}</div>
+        <div class="muted small">Indice calculé à partir des mesures réelles de ce PC.</div></div>
+      <div class="hl-tips">${h.tips.length ? h.tips.map((t) => `<div class="hl-tip ${t.level}"><span class="sc-dot"></span><span>${esc(t.text)}</span>${t.route ? `<button class="link" data-go="${t.route}">Corriger</button>` : ''}</div>`).join('') : `<div class="hl-tip ok"><span class="sc-dot"></span><span>Aucun problème détecté. Votre PC est en bonne santé.</span></div>`}</div>
+    </div>
+    ${hlCard('g-performance', 'process', 'Processeur', `${h.cpu.usage} %`, `${h.cpu.temp != null ? `${h.cpu.temp} °C · ` : ''}${plural(h.cpu.cores, 'cœur', 'cœurs')}${h.cpu.temp == null ? ' · température non communiquée' : ''}`, h.cpu.usage)}
+    ${hlCard('g-applications', 'memory', 'Mémoire', fmtBytes(h.memory.used), `${fmtBytes(h.memory.free)} disponibles sur ${fmtBytes(h.memory.total)}`, h.memory.percent)}
+    ${hlCard('g-clutter', 'storage', 'Stockage', main ? `${fmtBytes(main.free)} libres` : '–', main ? `${fmtBytes(used)} utilisés sur ${fmtBytes(main.size)} (${esc(main.id)})${h.volumes.length > 1 ? ` · ${plural(h.volumes.length - 1, 'autre volume', 'autres volumes')}` : ''}` : '', main ? Math.round((used / main.size) * 100) : null, diskPills)}
+    ${b ? hlCard('g-cleanup', 'battery', 'Batterie', b.health != null ? `${b.health} %` : `${b.charge ?? '–'} %`, `${b.health != null ? 'de la capacité d\'origine · ' : ''}charge ${b.charge ?? '–'} %${b.charging ? ' · en charge' : ''}${b.cycles ? ` · ${b.cycles} cycles` : ''}`, b.health != null ? { pct: b.health, good: true } : null)
+      : hlCard('g-cleanup', 'battery', 'Batterie', 'Aucune', 'Ce PC fonctionne sur secteur.', null)}
+    ${hlCard('g-lens wide', 'shieldCheck', 'Système', h.tips.length ? plural(h.tips.length, 'point à surveiller', 'points à surveiller') : 'Aucun problème', `${esc(h.system.os || '')} · allumé depuis ${up}`, null, sysLines)}`;
+  $('.hl-ring .g-val').innerHTML = `${h.score}<small>/100</small>`;
+}
 
 // ===================== Settings =====================
 PAGES.settings = async (token) => {
@@ -1642,6 +2092,9 @@ PAGES.settings = async (token) => {
   const row = (ic, title, sub, ctrl) => `<div class="row"><div class="r-ico tint">${ficon(ic)}</div><div class="r-main"><div class="r-title">${title}</div><div class="r-sub" style="white-space:normal">${sub}</div></div>${ctrl}</div>`;
   const sw = (id, on) => `<label class="switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}/><span></span></label>`;
   page(`${header('settings')}
+    <div class="list-head hl-head"><h2>État de santé du PC</h2><div class="grow"></div><button class="btn" id="hl-refresh">${icon('refresh')} Actualiser</button></div>
+    <div id="health" class="hl-grid">${healthSkeleton()}</div>
+    <h2>Préférences</h2>
     <div class="list glass">
       ${row('image', 'Thème', 'Apparence de l\'application', '<select id="s-theme"><option value="system">Système</option><option value="dark">Sombre</option><option value="light">Clair</option></select>')}
       ${row('sparkle', 'Effets visuels', 'Verre dépoli et animations. « Automatique » les désactive si la carte graphique n\'est pas accélérée.', '<select id="s-fx"><option value="auto">Automatique</option><option value="on">Activés</option><option value="off">Désactivés</option></select>')}
@@ -1652,7 +2105,10 @@ PAGES.settings = async (token) => {
       ${row('apps', 'Mini-panneau', 'Cliquez sur l\'icône de la barre supérieure, ou associez un raccourci clavier à <b>boost-my-pc --mini</b>', '')}
       ${row('memory', 'Boost avancé', 'Vide aussi le cache de pages du noyau (mot de passe à chaque Boost)', sw('s-drop', p.boostDropCaches))}
       ${row('admin', 'Droits administrateur', 'Les actions système demandent votre mot de passe via polkit', `<span class="pill ${admin ? 'ok' : 'info'}">${admin ? 'root' : 'À la demande'}</span>`)}`
-      : row('admin', 'Mode administrateur', admin ? 'Boost My Pc s\'exécute avec les droits administrateur' : 'Nécessaire pour certaines tâches système', admin ? '<span class="pill ok">Actif</span>' : '<button class="btn" id="s-admin">Redémarrer en administrateur</button>')}
+      : `${row('admin', 'Mode administrateur', admin ? 'Boost My Pc s\'exécute avec les droits administrateur' : 'Nécessaire pour certaines tâches système', admin ? '<span class="pill ok">Actif</span>' : '<button class="btn" id="s-admin">Redémarrer en administrateur</button>')}
+      ${row('shield', 'Démarrer en administrateur', '<span id="s-adm-sub">Évite de redemander l\'autorisation pendant l\'utilisation.</span>', `<select id="s-adm">
+        <option value="off">Non, à la demande</option><option value="prompt">Oui, demander à l'ouverture</option><option value="task">Toujours, sans demande</option></select>`)}`}
+      ${row('refresh', 'Réinitialiser l\'application', 'Rétablit les préférences par défaut et affiche à nouveau l\'écran de bienvenue', '<button class="btn" id="s-reset">Réinitialiser</button>')}
     </div>
     <h2>Informations système</h2>
     <div class="card glass"><div class="kv">
@@ -1674,6 +2130,8 @@ PAGES.settings = async (token) => {
       : `<span class="pill ok">${icon('check')} À jour</span>`;
     $('#s-update') && ($('#s-update').onclick = () => window.open(l.url));
   }).catch(() => {});
+  loadHealth(token);
+  $('#hl-refresh').onclick = () => { healthResult = null; $('#health').innerHTML = healthSkeleton(); loadHealth(token); };
   $('#s-theme').value = p.theme;
   $('#s-fx').value = p.effects || 'auto';
   $('#s-fx').onchange = async (e) => {
@@ -1687,6 +2145,30 @@ PAGES.settings = async (token) => {
   $('#s-alerts') && ($('#s-alerts').onchange = (e) => pcm.prefs.set({ alerts: e.target.checked }));
   $('#s-drop') && ($('#s-drop').onchange = (e) => pcm.prefs.set({ boostDropCaches: e.target.checked }));
   $('#s-admin') && ($('#s-admin').onclick = () => safe(() => pcm.system.relaunchAdmin()));
+  $('#s-reset').onclick = async () => {
+    if (!(await confirmBox('Réinitialiser l\'application ?', 'Les préférences reviennent à leurs valeurs par défaut et l\'écran de bienvenue s\'affichera à nouveau. Vos fichiers ne sont pas touchés.', 'Réinitialiser'))) return;
+    if (await safe(() => pcm.prefs.reset(), 'Réinitialisation')) location.reload();
+  };
+  if ($('#s-adm')) {
+    const a = await pcm.adminMode().catch(() => null);
+    if (!alive(token) || !a) return;
+    const sel = $('#s-adm');
+    sel.value = a.mode;
+    const task = sel.querySelector('option[value="task"]');
+    task.disabled = !a.protectedInstall && a.mode !== 'task';
+    $('#s-adm-sub').textContent = a.protectedInstall
+      ? '« Toujours » crée une fois une tâche planifiée Windows (une seule autorisation) : Boost My Pc démarre ensuite avec les droits administrateur sans les redemander.'
+      : '« Demander à l\'ouverture » affiche l\'autorisation Windows une fois par lancement. « Toujours, sans demande » nécessite une installation pour tous les utilisateurs (Program Files).';
+    sel.onchange = async () => {
+      const mode = sel.value;
+      sel.disabled = true;
+      const r = await safe(() => pcm.setAdminMode(mode), 'Mode administrateur');
+      sel.disabled = false;
+      if (!r) { sel.value = a.mode; return; }
+      a.mode = mode;
+      toast(mode === 'off' ? 'Les droits administrateur seront demandés seulement si nécessaire.' : mode === 'prompt' ? 'Windows demandera l\'autorisation à chaque ouverture de Boost My Pc.' : 'Boost My Pc démarrera désormais avec les droits administrateur, sans demande.');
+    };
+  }
 };
 
 // ===================== External actions (tray and mini panel) =====================
@@ -1701,6 +2183,7 @@ pcm.onAction((a) => {
 (async () => {
   try { PATHS = await pcm.v2.paths(); } catch {}
   go('smart');
+  pcm.prefs.get().then((p) => { if (!p.welcomed) showWelcome(); }).catch(() => {});
   try { CAPS = await pcm.caps(); } catch {}
   document.body.classList.toggle('lite', !!CAPS.lite);
   $('#admin-badge').textContent = IS_LINUX ? 'root' : 'Administrateur';

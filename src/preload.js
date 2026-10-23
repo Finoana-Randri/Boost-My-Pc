@@ -10,8 +10,11 @@ const call = async (channel, ...args) => {
 contextBridge.exposeInMainWorld('pcm', {
   platform: process.platform,
   lite: process.argv.includes('--bmp-lite'),
+  firstRun: process.argv.includes('--bmp-welcome'),
   caps: () => call('app:caps'),
   latest: () => call('app:latest'),
+  adminMode: () => call('app:adminMode'),
+  setAdminMode: (mode) => call('app:setAdminMode', mode),
   system: {
     stats: () => call('system:stats'),
     disks: () => call('system:disks'),
@@ -61,11 +64,15 @@ contextBridge.exposeInMainWorld('pcm', {
   prefs: {
     get: () => call('prefs:get'),
     set: (p) => call('prefs:set', p),
+    reset: () => call('prefs:reset'),
   },
   v2: {
     smartScan: () => call('v2:smart:scan'),
     smartRun: () => call('v2:smart:run'),
     smartCancel: () => call('v2:smart:cancel'),
+    health: () => call('v2:health'),
+    drivers: () => call('v2:drivers:list'),
+    driversInstall: (ids) => call('v2:drivers:install', ids),
     maintList: () => call('v2:maint:list'),
     maintRun: (ids) => call('v2:maint:run', ids),
     privacyScan: () => call('v2:privacy:scan'),

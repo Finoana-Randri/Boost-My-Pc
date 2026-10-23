@@ -21,9 +21,16 @@ let quitting = false;
 
 // ---------- Preferences ----------
 const prefsFile = () => path.join(app.getPath('userData'), 'preferences.json');
-const defaultPrefs = { theme: 'system', minimizeToTray: true, startup: false, boostDropCaches: false, alerts: true, effects: 'auto' };
+// Checked before Chromium creates its own files: data from an earlier session means the app was already used.
+const usedBefore = fs.existsSync(path.join(app.getPath('userData'), 'Local Storage'));
+const defaultPrefs = { theme: 'system', minimizeToTray: true, startup: false, boostDropCaches: false, alerts: true, effects: 'auto', welcomed: false, adminMode: 'off' };
 function loadPrefs() {
-  try { return { ...defaultPrefs, ...JSON.parse(fs.readFileSync(prefsFile(), 'utf8')) }; } catch { return { ...defaultPrefs }; }
+  try {
+    const saved = JSON.parse(fs.readFileSync(prefsFile(), 'utf8'));
+    // Preferences saved by an earlier version: the app was already in use, so skip the welcome screen.
+    if (!('welcomed' in saved)) saved.welcomed = true;
+    return { ...defaultPrefs, ...saved };
+  } catch { return { ...defaultPrefs, welcomed: usedBefore }; }
 }
 function savePrefs(p) {
   fs.mkdirSync(path.dirname(prefsFile()), { recursive: true });
@@ -49,7 +56,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       // Lets the page start in lightweight mode before its first render.
-      additionalArguments: [liteMode() ? '--bmp-lite' : '--bmp-full'],
+      additionalArguments: [liteMode() ? '--bmp-lite' : '--bmp-full', ...(prefs.welcomed ? [] : ['--bmp-welcome'])],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -190,11 +197,31 @@ function registerIpc() {
   handle('system:relaunchAdmin', async () => {
     if (isLinux) throw new Error('Sous Linux, chaque action système demande votre mot de passe.');
     const { runPS } = require('./services/ps');
-    const args = process.defaultApp ? [path.resolve(process.argv[1] || '.')] : [];
-    const argList = args.map((a) => `'"${a.replace(/'/g, "''")}"'`).join(',');
-    await runPS(`Start-Process -FilePath '${process.execPath.replace(/'/g, "''")}' ${argList ? '-ArgumentList ' + argList : ''} -Verb RunAs`);
+    // Release the lock first so the elevated copy does not hand over to this one and exit.
+    app.releaseSingleInstanceLock();
+    try {
+      if (prefs.adminMode === 'task' && protectedInstall() && adminTaskExists()) {
+        execFileSync('schtasks', ['/run', '/tn', ADMIN_TASK], { stdio: 'ignore', windowsHide: true, timeout: 10000 });
+      } else {
+        const { exe, args } = launchCommand();
+        const argList = [...args.map((a) => '"' + a + '"'), '--no-elevate'].map(psQuote).join(',');
+        await runPS('Start-Process -FilePath ' + psQuote(exe) + ' -ArgumentList ' + argList + ' -Verb RunAs');
+      }
+    } catch (e) {
+      app.requestSingleInstanceLock();
+      throw new Error(/annul|cancel/i.test(e.message) ? 'Autorisation administrateur refusée.' : e.message);
+    }
     quitting = true;
     app.quit();
+  });
+  handle('app:adminMode', () => ({ mode: prefs.adminMode, protectedInstall: protectedInstall(), elevated: isElevated(), task: !isLinux && adminTaskExists() }));
+  handle('app:setAdminMode', (mode) => setAdminMode(mode));
+  // Voluntary reset: default preferences, so the welcome screen shows again.
+  handle('prefs:reset', () => {
+    prefs = { ...defaultPrefs, adminMode: prefs.adminMode };
+    savePrefs(prefs);
+    applyTheme();
+    return prefs;
   });
 
   handle('clean:scan', (scene) => cleaner.scan(scene, progress('clean')));
@@ -292,6 +319,11 @@ function registerV2() {
   handle('v2:smart:scan', () => smart.scan(progress('smart')));
   handle('v2:smart:run', () => smart.run(progress('smart')));
   handle('v2:smart:cancel', () => smart.cancel());
+  const health = require('./services/v2/health');
+  handle('v2:health', () => health.check());
+  const drivers = require('./services/v2/drivers');
+  handle('v2:drivers:list', () => drivers.list());
+  handle('v2:drivers:install', async (ids) => drivers.install(ids || [], progress('drivers'), await cleaner.isAdmin().catch(() => false)));
   handle('v2:maint:list', () => maintenance.list());
   handle('v2:maint:run', (ids) => maintenance.run(ids || [], { boost }));
   handle('v2:privacy:scan', () => privacy.scan());
@@ -330,8 +362,111 @@ function registerV2() {
   handle('app:paths', () => ({ home: os.homedir(), pictures: app.getPath('pictures'), downloads: app.getPath('downloads'), root: path.parse(os.homedir()).root }));
 }
 
+// ---------- Administrator mode (Windows) ----------
+// 'off': rights are requested only by the actions that need them.
+// 'prompt': Windows asks for elevation (UAC) once at each launch.
+// 'task': the app starts elevated through a scheduled task created once with the user's consent.
+//   Offered only when the app is installed in Program Files, where only administrators can modify
+//   its files; elsewhere such a task would let any program gain administrator rights.
+const ADMIN_TASK = 'Boost My Pc (administrateur)';
+const { execFileSync } = require('child_process');
+
+function isElevated() {
+  if (isLinux) return false;
+  try { execFileSync('net', ['session'], { stdio: 'ignore', windowsHide: true, timeout: 5000 }); return true; } catch { return false; }
+}
+
+function protectedInstall() {
+  if (isLinux || !app.isPackaged) return false;
+  const exe = process.execPath.toLowerCase();
+  return [process.env.ProgramFiles, process.env['ProgramW6432']].filter(Boolean).some((p) => exe.startsWith(p.toLowerCase() + '\\'));
+}
+
+// Command line that starts this app (the packaged exe, or Electron with the app folder in development).
+function launchCommand() {
+  return { exe: process.execPath, args: process.defaultApp ? [path.resolve(process.argv[1] || '.')] : [] };
+}
+
+const psQuote = (s) => `'${String(s).replace(/'/g, "''")}'`;
+
+// Run a PowerShell script elevated: directly if already elevated, otherwise after one UAC prompt.
+async function runElevated(script) {
+  const { runPS } = require('./services/ps');
+  if (isElevated()) return runPS(script);
+  const enc = Buffer.from(script, 'utf16le').toString('base64');
+  await runPS(`$p = Start-Process -FilePath powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${enc}'; exit $p.ExitCode`, { timeout: 120000 })
+    .catch((e) => { throw new Error(/annul|cancel/i.test(e.message) ? 'Autorisation administrateur refusée.' : e.message); });
+}
+
+function adminTaskExists() {
+  try { execFileSync('schtasks', ['/query', '/tn', ADMIN_TASK], { stdio: 'ignore', windowsHide: true, timeout: 8000 }); return true; } catch { return false; }
+}
+
+async function setAdminMode(mode) {
+  if (isLinux) throw new Error('Sous Linux, chaque action système demande votre mot de passe via polkit.');
+  if (!['off', 'prompt', 'task'].includes(mode)) throw new Error('Mode inconnu.');
+  if (mode === 'task') {
+    if (!protectedInstall()) throw new Error('Ce mode nécessite une installation « pour tous les utilisateurs » (dans Program Files). Réinstallez Boost My Pc en choisissant cette option.');
+    const { exe, args } = launchCommand();
+    const user = `${process.env.USERDOMAIN || os.hostname()}\\${os.userInfo().username}`;
+    await runElevated(`
+      $a = New-ScheduledTaskAction -Execute ${psQuote(exe)}${args.length ? ` -Argument ${psQuote(args.map((x) => `"${x}"`).join(' '))}` : ''}
+      $p = New-ScheduledTaskPrincipal -UserId ${psQuote(user)} -LogonType Interactive -RunLevel Highest
+      $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances Parallel
+      Register-ScheduledTask -TaskName ${psQuote(ADMIN_TASK)} -Action $a -Principal $p -Settings $s -Force | Out-Null`);
+    if (!adminTaskExists()) throw new Error('La tâche planifiée n\'a pas pu être créée.');
+  } else if (adminTaskExists()) {
+    await runElevated(`Unregister-ScheduledTask -TaskName ${psQuote(ADMIN_TASK)} -Confirm:$false`);
+  }
+  prefs = { ...prefs, adminMode: mode };
+  savePrefs(prefs);
+  return { mode, elevated: isElevated() };
+}
+
+// Flags that must survive the relaunch through elevation (started at logon, mini panel).
+const LAUNCH_FLAGS = ['--hidden', '--mini'];
+const launchFlagsFile = () => path.join(app.getPath('userData'), 'launch-flags.json');
+
+// At launch, start an elevated copy if the user chose so. Returns true when this process should exit.
+function elevateAtLaunch() {
+  if (isLinux || process.argv.includes('--no-elevate')) return false;
+  const mode = loadPrefs().adminMode;
+  if (mode === 'off') return false;
+  // At logon the app starts hidden in the tray: no UAC prompt then, only with the silent task.
+  if (mode === 'prompt' && process.argv.includes('--hidden')) return false;
+  if (isElevated()) return false;
+  try { fs.writeFileSync(launchFlagsFile(), JSON.stringify({ flags: process.argv.filter((a) => LAUNCH_FLAGS.includes(a)), at: Date.now() })); } catch {}
+  try {
+    if (mode === 'task' && protectedInstall() && adminTaskExists()) {
+      execFileSync('schtasks', ['/run', '/tn', ADMIN_TASK], { stdio: 'ignore', windowsHide: true, timeout: 10000 });
+      return true;
+    }
+    if (mode === 'prompt' || mode === 'task') {
+      const { exe, args } = launchCommand();
+      const argList = [...args.map((a) => `"${a}"`), '--no-elevate'].map(psQuote).join(',');
+      execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Start-Process -FilePath ${psQuote(exe)} -ArgumentList ${argList} -Verb RunAs`], { stdio: 'ignore', windowsHide: true, timeout: 120000 });
+      return true;
+    }
+  } catch {
+    // Elevation refused or failed: continue without administrator rights.
+  }
+  return false;
+}
+
+// Flags passed by the non-elevated launcher (see elevateAtLaunch).
+function inheritedFlags() {
+  try {
+    const f = JSON.parse(fs.readFileSync(launchFlagsFile(), 'utf8'));
+    fs.unlinkSync(launchFlagsFile());
+    if (Date.now() - f.at < 30000) return f.flags.filter((x) => LAUNCH_FLAGS.includes(x));
+  } catch {}
+  return [];
+}
+
 // ---------- Lifecycle ----------
-if (!app.requestSingleInstanceLock()) {
+if (elevateAtLaunch()) {
+  app.exit(0);
+} else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   // `boost-my-pc --mini` toggles the mini panel, for example from a keyboard shortcut.
@@ -339,6 +474,7 @@ if (!app.requestSingleInstanceLock()) {
     if (menubar && argv.includes('--mini')) menubar.toggleMini('corner');
     else showWindow();
   });
+  process.argv.push(...inheritedFlags());
   app.whenReady().then(() => {
     if (!isLinux) app.setAppUserModelId('com.boostmypc.app');
     prefs = loadPrefs();

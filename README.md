@@ -50,12 +50,17 @@ One scan checks five areas; one click applies safe actions.
 | **Cleanup** | Cleans system and browser caches, temporary files, logs, crash reports, package caches, development caches (npm, pip, Yarn, Gradle, Cargo), and the trash. |
 | **Protection** | Runs quick, standard, or deep scans (ClamAV with heuristic scanning on Linux; Microsoft Defender on Windows); manages privacy data (history, cookies, sessions — never passwords or bookmarks); checks app permissions (Flatpak on Linux, camera/microphone/location on Windows) and firewall status. |
 | **Performance** | Runs maintenance tasks (DNS, fonts, SSD TRIM, logs, orphaned packages, and more), manages startup apps, finds resource-heavy processes, and diagnoses network issues. |
-| **Applications** | Uninstalls apps (apt, dnf, pacman, zypper, Flatpak, Snap on Linux; Windows apps and Microsoft Store apps), finds leftovers from removed apps, and checks for updates. |
+| **Applications** | Uninstalls apps (apt, dnf, pacman, zypper, Flatpak, Snap on Linux; Windows apps and Microsoft Store apps), finds leftovers from removed apps, and checks for updates, including **driver updates** from official sources only (Windows Update on Windows, fwupd/LVFS on Linux) with the current and new version of each driver and per-driver install progress. |
 | **Storage** | Finds exact duplicates, similar images (perceptual hash), large and old files, and downloads. |
 | **Disk Map** | Shows folders and files as bubbles sized by disk usage. Click a folder to zoom in, and remove items you no longer need. The scan runs in a separate process, so a slow or unresponsive folder can't block it. |
 | **Cloud Cleanup** | Finds large and old files in OneDrive, Dropbox, Google Drive, Nextcloud, and other synced folders. Includes **Free up local space** for OneDrive. |
 | **Shredder** | Permanently deletes files by overwriting them with random data (1, 3, or 7 passes). Supports drag and drop. |
+| **PC health** | In **Settings**, a score out of 100 based on real measurements: processor usage and temperature (when available), memory, storage space and disk health, battery wear, and system status, with recommendations. |
 | **Mini panel** | On Linux, click the top-bar icon to open a compact panel with system status, Boost, trash, and updates. Run `boost-my-pc --mini` to open it from a keyboard shortcut. |
+
+### Background scans
+
+Scans keep running when you open another module; a green dot on the menu icon shows which ones are running. Come back to see their progress or results. If you start a scan while another is running, Boost My Pc asks whether to stop the first one or run both.
 
 ### Card overviews and list view
 
@@ -111,7 +116,13 @@ node_modules/7zip-bin/win/x64/7za.exe x "%LOCALAPPDATA%/electron-builder/Cache/w
 
 ## Performance
 
-Boost My Pc automatically switches to lightweight mode on systems without graphics acceleration, such as virtual machines. You can change this in **Settings → Visual Effects** (Automatic, On, or Off). The app follows the system's light or dark theme.
+Boost My Pc automatically switches to lightweight mode on systems without graphics acceleration, such as virtual machines. You can change this in **Settings → Visual Effects** (Automatic, On, or Off). The app follows the system's light or dark theme. Decorative animations play when a page opens and pause while the window is in the background, so the app uses almost no processor time when idle.
+
+## Administrator rights (Windows)
+
+By default, actions that need administrator rights ask for them when you run them. In **Settings → Start as administrator**, you can choose **Ask when opening** (one Windows prompt per launch) or **Always, without asking**. The latter registers a Windows scheduled task once, with your consent, and is offered only when Boost My Pc is installed for all users in Program Files, where standard users can't modify its files.
+
+On first launch, a welcome screen presents the main features. **Settings → Reset the app** restores the default preferences and shows it again.
 
 ## Tests
 

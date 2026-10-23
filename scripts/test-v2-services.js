@@ -25,6 +25,8 @@ const t = async (name, fn, show) => {
   await t('leftovers', () => V2('leftovers').scan(), (r) => [r.length, r.slice(0, 4).map((x) => [x.name, x.size])]);
   await t('lens', () => V2('spacelens').scan(isLinux ? '/usr/share' : path.join(os.homedir(), 'Documents')), (r) => [r.dirs, r.files, r.tree.size, r.tree.children.slice(0, 3).map((c) => [c.name, c.size])]);
   await t('cloud.detect', () => V2('cloud').detect());
+  await t('health', () => V2('health').check(), (r) => [r.score, r.label, r.cpu.usage, r.memory.percent, r.volumes.length, r.disks.length, !!r.battery, r.tips.length]);
+  await t('drivers.list', () => V2('drivers').list(), (r) => [r.source, r.missing || false, r.updates.length, r.checked]);
   await t('malware.quick', () => V2('malware').quickCheck(protection), (r) => [r.threats.length, r.threats.slice(0, 3), r.note]);
   const sh = V2('shredder');
   await t('shred.forbidden', async () => {

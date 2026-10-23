@@ -121,6 +121,8 @@ const FICONS = {
   storage: '<rect x="3" y="4" width="18" height="7" rx="2.2"/><rect opacity=".7" x="3" y="13" width="18" height="7" rx="2.2"/><circle fill="#000" opacity=".25" cx="7" cy="7.5" r="1"/><circle fill="#000" opacity=".25" cx="7" cy="16.5" r="1"/>',
   apps: '<rect x="3" y="3" width="8" height="8" rx="2.4"/><rect opacity=".72" x="13" y="3" width="8" height="8" rx="2.4"/><rect opacity=".72" x="3" y="13" width="8" height="8" rx="2.4"/><rect opacity=".45" x="13" y="13" width="8" height="8" rx="2.4"/>',
   gauge: '<path d="M12 4.2a9.3 9.3 0 0 1 9.3 9.3c0 1.3-.3 2.6-.8 3.8a1.6 1.6 0 0 1-1.5 1H5a1.6 1.6 0 0 1-1.5-1 9.3 9.3 0 0 1 8.5-13.1z"/><path fill="#000" opacity=".3" d="M13.2 14.6a1.9 1.9 0 1 1-2.6-2.6l6.1-4.1z"/>',
+  battery: '<rect opacity=".55" x="2.5" y="6.5" width="17" height="11" rx="2.6"/><rect x="20" y="10" width="2" height="4" rx="1"/><rect x="4.5" y="8.5" width="9.5" height="7" rx="1.4"/>',
+  heart: '<path d="M12 20.3c-.3 0-.6-.1-.8-.3C6.4 15.8 3 12.8 3 9.1 3 6.6 5 4.6 7.4 4.6c1.8 0 3.4 1 4.6 2.6 1.2-1.6 2.8-2.6 4.6-2.6C19 4.6 21 6.6 21 9.1c0 3.7-3.4 6.7-8.2 10.9-.2.2-.5.3-.8.3z"/><path fill="none" stroke="#000" stroke-opacity=".3" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" d="M6 11.5h3l1.4-2.6 2.3 5.2 1.6-2.6H18"/>',
   mic: '<rect x="8.5" y="2.5" width="7" height="12" rx="3.5"/><path opacity=".6" d="M5.5 10.5a1 1 0 0 1 1 1 5.5 5.5 0 0 0 11 0 1 1 0 0 1 2 0 7.5 7.5 0 0 1-6.5 7.4V21h2.5a1 1 0 0 1 0 2h-7a1 1 0 0 1 0-2H11v-2.1a7.5 7.5 0 0 1-6.5-7.4 1 1 0 0 1 1-1z"/>',
 };
 // Map line-icon names to their filled versions
