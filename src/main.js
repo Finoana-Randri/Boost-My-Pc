@@ -1,5 +1,5 @@
 // Electron main process: windows, tray icon, and IPC for the Windows and Linux services.
-const { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage, dialog, net } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage, dialog, net, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -23,14 +23,14 @@ let quitting = false;
 const prefsFile = () => path.join(app.getPath('userData'), 'preferences.json');
 // Checked before Chromium creates its own files: data from an earlier session means the app was already used.
 const usedBefore = fs.existsSync(path.join(app.getPath('userData'), 'Local Storage'));
-const defaultPrefs = { theme: 'system', minimizeToTray: true, startup: false, boostDropCaches: false, alerts: true, effects: 'auto', welcomed: false, adminMode: 'off' };
+const defaultPrefs = { sounds: true, notifications: true, theme: 'system', minimizeToTray: true, startup: false, boostDropCaches: false, alerts: true, effects: 'auto', welcomed: false };
 function loadPrefs() {
   try {
     const saved = JSON.parse(fs.readFileSync(prefsFile(), 'utf8'));
     // Preferences saved by an earlier version: the app was already in use, so skip the welcome screen.
     if (!('welcomed' in saved)) saved.welcomed = true;
-    return { ...defaultPrefs, ...saved };
-  } catch { return { ...defaultPrefs, welcomed: usedBefore }; }
+    return { ...defaultPrefs, adminMode: defaultAdminMode(), ...saved };
+  } catch { return { ...defaultPrefs, adminMode: defaultAdminMode(), welcomed: usedBefore }; }
 }
 function savePrefs(p) {
   fs.mkdirSync(path.dirname(prefsFile()), { recursive: true });
@@ -63,11 +63,27 @@ function createWindow() {
     },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  // If the interface process crashes or stops responding, reload it instead of leaving a frozen window.
+  let lastReload = 0;
+  const recover = (why) => {
+    console.error(`[Boost My Pc] interface ${why}`);
+    if (Date.now() - lastReload < 15000 || win.isDestroyed()) return;
+    lastReload = Date.now();
+    win.webContents.reload();
+  };
+  win.webContents.on('render-process-gone', (_e, d) => recover(`gone: ${d.reason} (code ${d.exitCode})`));
+  win.on('unresponsive', () => recover('unresponsive'));
   win.once('ready-to-show', () => {
     const quiet = process.argv.includes('--hidden') || (menubar && process.argv.includes('--mini'));
     if (!quiet || !tray) win.show();
   });
   if (process.platform === 'win32') roundCorners(win);
+  // Taskbar icon and relaunch details from the current icon, even when Windows still
+  // groups the window with the shortcut of an older installation.
+  if (process.platform === 'win32') {
+    const ico = app.isPackaged ? process.execPath : path.join(__dirname, '..', 'build', 'icon.ico');
+    try { win.setAppDetails({ appId: 'com.boostmypc.app', appIconPath: ico, appIconIndex: 0, relaunchDisplayName: 'Boost My Pc' }); } catch {}
+  }
   win.on('close', (e) => {
     if (!quitting && prefs.minimizeToTray && tray) { e.preventDefault(); win.hide(); }
   });
@@ -97,10 +113,22 @@ function titleBarColors() {
   return { color: '#00000000', symbolColor: dark ? '#ffffff' : '#1a1a1a', height: isLinux ? 46 : 40 };
 }
 
+// Tray icon from assets/tray.png (made from icon.png by scripts/make-icons.py), with one
+// image per display scale so it stays sharp at 125 %, 150 % and 200 %.
+function trayImage(size) {
+  const src = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'tray.png'));
+  const img = nativeImage.createEmpty();
+  for (const scale of [1, 1.25, 1.5, 2]) {
+    const px = Math.round(size * scale);
+    img.addRepresentation({ scaleFactor: scale, width: px, height: px, buffer: src.resize({ width: px, height: px, quality: 'best' }).toPNG() });
+  }
+  return img;
+}
+
 function createTray() {
   if (!fs.existsSync(iconPath)) return;
   try {
-    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'tray.png')).resize({ width: isLinux ? 22 : 16, height: isLinux ? 22 : 16, quality: 'best' }));
+    tray = new Tray(trayImage(isLinux ? 22 : 16));
   } catch { tray = null; return; } // Some Linux desktops have no tray.
   tray.setToolTip('Boost My Pc');
   tray.setContextMenu(Menu.buildFromTemplate([
@@ -182,6 +210,17 @@ function handle(name, fn) {
 
 function registerIpc() {
   handle('app:caps', capabilities);
+  // System notification (Windows action center, Linux notification daemon); a click opens the result.
+  handle('app:notify', ({ title, body, route } = {}) => {
+    if (!Notification.isSupported()) return false;
+    const n = new Notification({ title: String(title || 'Boost My Pc'), body: String(body || ''), icon: iconPath, silent: true });
+    n.on('click', () => {
+      showWindow();
+      if (route) win?.webContents.send('action', `go:${route}`);
+    });
+    n.show();
+    return true;
+  });
   // Latest published version, shown in Settings > About.
   handle('app:latest', async () => {
     const res = await net.fetch('https://api.github.com/repos/Finoana-Randri/FastBoost/releases/latest', { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(8000) });
@@ -319,6 +358,9 @@ function registerV2() {
   handle('v2:smart:scan', () => smart.scan(progress('smart')));
   handle('v2:smart:run', () => smart.run(progress('smart')));
   handle('v2:smart:cancel', () => smart.cancel());
+  const diagnose = require('./services/v2/diagnose').createDiagnose({ runElevated: (script) => runElevated(script, 60 * 60000) });
+  handle('v2:diag:scan', () => diagnose.scan());
+  handle('v2:diag:fix', (ids) => diagnose.fix(ids || []));
   const health = require('./services/v2/health');
   handle('v2:health', () => health.check());
   const drivers = require('./services/v2/drivers');
@@ -390,11 +432,11 @@ function launchCommand() {
 const psQuote = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
 // Run a PowerShell script elevated: directly if already elevated, otherwise after one UAC prompt.
-async function runElevated(script) {
+async function runElevated(script, timeout = 120000) {
   const { runPS } = require('./services/ps');
-  if (isElevated()) return runPS(script);
+  if (isElevated()) return runPS(script, { timeout });
   const enc = Buffer.from(script, 'utf16le').toString('base64');
-  await runPS(`$p = Start-Process -FilePath powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${enc}'; exit $p.ExitCode`, { timeout: 120000 })
+  await runPS(`$p = Start-Process -FilePath powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${enc}'; exit $p.ExitCode`, { timeout })
     .catch((e) => { throw new Error(/annul|cancel/i.test(e.message) ? 'Autorisation administrateur refusée.' : e.message); });
 }
 
@@ -435,6 +477,8 @@ function elevateAtLaunch() {
   // At logon the app starts hidden in the tray: no UAC prompt then, only with the silent task.
   if (mode === 'prompt' && process.argv.includes('--hidden')) return false;
   if (isElevated()) return false;
+  // First launch after installation: create the silent elevation task, with one Windows prompt.
+  const setupTask = mode === 'task' && protectedInstall() && !adminTaskExists();
   try { fs.writeFileSync(launchFlagsFile(), JSON.stringify({ flags: process.argv.filter((a) => LAUNCH_FLAGS.includes(a)), at: Date.now() })); } catch {}
   try {
     if (mode === 'task' && protectedInstall() && adminTaskExists()) {
@@ -443,7 +487,7 @@ function elevateAtLaunch() {
     }
     if (mode === 'prompt' || mode === 'task') {
       const { exe, args } = launchCommand();
-      const argList = [...args.map((a) => `"${a}"`), '--no-elevate'].map(psQuote).join(',');
+      const argList = [...args.map((a) => `"${a}"`), '--no-elevate', ...(setupTask ? ['--create-admin-task'] : [])].map(psQuote).join(',');
       execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Start-Process -FilePath ${psQuote(exe)} -ArgumentList ${argList} -Verb RunAs`], { stdio: 'ignore', windowsHide: true, timeout: 120000 });
       return true;
     }
@@ -451,6 +495,12 @@ function elevateAtLaunch() {
     // Elevation refused or failed: continue without administrator rights.
   }
   return false;
+}
+
+// Installed for all users (Program Files): start as administrator by default, through the
+// scheduled task created at the first launch. Elsewhere (development, per-user copy): on demand.
+function defaultAdminMode() {
+  return protectedInstall() ? 'task' : 'off';
 }
 
 // Flags passed by the non-elevated launcher (see elevateAtLaunch).
@@ -480,10 +530,13 @@ if (elevateAtLaunch()) {
     prefs = loadPrefs();
     applyTheme();
     registerIpc();
+    // Elevated first launch: register the task so later launches start as administrator silently.
+    if (process.argv.includes('--create-admin-task') && isElevated()) setAdminMode('task').catch(() => {});
     if (isLinux) {
       // Linux: show the mini panel from the tray icon.
       menubar = createMenubar({
         iconPath,
+        trayImage,
         showMain: showWindow,
         sendToMain: (msg) => {
           if (!win) return;

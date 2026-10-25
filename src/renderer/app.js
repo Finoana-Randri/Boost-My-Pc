@@ -116,6 +116,7 @@ function go(route) {
   currentRoute = tab ? `${m}/${tab}` : m;
   document.body.dataset.mod = m;
   $$('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.page === m));
+  moveGlider(!navGlider.style.opacity);
   for (const k of Object.keys(progressHandlers)) delete progressHandlers[k];
   const token = ++pageToken;
   content.scrollTop = 0;
@@ -145,11 +146,121 @@ document.addEventListener('click', (e) => {
 $$('.nav-item').forEach((n) => {
   const ico = n.querySelector('[data-icon]');
   ico.innerHTML = micon(n.dataset.page);
+  n.title = n.textContent.trim(); // Shown when the menu is reduced to icons
   n.onclick = () => go(n.dataset.page);
 });
 
+// ===================== Motion =====================
+// Interaction-driven animations: they run when something happens and rest otherwise,
+// so the app stays idle when nobody uses it. All are skipped in lightweight mode.
+const motionOff = () => document.body.classList.contains('lite') || matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Highlight that slides between menu items instead of jumping.
+const navGlider = document.createElement('div');
+navGlider.className = 'nav-glider';
+$('#nav').prepend(navGlider);
+function moveGlider(instant = false) {
+  const a = $('.nav-item.active');
+  if (!a) return;
+  navGlider.classList.toggle('instant', instant);
+  navGlider.style.transform = `translateY(${a.offsetTop}px)`;
+  navGlider.style.height = `${a.offsetHeight}px`;
+  navGlider.style.opacity = 1;
+}
+window.addEventListener('resize', () => moveGlider(true));
+
+// Numbers count up from zero when a result appears ("4,8 Mo", "12 mises à jour"…).
+const COUNT_SELECTOR = '.big, .ov-card-title, .hx-big b, .rc-val, .sc-val';
+function countUp(el, ms = 750) {
+  if (motionOff() || el.dataset.counted) return;
+  const m = el.textContent.match(/^(\s*)(\d{1,3}(?:[\s ]\d{3})*(?:,\d+)?)(.*)$/s);
+  if (!m || el.children.length > 1) return;
+  const target = Number(m[2].replace(/[\s ]/g, '').replace(',', '.'));
+  if (!(target > 1)) return;
+  el.dataset.counted = '1';
+  const decimals = (m[2].split(',')[1] || '').length;
+  const node = [...el.childNodes].find((n) => n.nodeType === 3 && /\d/.test(n.nodeValue));
+  if (!node) return;
+  const suffix = node.nodeValue.slice(node.nodeValue.indexOf(m[2]) + m[2].length);
+  const prefix = node.nodeValue.slice(0, node.nodeValue.indexOf(m[2]));
+  const fmt = (v) => v.toLocaleString('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const t0 = performance.now();
+  const tick = (t) => {
+    const k = Math.min(1, (t - t0) / ms);
+    node.nodeValue = prefix + fmt(target * (1 - Math.pow(1 - k, 3))) + suffix;
+    if (k < 1 && el.isConnected) requestAnimationFrame(tick);
+    else node.nodeValue = prefix + m[2] + suffix;
+  };
+  requestAnimationFrame(tick);
+}
+function countUpIn(root = content) { $$(COUNT_SELECTOR, root).forEach((el) => countUp(el)); }
+
+// Click ripple on buttons, tabs and menu items.
+document.addEventListener('pointerdown', (e) => {
+  const b = e.target.closest('.btn, .btn-main, .nav-item, .tab, .sc-link, .wl-next');
+  if (!b || b.disabled || motionOff()) return;
+  const r = b.getBoundingClientRect();
+  const s = Math.max(r.width, r.height) * 2.2;
+  const w = document.createElement('span');
+  w.className = 'ripple';
+  w.style.cssText = `width:${s}px;height:${s}px;left:${e.clientX - r.left - s / 2}px;top:${e.clientY - r.top - s / 2}px`;
+  b.appendChild(w);
+  setTimeout(() => w.remove(), 650);
+});
+
+// Soft light that follows the cursor over cards.
+let spotRaf = 0;
+document.addEventListener('pointermove', (e) => {
+  if (spotRaf || motionOff()) return;
+  spotRaf = requestAnimationFrame(() => {
+    spotRaf = 0;
+    const c = e.target.closest?.('.ov-card, .sc-tile, .hx-card, .feature, .pick-card, .result-card, .wl-points li');
+    if (!c) return;
+    const r = c.getBoundingClientRect();
+    c.style.setProperty('--mx', `${e.clientX - r.left}px`);
+    c.style.setProperty('--my', `${e.clientY - r.top}px`);
+  });
+});
+
+// Called after each page is drawn.
+// Home screens animate while someone is looking: on opening and while the mouse moves,
+// then rest after a few seconds so the app stays idle.
+let liveTimer = 0;
+function wakeIntro() {
+  const el = $('.intro.ms');
+  if (!el || motionOff()) return;
+  el.classList.add('live');
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => el.classList.remove('live'), 10000);
+}
+let wakeAt = 0;
+content.addEventListener('pointermove', () => { if (Date.now() - wakeAt > 500) { wakeAt = Date.now(); wakeIntro(); } });
+
+function pageMotion(root) {
+  wakeIntro();
+  countUpIn(root);
+  const done = $('.done-hero', root);
+  if (done) setTimeout(() => done.isConnected && celebrate(done), 380);
+}
+
 // ===================== Shared components =====================
-function page(html) { content.innerHTML = `<div class="page">${html}</div>`; return $('.page'); }
+function page(html) {
+  content.innerHTML = `<div class="page">${html}</div>`;
+  const el = $('.page');
+  // Detail views: the header (back button, title, tabs) stays put and only what follows
+  // scrolls, under a soft fade instead of a cut line.
+  const head = el.querySelector(':scope > .dhead');
+  content.classList.toggle('split', !!head);
+  if (head) {
+    const body = document.createElement('div');
+    body.className = 'dbody';
+    while (head.nextSibling) body.appendChild(head.nextSibling);
+    el.appendChild(body);
+    el.classList.add('split');
+  }
+  pageMotion(el);
+  return el;
+}
 
 function header(mod, sub) {
   return `<h1>${esc(MODULES[mod].title)}</h1>${sub ? `<p class="lead">${sub}</p>` : ''}`;
@@ -160,14 +271,43 @@ function tabs(mod, list, active) {
 }
 
 // Module home screen: icon, description, features, and action button.
+// Group shown above the module title.
+const MODULE_GROUP = {
+  smart: 'Analyse complète', cleanup: 'Nettoyage', protection: 'Protection', performance: 'Vitesse',
+  applications: 'Applications', clutter: 'Fichiers', lens: 'Fichiers', cloud: 'Fichiers', shredder: 'Fichiers',
+};
+
+// Date of the last finished scan per module, kept on this computer.
+function lastScanText(mod) {
+  let t = 0;
+  try { t = Number(localStorage.getItem(`lastScan:${mod}`)) || 0; } catch {}
+  if (!t) return 'Jamais analysé';
+  const min = Math.round((Date.now() - t) / 60000);
+  if (min < 1) return 'Analysé à l\'instant';
+  if (min < 60) return `Analysé il y a ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `Analysé il y a ${h} h`;
+  return `Analysé il y a ${plural(Math.round(h / 24), 'jour', 'jours')}`;
+}
+
+// Module home screen: illustration on the left (module icon with its features in orbit),
+// text and features on the right, and the round scan button below.
 function intro(mod, { title, lead, features = [], button = 'Analyser', extra = '' }) {
-  return `<div class="intro">
-    <div class="hero-icon">${micon(mod)}</div>
+  const sats = features.slice(0, 6);
+  return `<div class="intro ms">
+    <div class="ms-stage" aria-hidden="true">
+      <div class="ms-glow"></div>
+      <div class="ms-wave"></div><div class="ms-wave w2"></div>
+      <div class="ms-orbit">${sats.map(([ic], i) => `<div class="ms-sat" style="--a:${(360 / sats.length) * i - 90}deg;--d:${0.3 + i * 0.07}s"><span>${ficon(ic)}</span></div>`).join('')}</div>
+      <div class="hero-icon ms-icon">${micon(mod)}</div>
+    </div>
+    <span class="ms-eyebrow">${esc(MODULE_GROUP[mod] || '')}</span>
     <h1>${esc(title || MODULES[mod].title)}</h1>
     <p class="lead">${lead}</p>
-    ${features.length ? `<div class="features">${features.map(([ic, t, s]) => `<div class="feature glass"><div class="f-ico">${ficon(ic)}</div><div><b>${esc(t)}</b><span>${esc(s)}</span></div></div>`).join('')}</div>` : ''}
-    ${extra}
+    ${features.length ? `<div class="ms-chips">${features.map(([ic, t, s], i) => `<span class="ms-chip" title="${esc(s)}" style="--d:${0.35 + i * 0.05}s">${ficon(ic)}${esc(t)}</span>`).join('')}</div>` : ''}
+    ${extra ? `<div class="ms-extra">${extra}</div>` : ''}
     <button class="scan-btn" id="scan">${esc(button)}</button>
+    <span class="ms-last">${icon('clock')} ${lastScanText(mod)}</span>
   </div>`;
 }
 
@@ -178,7 +318,7 @@ function scanning(mod, status, detail = '', { pct = null, stop = false } = {}) {
     ? `<circle cx="95" cy="95" r="${r}" stroke="url(#sg)" stroke-width="${stroke}" fill="none" stroke-linecap="round" stroke-dasharray="${c * 0.28} ${c}"/>`
     : `<circle cx="95" cy="95" r="${r}" stroke="url(#sg)" stroke-width="${stroke}" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct)}" style="transition:stroke-dashoffset .4s"/>`;
   return `<div class="scanning">
-    <div class="ring-big ${pct == null ? 'spin' : ''}"><svg width="${size}" height="${size}"><defs><linearGradient id="sg"><stop offset="0" stop-color="var(--a1)"/><stop offset="1" stop-color="var(--a2)"/></linearGradient></defs>
+    <div class="ring-big ${pct == null ? 'spin' : ''}"><div class="scan-halo"></div><div class="scan-orbit"><i></i><i></i><i></i></div><svg width="${size}" height="${size}"><defs><linearGradient id="sg"><stop offset="0" stop-color="var(--a1)"/><stop offset="1" stop-color="var(--a2)"/></linearGradient></defs>
       <circle cx="95" cy="95" r="${r}" stroke="var(--track)" stroke-width="${stroke}" fill="none"/>${arc}</svg>
       <div class="ring-center">${micon(mod)}</div></div>
     <div class="scan-status" id="scan-status">${esc(status)}</div>
@@ -194,7 +334,7 @@ function setScan(status, detail) {
 
 function doneView(mod, title, sub, again) {
   return `<div class="intro">
-    <div class="hero-icon">${icon('check')}</div>
+    <div class="hero-icon done-hero"><svg class="done-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></div>
     <h1>${esc(title)}</h1><p class="lead">${esc(sub)}</p>
     <button class="btn" data-go="${again}">${icon('refresh')} Nouvelle analyse</button>
   </div>`;
@@ -267,9 +407,45 @@ async function startJob(key, { label, stop, auto = false, keepPartial = false },
       finishJob(job);
       // The user is elsewhere: let them know the result is ready.
       if (r != null && currentRoute.split('/')[0] !== key.split('/')[0]) toast(`${label} : terminée. Le résultat vous attend dans « ${MODULES[key.split('/')[0]].title} ».`);
+      if (r != null) jobFinished(job);
       return r;
     });
   return job;
+}
+
+// ---------- Sound and system notifications ----------
+let soundPrefs = { sounds: true, notifications: true };
+pcm.prefs.get().then((p) => { soundPrefs = { sounds: p.sounds !== false, notifications: p.notifications !== false }; }).catch(() => {});
+let audioCtx = null;
+
+// Short two-note chime synthesized on the fly (no audio file).
+function chime(kind = 'done') {
+  if (!soundPrefs.sounds) return;
+  try {
+    audioCtx ||= new AudioContext();
+    const t = audioCtx.currentTime + 0.02;
+    const notes = kind === 'warn' ? [[659.3, 0], [523.3, 0.13]] : [[783.99, 0], [1174.66, 0.11]];
+    for (const [freq, at] of notes) {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0, t + at);
+      g.gain.linearRampToValueAtTime(0.12, t + at + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.55);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(t + at);
+      o.stop(t + at + 0.6);
+    }
+  } catch {}
+}
+
+// A scan or action finished: chime, and a system notification when the window is not in front.
+function jobFinished(job) {
+  try { localStorage.setItem(`lastScan:${job.key.split('/')[0]}`, String(Date.now())); } catch {}
+  chime();
+  if (!soundPrefs.notifications || (document.hasFocus() && !document.hidden)) return;
+  const mod = job.key.split('/')[0];
+  pcm.notify({ title: `${job.label} : terminée`, body: `Le résultat vous attend dans « ${MODULES[mod].title} ».`, route: job.key }).catch(() => {});
 }
 
 function finishJob(job) {
@@ -351,11 +527,11 @@ async function loadThumbs(token, root = content) {
 function detailHead(mod, list, active, sub) {
   const title = (list.find(([id]) => id === active) || [])[1] || MODULES[mod].title;
   const cards = document.body.classList.contains('view-cards');
-  return `<div class="sub-head"><button class="back-pill" data-go="${mod}">${icon('back')} Vue d'ensemble</button><span class="ov-mod">${esc(MODULES[mod].title)}</span>
+  return `<div class="dhead"><div class="sub-head"><button class="back-pill" data-go="${mod}">${icon('back')} Vue d'ensemble</button><span class="ov-mod">${esc(MODULES[mod].title)}</span>
       <div class="view-toggle glass" role="group" aria-label="Affichage">
         <button class="${cards ? '' : 'active'}" data-view="list" title="Afficher en liste">${icon('viewList')}</button>
         <button class="${cards ? 'active' : ''}" data-view="cards" title="Afficher en cartes">${icon('viewCards')}</button></div></div>
-    <h1>${esc(title)}</h1>${tabs(mod, list, active)}${sub ? `<p class="lead">${sub}</p>` : ''}`;
+    <h1>${esc(title)}</h1>${tabs(mod, list, active)}</div>${sub ? `<p class="lead">${sub}</p>` : ''}`;
 }
 
 // Select files with checkboxes, then move them to the trash.
@@ -478,7 +654,10 @@ function smartSet(id, state, val, sub = '') {
   const t = $(`.sc-tile[data-id="${id}"]`);
   if (t) {
     t.dataset.state = state;
-    t.querySelector('.sc-val').innerHTML = val;
+    const v = t.querySelector('.sc-val');
+    v.innerHTML = val;
+    delete v.dataset.counted;
+    if (['ok', 'warn', 'bad', 'done'].includes(state)) countUp(v);
     t.querySelector('.sc-sub').innerHTML = sub;
     t.querySelector('.sc-link').classList.toggle('hidden', !['ok', 'warn', 'bad', 'done'].includes(state));
   }
@@ -1053,7 +1232,8 @@ function maintenanceDone(res, tasks, top) {
 async function perfMaintenance(token, top) {
   const mj = JOBS['performance/maintenance'];
   if (mj) return showJob(token, 'performance/maintenance', { mod: 'performance', top }, (res) => maintenanceDone(res, mj.tasks || [], top));
-  page(`${top}<div id="mt"><div class="loading"><span class="spinner"></span></div></div>`);
+  page(`${top}<div id="diag"></div><h2 class="mt-title">Tâches de maintenance</h2><div id="mt"><div class="loading"><span class="spinner"></span></div></div>`);
+  diagSection(token);
   const tasks = overviewCache.performance?.tasks || await safe(() => pcm.v2.maintList(), 'Maintenance');
   if (!tasks || !alive(token)) return;
   $('#mt').innerHTML = `<div class="cards c3">${tasks.map((t) => `<label class="pick-card glass">
@@ -1068,6 +1248,74 @@ async function perfMaintenance(token, top) {
   $('#mt').addEventListener('change', upd);
   upd();
   $('#mt-run').onclick = () => runMaintenance(token, $$('#mt input:checked').map((c) => c.dataset.id), tasks, top);
+}
+
+// ---------- System diagnostic ----------
+// Detects common system problems and fixes them (Windows: services, disk, firewall,
+// Defender, network, clock, system files; Linux: failed services, packages, journal, clock, DNS).
+let diagResult = null;
+const DIAG_ICONS = { services: 'process', units: 'process', disk: 'storage', space: 'storage', readonly: 'storage', firewall: 'shield', defender: 'shield',
+  dns: 'wifi', time: 'clock', sysfiles: 'file', temp: 'file', reboot: 'refresh', events: 'warn', packages: 'box', journal: 'file' };
+
+function diagSection(token) {
+  const box = $('#diag');
+  if (!box) return;
+  const job = JOBS['performance/diagnose'];
+  if (job) {
+    box.innerHTML = `<div class="card glass diag-head busy"><span class="diag-orb"><span class="spinner"></span></span><div class="diag-txt"><b>${esc(job.status)}</b><span>${esc(job.detail || 'Services, disque, réseau, horloge et protection')}</span></div></div>`;
+    job.promise.then(() => alive(token) && diagSection(token));
+    return;
+  }
+  if (!diagResult) {
+    box.innerHTML = `<div class="card glass diag-head"><span class="diag-orb">${ficon('wrench')}</span>
+      <div class="diag-txt"><b>Diagnostic du système</b><span>Recherche les problèmes de ${IS_LINUX ? 'services, paquets, disque, horloge et réseau' : 'services, disque, pare-feu, Defender, réseau, horloge et fichiers système'}, puis les corrige.</span></div>
+      <button class="btn primary" id="diag-go">${icon('search')} Rechercher les problèmes</button></div>`;
+    $('#diag-go').onclick = () => runDiag(token);
+    return;
+  }
+  const checks = diagResult.checks;
+  const problems = checks.filter((c) => c.status === 'bad' || c.status === 'warn');
+  const fixable = problems.filter((c) => c.fix && !c.fix.long);
+  const order = { bad: 0, warn: 1, info: 2, ok: 3 };
+  const rows = [...checks].sort((a, b) => order[a.status] - order[b.status]);
+  box.innerHTML = `<div class="card glass diag-head ${problems.length ? 'warn' : 'ok'}">
+      <span class="diag-orb">${icon(problems.length ? 'warn' : 'check')}</span>
+      <div class="diag-txt"><b>${problems.length ? plural(problems.length, 'problème détecté', 'problèmes détectés') : 'Aucun problème détecté'}</b>
+        <span>${plural(checks.length, 'point vérifié', 'points vérifiés')}${fixable.length ? ` · ${plural(fixable.length, 'correction automatique possible', 'corrections automatiques possibles')}` : ''}</span></div>
+      ${fixable.length ? `<button class="btn primary" id="diag-all">${icon('wrench')} Tout corriger</button>` : ''}
+      <button class="btn" id="diag-again">${icon('refresh')} Relancer</button></div>
+    <div class="list glass diag-list">${rows.map((c) => `<div class="row diag-row ${c.status}">
+      <span class="diag-st">${icon(c.status === 'ok' ? 'check' : c.status === 'info' ? 'info' : 'warn')}</span>
+      <div class="r-ico tint">${ficon(DIAG_ICONS[c.id] || 'wrench')}</div>
+      <div class="r-main"><div class="r-title">${esc(c.title)}</div><div class="r-sub" title="${esc(c.detail)}">${esc(c.detail)}</div></div>
+      ${c.fix && c.status !== 'ok' ? `<button class="btn ${c.status === 'info' ? '' : 'primary'}" data-fix="${c.id}">${esc(c.fix.label)}${c.fix.admin ? ` ${icon('admin')}` : ''}</button>`
+        : c.route ? `<button class="btn" data-go="${c.route.go}">${esc(c.route.label)}</button>` : ''}</div>`).join('')}</div>`;
+  $('#diag-again').onclick = () => runDiag(token);
+  $('#diag-all') && ($('#diag-all').onclick = () => fixDiag(token, fixable.map((c) => c.id)));
+  $$('[data-fix]', box).forEach((b) => (b.onclick = () => fixDiag(token, [b.dataset.fix])));
+}
+
+async function runDiag(token) {
+  const job = await startJob('performance/diagnose', { label: 'Diagnostic du système' }, async (j) => {
+    j.update('Diagnostic du système…', IS_LINUX ? 'Services, paquets, disque, horloge et réseau' : 'Services, disque, pare-feu, réseau, horloge');
+    return (diagResult = await pcm.v2.diagScan());
+  });
+  if (job && alive(token)) diagSection(token);
+}
+
+async function fixDiag(token, ids) {
+  const checks = diagResult.checks.filter((c) => ids.includes(c.id));
+  const long = checks.some((c) => c.fix?.long);
+  const what = checks.map((c) => `• ${c.title} : ${c.fix.label.toLowerCase()}`).join('\n');
+  const how = IS_LINUX ? 'Votre mot de passe sera demandé une fois.' : 'Windows demandera une autorisation administrateur une fois.';
+  if (!(await confirmBox(ids.length > 1 ? 'Corriger ces problèmes ?' : 'Corriger ce problème ?', `${what}\n\n${how}${long ? '\nCette réparation peut prendre de 10 à 30 minutes.' : ''}`, 'Corriger'))) return;
+  const job = await startJob('performance/diagnose', { label: 'Réparation du système' }, async (j) => {
+    j.update('Réparation en cours…', checks.map((c) => c.title).join(', '));
+    await pcm.v2.diagFix(ids);
+    j.update('Nouvelle vérification…', '');
+    return (diagResult = await pcm.v2.diagScan());
+  });
+  if (job && alive(token)) diagSection(token);
 }
 
 async function perfStartup(token, top) {
@@ -1936,9 +2184,9 @@ const TOOLS = [
 
 PAGES.tools = async (token) => {
   page(`${header('tools', 'Vos outils système, rassemblés au même endroit.')}
-    <div class="cards c3" id="live"></div>
+    <div class="cards c3 tools-live" id="live"></div>
     <h2>Raccourcis</h2>
-    <div class="cards c3">${TOOLS.filter(([id]) => CAPS.tools.includes(id)).map(([id, ic, t, s]) => `<button class="row glass" style="border-radius:18px;cursor:pointer;text-align:left" data-tool="${id}">
+    <div class="cards c3 tools-grid">${TOOLS.filter(([id]) => CAPS.tools.includes(id)).map(([id, ic, t, s]) => `<button class="row glass" style="border-radius:18px;cursor:pointer;text-align:left" data-tool="${id}" title="${esc(t)} : ${esc(s)}">
       <div class="r-ico tint">${ficon(ic)}</div><div class="r-main"><div class="r-title">${esc(t)}</div><div class="r-sub">${esc(s)}</div></div></button>`).join('')}</div>`);
   // The cards are drawn once; each refresh only changes their values, so nothing flickers.
   $('#live').innerHTML = `
@@ -2027,7 +2275,7 @@ function welcomeVisual(i) {
     return `<div class="wv wv-orbit" data-v="0">
       <div class="wv-halo"></div><div class="wv-ring r1"></div><div class="wv-ring r2"></div>
       <div class="wv-spin">${WELCOME_ORBIT.map((m, k) => `<div class="wv-planet" style="--a:${k * 60}deg"><div class="wv-moon g-${m}">${micon(m)}</div></div>`).join('')}</div>
-      <img class="wv-logo" src="../../assets/icon.png" alt=""/></div>`;
+      <img class="wv-logo" src="../../assets/icon-256.png" alt=""/></div>`;
   }
   if (i === 1) {
     return `<div class="wv wv-bento" data-v="1">${['smart', 'cleanup', 'protection', 'performance', 'applications', 'clutter', 'lens', 'shredder'].map((m, k) => `
@@ -2318,9 +2566,11 @@ PAGES.settings = async (token, tab = 'health') => {
   const row = (ic, title, sub, ctrl) => `<div class="row"><div class="r-ico tint">${ficon(ic)}</div><div class="r-main"><div class="r-title">${title}</div><div class="r-sub" style="white-space:normal">${sub}</div></div>${ctrl}</div>`;
   const sw = (id, on) => `<label class="switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}/><span></span></label>`;
   page(`${top}
-    <div class="list glass">
+    <div class="list glass prefs-grid">
       ${row('image', 'Thème', 'Apparence de l\'application', '<select id="s-theme"><option value="system">Système</option><option value="dark">Sombre</option><option value="light">Clair</option></select>')}
       ${row('sparkle', 'Effets visuels', 'Verre dépoli et animations. « Automatique » les désactive si la carte graphique n\'est pas accélérée.', '<select id="s-fx"><option value="auto">Automatique</option><option value="on">Activés</option><option value="off">Désactivés</option></select>')}
+      ${row('bell', 'Son de fin', 'Petit son quand une analyse ou une action se termine', sw('s-sounds', p.sounds !== false))}
+      ${row('bell', 'Notifications système', 'Prévient quand une analyse se termine alors que Boost My Pc est en arrière-plan', sw('s-notif', p.notifications !== false))}
       ${row('power', 'Lancer à l\'ouverture de session', 'Boost My Pc démarre réduit dans la zone de notification', sw('s-startup', p.startup))}
       ${row('apps', 'Réduire dans la zone de notification', 'La fermeture de la fenêtre laisse l\'application active', sw('s-tray', p.minimizeToTray))}
       ${IS_LINUX ? `
@@ -2328,9 +2578,9 @@ PAGES.settings = async (token, tab = 'health') => {
       ${row('apps', 'Mini-panneau', 'Cliquez sur l\'icône de la barre supérieure, ou associez un raccourci clavier à <b>boost-my-pc --mini</b>', '')}
       ${row('memory', 'Boost avancé', 'Vide aussi le cache de pages du noyau (mot de passe à chaque Boost)', sw('s-drop', p.boostDropCaches))}
       ${row('admin', 'Droits administrateur', 'Les actions système demandent votre mot de passe via polkit', `<span class="pill ${admin ? 'ok' : 'info'}">${admin ? 'root' : 'À la demande'}</span>`)}`
-      : `${row('admin', 'Mode administrateur', admin ? 'Boost My Pc s\'exécute avec les droits administrateur' : 'Nécessaire pour certaines tâches système', admin ? '<span class="pill ok">Actif</span>' : '<button class="btn" id="s-admin">Redémarrer en administrateur</button>')}
+      : `${row('admin', 'Mode administrateur', admin ? 'Boost My Pc s\'exécute avec les droits administrateur' : 'Nécessaire pour certaines tâches système', admin ? '<span class="pill ok">Actif</span>' : '<button class="btn" id="s-admin" title="Redémarrer Boost My Pc avec les droits administrateur">Relancer</button>')}
       ${row('shield', 'Démarrer en administrateur', '<span id="s-adm-sub">Évite de redemander l\'autorisation pendant l\'utilisation.</span>', `<select id="s-adm">
-        <option value="off">Non, à la demande</option><option value="prompt">Oui, demander à l'ouverture</option><option value="task">Toujours, sans demande</option></select>`)}`}
+        <option value="off">À la demande</option><option value="prompt">À l'ouverture</option><option value="task">Toujours</option></select>`)}`}
       ${row('refresh', 'Réinitialiser l\'application', 'Rétablit les préférences par défaut et affiche à nouveau l\'écran de bienvenue', '<button class="btn" id="s-reset">Réinitialiser</button>')}
     </div>`);
   $('#s-theme').value = p.theme;
@@ -2342,6 +2592,12 @@ PAGES.settings = async (token, tab = 'health') => {
   };
   $('#s-theme').onchange = (e) => pcm.prefs.set({ theme: e.target.value });
   $('#s-startup').onchange = (e) => pcm.prefs.set({ startup: e.target.checked });
+  $('#s-sounds').onchange = (e) => { soundPrefs.sounds = e.target.checked; pcm.prefs.set({ sounds: e.target.checked }); if (e.target.checked) chime(); };
+  $('#s-notif').onchange = (e) => {
+    soundPrefs.notifications = e.target.checked;
+    pcm.prefs.set({ notifications: e.target.checked });
+    if (e.target.checked) pcm.notify({ title: 'Notifications activées', body: 'Boost My Pc vous préviendra à la fin des analyses.' }).catch(() => {});
+  };
   $('#s-tray').onchange = (e) => pcm.prefs.set({ minimizeToTray: e.target.checked });
   $('#s-alerts') && ($('#s-alerts').onchange = (e) => pcm.prefs.set({ alerts: e.target.checked }));
   $('#s-drop') && ($('#s-drop').onchange = (e) => pcm.prefs.set({ boostDropCaches: e.target.checked }));
@@ -2358,8 +2614,8 @@ PAGES.settings = async (token, tab = 'health') => {
     const task = sel.querySelector('option[value="task"]');
     task.disabled = !a.protectedInstall && a.mode !== 'task';
     $('#s-adm-sub').textContent = a.protectedInstall
-      ? '« Toujours » crée une fois une tâche planifiée Windows (une seule autorisation) : Boost My Pc démarre ensuite avec les droits administrateur sans les redemander.'
-      : '« Demander à l\'ouverture » affiche l\'autorisation Windows une fois par lancement. « Toujours, sans demande » nécessite une installation pour tous les utilisateurs (Program Files).';
+      ? '« Toujours » (par défaut) : démarre avec les droits administrateur, autorisés une seule fois.'
+      : '« À l\'ouverture » : une autorisation par lancement. « Toujours » nécessite l\'installation dans Program Files.';
     sel.onchange = async () => {
       const mode = sel.value;
       sel.disabled = true;
@@ -2373,7 +2629,7 @@ PAGES.settings = async (token, tab = 'health') => {
 };
 
 async function settingsAbout(token, top) {
-  page(`${top}<div class="card glass about"><img src="../../assets/icon.png" alt=""/><div><b>Boost My Pc</b><span>Version ${esc(CAPS.version || '')}</span></div><span id="s-latest"></span></div>
+  page(`${top}<div class="card glass about"><img src="../../assets/icon-256.png" alt=""/><div><b>Boost My Pc</b><span>Version ${esc(CAPS.version || '')}</span></div><span id="s-latest"></span></div>
     <h2>Informations système</h2><div class="card glass" id="s-info"><div class="loading"><span class="spinner"></span></div></div>`);
   pcm.latest().then((l) => {
     const el = $('#s-latest');

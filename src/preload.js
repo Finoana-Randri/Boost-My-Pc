@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('pcm', {
   firstRun: process.argv.includes('--bmp-welcome'),
   caps: () => call('app:caps'),
   latest: () => call('app:latest'),
+  notify: (n) => call('app:notify', n),
   adminMode: () => call('app:adminMode'),
   setAdminMode: (mode) => call('app:setAdminMode', mode),
   system: {
@@ -71,6 +72,8 @@ contextBridge.exposeInMainWorld('pcm', {
     smartRun: () => call('v2:smart:run'),
     smartCancel: () => call('v2:smart:cancel'),
     health: () => call('v2:health'),
+    diagScan: () => call('v2:diag:scan'),
+    diagFix: (ids) => call('v2:diag:fix', ids),
     drivers: () => call('v2:drivers:list'),
     driversInstall: (ids) => call('v2:drivers:install', ids),
     maintList: () => call('v2:maint:list'),

@@ -36,7 +36,7 @@ One scan checks five areas; one click applies safe actions.
 |---|---|
 | ![Disk Map](docs/screenshots/v2/09-carte-du-disque.png) | ![Cloud Cleanup](docs/screenshots/v2/10-nettoyage-cloud.png) |
 
-| Shredder | Tools | Settings |
+| Shredder | Tools | PC health (Settings) |
 |---|---|---|
 | ![Shredder](docs/screenshots/v2/11-broyeur.png) | ![Tools](docs/screenshots/v2/12-outils.png) | ![Settings](docs/screenshots/v2/13-parametres.png) |
 
@@ -49,7 +49,7 @@ One scan checks five areas; one click applies safe actions.
 | **Smart Care** | Checks for junk files, threats, maintenance tasks, updates, and large forgotten files in one scan. Results appear as tiles around a round button that shows progress; **Run** applies safe actions, and **Stop** ends the scan. |
 | **Cleanup** | Cleans system and browser caches, temporary files, logs, crash reports, package caches, development caches (npm, pip, Yarn, Gradle, Cargo), and the trash. |
 | **Protection** | Runs quick, standard, or deep scans (ClamAV with heuristic scanning on Linux; Microsoft Defender on Windows); manages privacy data (history, cookies, sessions — never passwords or bookmarks); checks app permissions (Flatpak on Linux, camera/microphone/location on Windows) and firewall status. |
-| **Performance** | Runs maintenance tasks (DNS, fonts, SSD TRIM, logs, orphaned packages, and more), manages startup apps, finds resource-heavy processes, and diagnoses network issues. |
+| **Performance** | Diagnoses and fixes system problems (Windows: essential services, disk errors, firewall, Defender, DNS, clock, system files with DISM/SFC; Linux: failed services, broken packages, journal size, clock, DNS) with one authorization for all fixes. Runs maintenance tasks (DNS, fonts, SSD TRIM, logs, orphaned packages, and more), manages startup apps, finds resource-heavy processes, and diagnoses network issues. |
 | **Applications** | Uninstalls apps (apt, dnf, pacman, zypper, Flatpak, Snap on Linux; Windows apps and Microsoft Store apps), finds leftovers from removed apps, and checks for updates, including **driver updates** from official sources only (Windows Update on Windows, fwupd/LVFS on Linux) with the current and new version of each driver and per-driver install progress. |
 | **Storage** | Finds exact duplicates, similar images (perceptual hash), large and old files, and downloads. |
 | **Disk Map** | Shows folders and files as bubbles sized by disk usage. Click a folder to zoom in, and remove items you no longer need. The scan runs in a separate process, so a slow or unresponsive folder can't block it. |
@@ -76,21 +76,21 @@ Download the installers from the [latest release](https://github.com/Finoana-Ran
 
 ```bash
 # Debian / Ubuntu / Mint / Pop!_OS
-sudo apt install ./Boost-My-Pc-2.0.3.deb
+sudo apt install ./Boost-My-Pc-2.1.0.deb
 
 # All distributions
-chmod +x Boost-My-Pc-2.0.3.AppImage && ./Boost-My-Pc-2.0.3.AppImage
+chmod +x Boost-My-Pc-2.1.0.AppImage && ./Boost-My-Pc-2.1.0.AppImage
 ```
 
 On standard GNOME desktops (Fedora, Debian), install the *AppIndicator and KStatusNotifierItem Support* extension to show the top-bar icon.
 
 ### Windows
 
-1. Download `Boost-My-Pc-Setup-2.0.3.exe` from the latest release.
-2. Run it. The setup wizard (in French) lets you choose the install folder, then creates **Boost My Pc** shortcuts on the desktop and in the Start menu, and launches the app.
+1. Download `Boost-My-Pc-Setup-2.1.0.exe` from the latest release.
+2. Run it and accept the Windows prompt. The setup wizard (in French) lets you choose the install folder, then creates **Boost My Pc** shortcuts on the desktop and in the Start menu, and launches the app.
 3. The installer is not code-signed yet, so Windows SmartScreen may show *Windows protected your PC*. Select **More info**, then **Run anyway**.
 
-The app installs for the current user (no administrator rights needed). Some system tasks, such as SSD TRIM, ask for administrator rights when you run them. To uninstall, open **Settings → Apps → Installed apps → Boost My Pc → Uninstall**; your preferences are kept unless you delete `%APPDATA%\Boost My Pc`.
+The installer asks for administrator rights once and installs Boost My Pc for all users in Program Files. To uninstall, open **Settings → Apps → Installed apps → Boost My Pc → Uninstall**; your preferences are kept unless you delete `%APPDATA%\Boost My Pc`.
 
 ### From source
 
@@ -116,11 +116,11 @@ node_modules/7zip-bin/win/x64/7za.exe x "%LOCALAPPDATA%/electron-builder/Cache/w
 
 ## Performance
 
-Boost My Pc automatically switches to lightweight mode on systems without graphics acceleration, such as virtual machines. You can change this in **Settings → Visual Effects** (Automatic, On, or Off). The app follows the system's light or dark theme. Decorative animations play when a page opens and pause while the window is in the background, so the app uses almost no processor time when idle.
+Boost My Pc automatically switches to lightweight mode on systems without graphics acceleration, such as virtual machines. You can change this in **Settings → Visual Effects** (Automatic, On, or Off). The app follows the system's light or dark theme. Small windows and screens are supported down to 880 × 530 without scrollbars (the menu collapses to icons). A short sound and a system notification signal the end of a scan running in the background; both can be turned off in **Settings → Preferences**. Decorative animations play when a page opens and pause while the window is in the background, so the app uses almost no processor time when idle.
 
 ## Administrator rights (Windows)
 
-By default, actions that need administrator rights ask for them when you run them. In **Settings → Start as administrator**, you can choose **Ask when opening** (one Windows prompt per launch) or **Always, without asking**. The latter registers a Windows scheduled task once, with your consent, and is offered only when Boost My Pc is installed for all users in Program Files, where standard users can't modify its files.
+The installer installs Boost My Pc for all users in Program Files, and the app **always starts as administrator**: at the first launch Windows asks once for permission and Boost My Pc registers a scheduled task, so later launches start elevated without a prompt. This is only done in Program Files, where standard users can't modify the app's files. You can change it in **Settings → Preferences → Start as administrator** (on demand, at each launch, or always).
 
 On first launch, a welcome screen presents the main features. **Settings → Reset the app** restores the default preferences and shows it again.
 

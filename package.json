@@ -1,7 +1,7 @@
 {
   "name": "boost-my-pc",
   "productName": "Boost My Pc",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "description": "Boost My Pc 2: clean, protect, and speed up your PC on Linux and Windows",
   "main": "src/main.js",
   "homepage": "https://github.com/Finoana-Randri/FastBoost",
@@ -35,6 +35,7 @@
       "src/**/*",
       "assets/icon.png",
       "assets/tray.png",
+      "assets/icon-256.png",
       "package.json"
     ],
     "directories": {
@@ -56,7 +57,7 @@
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": false,
+      "perMachine": true,
       "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "build/icon.ico",

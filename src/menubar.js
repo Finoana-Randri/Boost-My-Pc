@@ -1,6 +1,6 @@
 // Tray panel: click the icon to see system status and quick actions.
 // The tooltip shows live status and alerts.
-const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, screen, Notification, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeTheme, screen, Notification, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -16,7 +16,7 @@ function fmtBytes(b) {
   return `${b.toFixed(b >= 100 ? 0 : 1).replace('.', ',')} ${u[i]}`;
 }
 
-function createMenubar({ iconPath, showMain, sendToMain, services, getPrefs, onQuit }) {
+function createMenubar({ iconPath, trayImage, showMain, sendToMain, services, getPrefs, onQuit }) {
   const { system, cleaner, protection, platform } = services;
   let tray = null;
   let mini = null;
@@ -102,7 +102,7 @@ function createMenubar({ iconPath, showMain, sendToMain, services, getPrefs, onQ
   function createTray() {
     if (!fs.existsSync(iconPath)) return null;
     try {
-      tray = new Tray(nativeImage.createFromPath(path.join(path.dirname(iconPath), 'tray.png')).resize({ width: 22, height: 22, quality: 'best' }));
+      tray = new Tray(trayImage(22));
     } catch { tray = null; return null; } // No tray on this desktop.
     tray.setToolTip('Boost My Pc');
     // Some Linux desktops send only a menu event, so make the first item open the panel.
