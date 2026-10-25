@@ -16,7 +16,7 @@ function fmtBytes(b) {
   return `${b.toFixed(b >= 100 ? 0 : 1).replace('.', ',')} ${u[i]}`;
 }
 
-function createMenubar({ iconPath, trayImage, showMain, sendToMain, services, getPrefs, onQuit }) {
+function createMenubar({ iconPath, trayImage, T = (x) => x, showMain, sendToMain, services, getPrefs, onQuit }) {
   const { system, cleaner, protection, platform } = services;
   let tray = null;
   let mini = null;
@@ -105,19 +105,22 @@ function createMenubar({ iconPath, trayImage, showMain, sendToMain, services, ge
       tray = new Tray(trayImage(22));
     } catch { tray = null; return null; } // No tray on this desktop.
     tray.setToolTip('Boost My Pc');
-    // Some Linux desktops send only a menu event, so make the first item open the panel.
-    tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Afficher le mini-panneau', click: () => showMini('cursor') },
-      { label: 'Ouvrir Boost My Pc', click: () => showMain() },
-      { type: 'separator' },
-      { label: 'Boost', click: () => { showMini('cursor'); mini.webContents.send('mini:action', 'boost'); } },
-      { label: 'Bilan de santé', click: () => { showMain(); sendToMain('go:health'); } },
-      { label: 'Mises à jour', click: () => { showMain(); sendToMain('go:updates'); } },
-      { type: 'separator' },
-      { label: 'Quitter', click: onQuit },
-    ]));
+    setMenu();
     tray.on('click', () => toggleMini('cursor'));
     return tray;
+  }
+  // Some Linux desktops send only a menu event, so make the first item open the panel.
+  function setMenu() {
+    tray?.setContextMenu(Menu.buildFromTemplate([
+      { label: T('Afficher le mini-panneau'), click: () => showMini('cursor') },
+      { label: T('Ouvrir Boost My Pc'), click: () => showMain() },
+      { type: 'separator' },
+      { label: 'Boost', click: () => { showMini('cursor'); mini.webContents.send('mini:action', 'boost'); } },
+      { label: T('Bilan de santé'), click: () => { showMain(); sendToMain('go:health'); } },
+      { label: T('Mises à jour'), click: () => { showMain(); sendToMain('go:updates'); } },
+      { type: 'separator' },
+      { label: T('Quitter'), click: onQuit },
+    ]));
   }
 
   // ---------- Cached scan summary ----------
@@ -164,7 +167,7 @@ function createMenubar({ iconPath, trayImage, showMain, sendToMain, services, ge
     if (!getPrefs().alerts || !Notification.isSupported()) return;
     if (lastAlert[key] && Date.now() - lastAlert[key] < cooldownMs) return;
     lastAlert[key] = Date.now();
-    const n = new Notification({ title, body, icon: iconPath, silent: false });
+    const n = new Notification({ title: T(title), body: T(body), icon: iconPath, silent: false });
     n.on('click', () => showMini());
     n.show();
   }
@@ -172,7 +175,7 @@ function createMenubar({ iconPath, trayImage, showMain, sendToMain, services, ge
   async function tick() {
     const s = await system.getStats().catch(() => null);
     if (!s) return;
-    if (tray) tray.setToolTip(`Boost My Pc\nProcesseur ${s.cpu} % · Mémoire ${s.memory.percent} %\n↓ ${fmtBytes(s.net.down)}/s  ↑ ${fmtBytes(s.net.up)}/s`);
+    if (tray) tray.setToolTip(`Boost My Pc\n${T(`Processeur ${s.cpu} %`)} · ${T(`Mémoire ${s.memory.percent} %`)}\n↓ ${fmtBytes(s.net.down)}/s  ↑ ${fmtBytes(s.net.up)}/s`);
     highMem = s.memory.percent >= 90 ? highMem + 1 : 0;
     if (highMem >= 3) alert('mem', 30 * 60 * 1000, 'Mémoire presque pleine', `${s.memory.percent} % de la mémoire est utilisée. Ouvrez le mini-panneau pour libérer de la mémoire.`);
   }
@@ -203,7 +206,7 @@ function createMenubar({ iconPath, trayImage, showMain, sendToMain, services, ge
   setTimeout(slowTick, 60 * 1000);
   tick();
 
-  return { tray, showMini, hideMini, toggleMini, platform };
+  return { tray, showMini, hideMini, toggleMini, platform, setMenu, reloadMini: () => mini?.webContents.reload() };
 }
 
 module.exports = { createMenubar };

@@ -14,7 +14,7 @@ const FLOWS = {
   status: { route: 'protection/status', until: '#sec .card', timeout: 60000 },
   maintenance: { route: 'performance/maintenance', until: '#mt .pick-card', timeout: 30000 },
   startup: { route: 'performance/startup', until: '#su .pick-card, #su .empty', timeout: 30000 },
-  network: { route: 'performance/network', until: '.list .row', timeout: 90000 },
+  network: { route: 'performance/network', until: '.list .row, .net-row, .pick-card', timeout: 90000 },
   leftovers: { route: 'applications/leftovers', until: '#lo, .empty', timeout: 180000 },
   updates: { route: 'applications/updates', until: '.big', timeout: 300000 },
   lens: { reset: 'lensData = null', route: 'lens', click: '#scan', until: '.bubble', timeout: 600000 },

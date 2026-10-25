@@ -10,6 +10,7 @@ const call = async (channel, ...args) => {
 contextBridge.exposeInMainWorld('pcm', {
   platform: process.platform,
   lite: process.argv.includes('--bmp-lite'),
+  lang: ipcRenderer.sendSync('app:lang') || 'fr', // Read once per page load: a language change reloads the page
   firstRun: process.argv.includes('--bmp-welcome'),
   caps: () => call('app:caps'),
   latest: () => call('app:latest'),

@@ -39,6 +39,7 @@ function savePrefs(p) {
 let prefs = defaultPrefs;
 
 const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+const T = require('./i18n-main').makeT(() => uiLang());
 
 function createWindow() {
   win = new BrowserWindow({
@@ -102,6 +103,13 @@ function roundCorners(w) {
 $v = 2; [void][BmpDwm]::DwmSetWindowAttribute([IntPtr]${hwnd}, 33, [ref]$v, 4)`, { timeout: 20000 }).catch(() => {});
 }
 
+// Interface language: the saved choice, otherwise the system language (French, Malagasy, or English).
+function uiLang() {
+  if (['fr', 'en', 'mg'].includes(prefs.lang)) return prefs.lang;
+  const loc = (app.getLocale() || 'fr').toLowerCase();
+  return loc.startsWith('fr') ? 'fr' : loc.startsWith('mg') ? 'mg' : 'en';
+}
+
 function backgroundColor() {
   const dark = nativeTheme.shouldUseDarkColors;
   if (isLinux) return dark ? '#222226' : '#fafafb';
@@ -131,13 +139,16 @@ function createTray() {
     tray = new Tray(trayImage(isLinux ? 22 : 16));
   } catch { tray = null; return; } // Some Linux desktops have no tray.
   tray.setToolTip('Boost My Pc');
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Ouvrir Boost My Pc', click: showWindow },
+  setTrayMenu();
+  tray.on('click', showWindow);
+}
+function setTrayMenu() {
+  tray?.setContextMenu(Menu.buildFromTemplate([
+    { label: T('Ouvrir Boost My Pc'), click: showWindow },
     { label: 'Boost', click: () => { showWindow(); win.webContents.send('action', 'boost'); } },
     { type: 'separator' },
-    { label: 'Quitter', click: () => { quitting = true; app.quit(); } },
+    { label: T('Quitter'), click: () => { quitting = true; app.quit(); } },
   ]));
-  tray.on('click', showWindow);
 }
 function showWindow() { if (!win) createWindow(); win.show(); win.focus(); }
 
@@ -209,6 +220,7 @@ function handle(name, fn) {
 }
 
 function registerIpc() {
+  ipcMain.on('app:lang', (e) => { e.returnValue = uiLang(); });
   handle('app:caps', capabilities);
   // System notification (Windows action center, Linux notification daemon); a click opens the result.
   handle('app:notify', ({ title, body, route } = {}) => {
@@ -336,6 +348,7 @@ function registerIpc() {
     savePrefs(prefs);
     if ('theme' in p) applyTheme();
     if ('startup' in p) setStartup(!!p.startup);
+    if ('lang' in p) { if (menubar) { menubar.setMenu(); menubar.reloadMini?.(); } else setTrayMenu(); }
     return prefs;
   });
 }
@@ -537,6 +550,7 @@ if (elevateAtLaunch()) {
       menubar = createMenubar({
         iconPath,
         trayImage,
+        T,
         showMain: showWindow,
         sendToMain: (msg) => {
           if (!win) return;

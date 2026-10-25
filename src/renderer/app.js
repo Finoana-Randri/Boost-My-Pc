@@ -256,11 +256,30 @@ function page(html) {
     body.className = 'dbody';
     while (head.nextSibling) body.appendChild(head.nextSibling);
     el.appendChild(body);
+    const foot = document.createElement('div');
+    foot.className = 'dfoot';
+    el.appendChild(foot);
     el.classList.add('split');
   }
   pageMotion(el);
   return el;
 }
+
+// Detail views: the action bar sits under the scrolling area, so it never covers the content.
+// A hidden marker stays where the bar was drawn; when that part is redrawn, the old bar goes away.
+const barSlots = new WeakMap();
+new MutationObserver(() => {
+  const foot = content.querySelector(':scope > .page.split > .dfoot');
+  if (!foot) return;
+  for (const b of [...foot.children]) if (!barSlots.get(b)?.isConnected) b.remove();
+  for (const b of foot.parentNode.querySelectorAll('.dbody .action-bar')) {
+    const slot = document.createElement('i');
+    slot.hidden = true;
+    b.replaceWith(slot);
+    barSlots.set(b, slot);
+    foot.replaceChildren(b);
+  }
+}).observe(content, { childList: true, subtree: true });
 
 function header(mod, sub) {
   return `<h1>${esc(MODULES[mod].title)}</h1>${sub ? `<p class="lead">${sub}</p>` : ''}`;
@@ -2183,42 +2202,10 @@ const TOOLS = [
 ];
 
 PAGES.tools = async (token) => {
-  page(`${header('tools', 'Vos outils système, rassemblés au même endroit.')}
-    <div class="cards c3 tools-live" id="live"></div>
-    <h2>Raccourcis</h2>
+  page(`<div class="tools-head"><div><h1>${esc(MODULES.tools.title)}</h1><p class="lead">Vos outils système, rassemblés au même endroit.</p></div>
+      <button class="btn primary tools-boost" id="boost" title="Libère la mémoire des applications inactives">${icon('rocket')} Boost</button></div>
     <div class="cards c3 tools-grid">${TOOLS.filter(([id]) => CAPS.tools.includes(id)).map(([id, ic, t, s]) => `<button class="row glass" style="border-radius:18px;cursor:pointer;text-align:left" data-tool="${id}" title="${esc(t)} : ${esc(s)}">
       <div class="r-ico tint">${ficon(ic)}</div><div class="r-main"><div class="r-title">${esc(t)}</div><div class="r-sub">${esc(s)}</div></div></button>`).join('')}</div>`);
-  // The cards are drawn once; each refresh only changes their values, so nothing flickers.
-  $('#live').innerHTML = `
-    <div class="card glass live-card">${gauge(0)}<div><b>Processeur</b><div class="muted small" id="lv-cpu">Utilisation</div></div></div>
-    <div class="card glass live-card">${gauge(0)}<div><b>Mémoire</b><div class="muted small" id="lv-mem">–</div></div></div>
-    <div class="card glass"><b>Réseau</b><div class="muted small" style="margin-top:8px" id="lv-net">↓ – · ↑ –</div>
-      <button class="btn primary" style="margin-top:10px" id="boost">${icon('rocket')} Boost</button></div>`;
-  // Animate a gauge only when its value really changes: each transition redraws the glass behind it.
-  const setGauge = (el, pct) => {
-    if (Math.abs((el.pct ?? -10) - pct) < 2) return;
-    el.pct = pct;
-    const c = el.querySelector('circle:nth-of-type(2)');
-    c.style.transitionDuration = el.pct0 ? '0s' : '.5s';
-    el.pct0 = true;
-    c.style.strokeDashoffset = c.getTotalLength() * (1 - pct / 100);
-    el.querySelector('.g-val').textContent = `${pct}%`;
-  };
-  const [cpuG, memG] = $$('#live .gauge');
-  const setText = (id, text) => { const el = $(id); if (el && el.textContent !== text) el.textContent = text; };
-  let busy = false;
-  const refresh = async () => {
-    if (busy || document.hidden) return;
-    busy = true;
-    const s = await pcm.system.stats().catch(() => null);
-    busy = false;
-    if (!s || !alive(token)) return;
-    setGauge(cpuG, s.cpu);
-    setGauge(memG, s.memory.percent);
-    setText('#lv-cpu', s.load != null ? `Charge ${s.load.toFixed(2)}` : 'Utilisation');
-    setText('#lv-mem', `${fmtBytes(s.memory.used)} / ${fmtBytes(s.memory.total)}`);
-    setText('#lv-net', `↓ ${fmtBytes(s.net.down)}/s · ↑ ${fmtBytes(s.net.up)}/s`);
-  };
   $('#boost').onclick = async (e) => {
     const b = e.currentTarget;
     b.disabled = true;
@@ -2228,10 +2215,7 @@ PAGES.tools = async (token) => {
     if (!alive(token)) return;
     b.disabled = false;
     b.innerHTML = `${icon('rocket')} Boost`;
-    refresh();
   };
-  refresh();
-  const timer = setInterval(() => (alive(token) ? refresh() : clearInterval(timer)), 3000);
 };
 
 // ===================== Welcome screen =====================
@@ -2567,6 +2551,7 @@ PAGES.settings = async (token, tab = 'health') => {
   const sw = (id, on) => `<label class="switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}/><span></span></label>`;
   page(`${top}
     <div class="list glass prefs-grid">
+      ${row('globe', 'Langue', 'Langue de l\'interface', `<select id="s-lang" data-no-i18n>${Object.entries(i18n.LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>`)}
       ${row('image', 'Thème', 'Apparence de l\'application', '<select id="s-theme"><option value="system">Système</option><option value="dark">Sombre</option><option value="light">Clair</option></select>')}
       ${row('sparkle', 'Effets visuels', 'Verre dépoli et animations. « Automatique » les désactive si la carte graphique n\'est pas accélérée.', '<select id="s-fx"><option value="auto">Automatique</option><option value="on">Activés</option><option value="off">Désactivés</option></select>')}
       ${row('bell', 'Son de fin', 'Petit son quand une analyse ou une action se termine', sw('s-sounds', p.sounds !== false))}
@@ -2578,11 +2563,13 @@ PAGES.settings = async (token, tab = 'health') => {
       ${row('apps', 'Mini-panneau', 'Cliquez sur l\'icône de la barre supérieure, ou associez un raccourci clavier à <b>boost-my-pc --mini</b>', '')}
       ${row('memory', 'Boost avancé', 'Vide aussi le cache de pages du noyau (mot de passe à chaque Boost)', sw('s-drop', p.boostDropCaches))}
       ${row('admin', 'Droits administrateur', 'Les actions système demandent votre mot de passe via polkit', `<span class="pill ${admin ? 'ok' : 'info'}">${admin ? 'root' : 'À la demande'}</span>`)}`
-      : `${row('admin', 'Mode administrateur', admin ? 'Boost My Pc s\'exécute avec les droits administrateur' : 'Nécessaire pour certaines tâches système', admin ? '<span class="pill ok">Actif</span>' : '<button class="btn" id="s-admin" title="Redémarrer Boost My Pc avec les droits administrateur">Relancer</button>')}
+      : `${row('admin', 'Mode administrateur', admin ? 'Boost My Pc s\'exécute avec les droits administrateur' : 'Nécessaire pour certaines tâches système', admin ? '<span class="pill ok">Actif</span>' : '<button class="btn" id="s-admin" title="Redémarrer Boost My Pc avec les droits administrateur">Redémarrer</button>')}
       ${row('shield', 'Démarrer en administrateur', '<span id="s-adm-sub">Évite de redemander l\'autorisation pendant l\'utilisation.</span>', `<select id="s-adm">
         <option value="off">À la demande</option><option value="prompt">À l'ouverture</option><option value="task">Toujours</option></select>`)}`}
       ${row('refresh', 'Réinitialiser l\'application', 'Rétablit les préférences par défaut et affiche à nouveau l\'écran de bienvenue', '<button class="btn" id="s-reset">Réinitialiser</button>')}
     </div>`);
+  $('#s-lang').value = i18n.lang;
+  $('#s-lang').onchange = async (e) => { await pcm.prefs.set({ lang: e.target.value }); location.reload(); };
   $('#s-theme').value = p.theme;
   $('#s-fx').value = p.effects || 'auto';
   $('#s-fx').onchange = async (e) => {
@@ -2629,8 +2616,10 @@ PAGES.settings = async (token, tab = 'health') => {
 };
 
 async function settingsAbout(token, top) {
-  page(`${top}<div class="card glass about"><img src="../../assets/icon-256.png" alt=""/><div><b>Boost My Pc</b><span>Version ${esc(CAPS.version || '')}</span></div><span id="s-latest"></span></div>
+  page(`${top}<div class="card glass about"><img src="../../assets/icon-256.png" alt=""/><div><b>Boost My Pc</b><span>Version ${esc(CAPS.version || '')}</span>
+      <span class="about-by">Créé par <a href="https://github.com/Finoana-Randri" id="s-author">${icon('github')} Finoana-Randri</a></span></div><span id="s-latest"></span></div>
     <h2>Informations système</h2><div class="card glass" id="s-info"><div class="loading"><span class="spinner"></span></div></div>`);
+  $('#s-author').onclick = (e) => { e.preventDefault(); window.open('https://github.com/Finoana-Randri'); };
   pcm.latest().then((l) => {
     const el = $('#s-latest');
     if (!el || !l?.version) return;

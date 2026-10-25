@@ -6,7 +6,7 @@
 
 <p align="center"><b>Clean, protect, and speed up your PC — on Linux and Windows.</b></p>
 
-Boost My Pc 2 brings together more than 25 PC maintenance tools, with a distinct color for each module. Its features take inspiration from **CleanMyMac** (modules reviewed with REA; see [docs/ANALYSE-CLEANMYMAC.md](docs/ANALYSE-CLEANMYMAC.md)) and **Microsoft PC Manager** ([docs/ANALYSE-REA.md](docs/ANALYSE-REA.md)). This is an independent project: it reuses no logos, icons, or code from those applications.
+Boost My Pc 2 brings together more than 25 PC maintenance tools, with a distinct color for each module. Its features take inspiration from **CleanMyMac** and **Microsoft PC Manager**. This is an independent project: it reuses no logos, icons, or code from those applications. The interface is available in **French, English, and Malagasy**.
 
 <p align="center">
   <img src="docs/screenshots/v2/01-entretien-intelligent.png" alt="Smart Care" width="820">
@@ -40,7 +40,7 @@ One scan checks five areas; one click applies safe actions.
 |---|---|---|
 | ![Shredder](docs/screenshots/v2/11-broyeur.png) | ![Tools](docs/screenshots/v2/12-outils.png) | ![Settings](docs/screenshots/v2/13-parametres.png) |
 
-> Screenshots were captured on Debian 12 (Xvfb) with test data; the desktop panel and window controls are not shown. They show the current version; regenerate them with `scripts/docker-v2.sh` (`scripts/readme-shots.sh` names them `readme-01` to `readme-13`).
+> Screenshots were captured on Debian 12 (Xvfb) with test data and the English interface; the desktop panel and window controls are not shown. They show the current version; regenerate them with `scripts/docker-v2.sh` (`scripts/readme-shots.sh` names them `readme-01` to `readme-13`).
 
 ## Modules
 
@@ -60,13 +60,17 @@ One scan checks five areas; one click applies safe actions.
 
 ### Background scans
 
-Scans keep running when you open another module; a green dot on the menu icon shows which ones are running. Come back to see their progress or results. If you start a scan while another is running, Boost My Pc asks whether to stop the first one or run both.
+Scans keep running when you open another module; a thin ring turning around the menu icon shows which ones are running. Come back to see their progress or results. If you start a scan while another is running, Boost My Pc asks whether to stop the first one or run both.
 
 ### Card overviews and list view
 
 Protection, Performance, Applications, and Storage open on a **card overview** after their scan: a headline, one large card, and smaller cards, each with a counter and **Review** / **Delete** buttons. **Review** opens the detail view, shown as a **list by default**. Use the **List / Cards** toggle in the top-right corner of a detail view to switch layouts; your choice is remembered. Maintenance tasks, startup apps, apps, leftovers, privacy items, and permissions can all be shown either way.
 
 Nothing is deleted without confirmation. Deletions go through the trash, except when you explicitly use the Shredder. System folders are protected, and Linux system actions request your password through polkit.
+
+## Languages
+
+Choose the interface language in **Settings → Preferences → Language**: Français, English, or Malagasy. On first launch, Boost My Pc follows the system language (French or Malagasy when the system uses them, English otherwise). The menu of the notification-area icon and the alerts use the same language. Translations live in `src/renderer/i18n-dict.js`, one line per text (`French | English | Malagasy`).
 
 ## Installation
 
@@ -76,17 +80,17 @@ Download the installers from the [latest release](https://github.com/Finoana-Ran
 
 ```bash
 # Debian / Ubuntu / Mint / Pop!_OS
-sudo apt install ./Boost-My-Pc-2.1.0.deb
+sudo apt install ./Boost-My-Pc-2.2.0.deb
 
 # All distributions
-chmod +x Boost-My-Pc-2.1.0.AppImage && ./Boost-My-Pc-2.1.0.AppImage
+chmod +x Boost-My-Pc-2.2.0.AppImage && ./Boost-My-Pc-2.2.0.AppImage
 ```
 
 On standard GNOME desktops (Fedora, Debian), install the *AppIndicator and KStatusNotifierItem Support* extension to show the top-bar icon.
 
 ### Windows
 
-1. Download `Boost-My-Pc-Setup-2.1.0.exe` from the latest release.
+1. Download `Boost-My-Pc-Setup-2.2.0.exe` from the latest release.
 2. Run it and accept the Windows prompt. The setup wizard (in French) lets you choose the install folder, then creates **Boost My Pc** shortcuts on the desktop and in the Start menu, and launches the app.
 3. The installer is not code-signed yet, so Windows SmartScreen may show *Windows protected your PC*. Select **More info**, then **Run anyway**.
 
@@ -142,12 +146,13 @@ src/services/               Windows (PowerShell), Linux (src/services/linux), an
 src/services/v2/            v2 modules: Smart Care, maintenance, privacy, permissions,
                             leftovers, threats, shredder, Disk Map, similar images, cloud
 src/renderer/               App interface and mini panel
+src/renderer/i18n*.js       Interface languages (translator and dictionary)
 assets/                     App and tray icons
 build/                      Windows installer resources (icon.ico, wizard banners)
 scripts/                    Tests and Docker builds
-docs/                       REA analyses and screenshots
+docs/                       Logo and screenshots
 ```
 
 ## License
 
-MIT. Independent project, not affiliated with Microsoft or MacPaw.
+MIT. Created by [Finoana-Randri](https://github.com/Finoana-Randri). Independent project, not affiliated with Microsoft or MacPaw.

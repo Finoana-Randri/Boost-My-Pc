@@ -775,11 +775,16 @@ body.paused .ring-big .ring-center .svg-ico { animation-play-state: paused !impo
 
 /* Running scan: small pulsing dot on the menu icon */
 .nav-item .nav-ico { position: relative; }
+/* Scan running in a module: a thin ring turns around its menu icon (no blinking). */
+.nav-item.busy .nav-ico { overflow: visible; }
 .nav-item.busy .nav-ico::after {
-  content: ""; position: absolute; right: -4px; top: -4px; width: 11px; height: 11px; border-radius: 50%;
-  background: var(--ok); box-shadow: 0 0 0 2px rgba(20, 10, 38, .85), 0 0 10px var(--ok); animation: busyDot 1.4s ease-in-out infinite;
+  /* A circle, so it stays centred on the icon while it turns. */
+  content: ""; position: absolute; inset: -6px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 0deg, color-mix(in srgb, var(--a2) 18%, transparent) 0 50%, color-mix(in srgb, var(--a2) 90%, #fff) 92%, color-mix(in srgb, var(--a2) 18%, transparent) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  padding: 2px; animation: spin 1.6s linear infinite;
 }
-@keyframes busyDot { 50% { transform: scale(.6); opacity: .55; } }
+.nav-item.busy::after { content: ""; position: absolute; right: 10px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: color-mix(in srgb, var(--a2) 80%, #fff); opacity: .8; }
 body.paused .nav-item.busy .nav-ico::after { animation-play-state: paused; }
 
 /* Three-choice dialog */
@@ -1487,5 +1492,69 @@ select:focus { border-color: var(--a2); }
   -webkit-mask: linear-gradient(transparent, #000 16px, #000 calc(100% - 12px), transparent); mask: linear-gradient(transparent, #000 16px, #000 calc(100% - 12px), transparent);
 }
 .dbody::-webkit-scrollbar { display: none; }
+.dfoot { flex-shrink: 0; display: flex; justify-content: center; padding: 6px 0 14px; }
+.dfoot:empty { display: none; }
+.dfoot > .action-bar { position: static; margin: 0 auto; }
 .dbody > .action-bar { margin-top: auto; }
 .dhead .tabs { margin-bottom: 4px; }
+
+/* Spacing and overlaps */
+.ms-last { margin-top: 24px; }
+.dbody > .intro.ms .ms-last { margin-top: 18px; }
+.ms-chips { max-width: min(640px, 100%); padding: 0 4px; }
+/* Fixed action bars must never cover content: leave room at the end of scrollable pages. */
+.page:has(> .action-bar), .dbody:has(> .action-bar) { padding-bottom: 8px; }
+.tm-legend { margin: 10px 0 0; }
+.page:has(.lens-wrap) .lens-wrap { margin-bottom: 84px; }
+.page > .action-bar, .dbody > .action-bar { box-shadow: var(--shadow), 0 -12px 30px color-mix(in srgb, var(--bg) 60%, transparent); }
+/* Tools header with the Boost button */
+.tools-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.tools-boost { margin-top: 20px; flex-shrink: 0; }
+
+/* PC health: compact version (same content, less height) */
+.hx-hero { padding: 16px 22px; gap: 20px; border-radius: 24px; }
+.hx-orb { width: 112px; height: 112px; }
+.hx-orb circle { stroke-width: 10; }
+.hx-score b { font-size: 34px; }
+.hx-score span { font-size: 12px; }
+.hx-head h2 { font-size: 20px; margin: 4px 0; }
+.hx-head p { font-size: 12.5px; }
+.hx-chips { margin-top: 10px; gap: 6px; }
+.hx-chip { padding: 4px 10px 4px 7px; font-size: 11.5px; }
+.hx-refresh { top: 14px; right: 14px; padding: 6px 12px; font-size: 12.5px; }
+/* The ripple rule (.btn { position: relative }) comes later: keep the button in the corner. */
+.hx-hero > .hx-refresh { position: absolute; gap: 6px; }
+@media (max-width: 760px) { .hx-hero > .hx-refresh { position: static; } }
+.hx-body { margin-top: 12px; gap: 12px; grid-template-columns: minmax(0, 1fr) 270px; }
+.hx-cards { gap: 12px; }
+.hx-card { min-height: 0; padding: 14px 16px; gap: 8px; border-radius: 20px; }
+.hx-card-head b { font-size: 13.5px; }
+.hx-ico { width: 32px; height: 32px; border-radius: 10px; }
+.hx-ico .f-ico-svg, .hx-ico .svg-ico { width: 17px; height: 17px; }
+.hx-gauge { width: 150px; margin-top: 0; }
+.hx-gauge-val b { font-size: 26px; }
+.hx-spark { height: 34px; }
+.hx-big b { font-size: 24px; }
+.hx-big.small b { font-size: 20px; }
+.hx-bat-body { height: 40px; border-radius: 11px; }
+.hx-bat-body span { font-size: 14px; }
+.hx-side { padding: 14px 16px; gap: 8px; border-radius: 20px; }
+.hx-tip { padding: 9px 10px; }
+.hx-sys-row { padding: 4px 0; }
+.hx-allgood { padding: 8px; }
+.hx-allgood > span { width: 42px; height: 42px; }
+@media (max-width: 1100px) { .hx-body { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1000px), (max-height: 720px) {
+  .hx-orb { width: 92px; height: 92px; }
+  .hx-score b { font-size: 28px; }
+  .hx-head h2 { font-size: 18px; }
+  .hx-head p { display: none; }
+  .hx-gauge { width: 120px; }
+  .hx-gauge-val b { font-size: 22px; }
+  .hx-spark { height: 28px; }
+  .hx-card { padding: 12px 14px; }
+}
+.about-by { margin-top: 4px; font-size: 12.5px; color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
+.about-by a { display: inline-flex; align-items: center; gap: 5px; color: color-mix(in srgb, var(--a2) 70%, var(--text)); font-weight: 800; text-decoration: none; }
+.about-by a:hover { text-decoration: underline; }
+.about-by .svg-ico { width: 14px; height: 14px; }
