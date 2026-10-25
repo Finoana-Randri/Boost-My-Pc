@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const REPO = 'Finoana-Randri/FastBoost';
+const REPO = 'Finoana-Randri/Boost-My-Pc';
 // A different release feed (JSON in the GitHub format), for tests only.
 const FEED = process.env.BMP_UPDATE_FEED || `https://api.github.com/repos/${REPO}/releases/latest`;
 const isLinux = process.platform === 'linux';

@@ -84,7 +84,7 @@ When Boost My Pc runs from source, the button opens the release page instead.
 
 ## Installation
 
-Download the installers from the [latest release](https://github.com/Finoana-Randri/FastBoost/releases/latest).
+Download the installers from the [latest release](https://github.com/Finoana-Randri/Boost-My-Pc/releases/latest).
 
 ### Linux
 
