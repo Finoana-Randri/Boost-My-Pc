@@ -1118,6 +1118,22 @@ Gestionnaire : dnf | Manager: dnf | Mpitantana: dnf
 Gestionnaire : pacman | Manager: pacman | Mpitantana: pacman
 Gestionnaire : zypper | Manager: zypper | Mpitantana: zypper
 Dossiers | Folders | Lahatahiry
+La synchronisation automatique de l'heure est désactivée. | Automatic time sync is turned off. | Tsy mandeha ny fampifanarahana ho azy ny ora.
+Problèmes corrigés | Problems fixed | Voahitsy ny olana
+Mettre à jour vers la version {0} | Update to version {0} | Havaozy ho dikany {0}
+Version {0} disponible | Version {0} available | Misy ny dikany {0}
+Mettre à jour Boost My Pc ? | Update Boost My Pc? | Havaozina ve ny Boost My Pc?
+La version {0} ({1}) va être téléchargée depuis GitHub puis installée. Boost My Pc redémarrera tout seul. | Version {0} ({1}) will be downloaded from GitHub and installed. Boost My Pc will restart by itself. | Halaina avy amin'ny GitHub ary hapetraka ny dikany {0} ({1}). Hiverina hanomboka ho azy ny Boost My Pc.
+Téléchargement… {0} % | Downloading… {0} % | Maka… {0} %
+Boost My Pc est déjà à jour. | Boost My Pc is already up to date. | Efa vaovao ny Boost My Pc.
+Mise à jour automatique indisponible pour cette installation. | Automatic update isn't available for this installation. | Tsy azo atao amin'ity fametrahana ity ny fanavaozana ho azy.
+Téléchargement impossible ({0}) | Download failed ({0}) | Tsy afaka naka ({0})
+Téléchargement incomplet. | Download incomplete. | Tsy feno ny rakitra nalaina.
+Fichier téléchargé corrompu (somme de contrôle différente). | Downloaded file is corrupted (checksum mismatch). | Simba ny rakitra nalaina (tsy mitovy ny sonia).
+Délai dépassé. | Timed out. | Lany ny fotoana.
+La commande a échoué (code {0}). | The command failed (code {0}). | Tsy nahomby ny baiko (kaody {0}).
+Impossible de renouveler l’adresse IP | Couldn't renew the IP address | Tsy afaka nanavao ny adiresy IP
+Non corrigé : {0}. Réessayez ou redémarrez le PC. | Not fixed: {0}. Try again or restart the PC. | Tsy voahitsy: {0}. Andramo indray na avereno alefa ny solosaina.
 Aucun problème détecté. Mesuré à {0}:{1} | No problems found. Measured at {0}:{1} | Tsy nahitana olana. Norefesina tamin'ny {0}:{1}
 {0} recommandations pour l'améliorer. Mesuré à {1}:{2} | {0} recommendations to improve it. Measured at {1}:{2} | Tolo-kevitra {0} hanatsarana azy. Norefesina tamin'ny {1}:{2}
 Recherche les problèmes de services, paquets, disque, horloge et réseau, puis les corrige. | Looks for service, package, disk, clock and network problems, then fixes them. | Mitady olana amin'ny serivisy, fonosana, kapila, famantaranandro ary tambajotra, dia manitsy azy.

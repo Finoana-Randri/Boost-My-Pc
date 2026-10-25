@@ -116,12 +116,13 @@ async function pingIcmp(host) {
 
 async function networkFix(id) {
   switch (id) {
-    case 'flushdns': await runPS('ipconfig /flushdns | Out-Null; Clear-DnsClientCache -ErrorAction SilentlyContinue'); return 'Cache DNS vidé.';
-    case 'renewip': await runPS('ipconfig /release | Out-Null; ipconfig /renew | Out-Null', { timeout: 60000 }); return 'Adresse IP renouvelée.';
+    case 'flushdns': await runPS('ipconfig /flushdns | Out-Null; if ($LASTEXITCODE) { throw "Droits administrateur requis" }'); return 'Cache DNS vidé.';
+    case 'renewip': await runPS('ipconfig /release | Out-Null; ipconfig /renew | Out-Null; if ($LASTEXITCODE) { throw "Impossible de renouveler l’adresse IP" }', { timeout: 60000 }); return 'Adresse IP renouvelée.';
     case 'disableproxy':
       await runPS(`Set-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' -Name ProxyEnable -Value 0`);
       return 'Proxy désactivé.';
-    case 'resetwinsock': await runPS('netsh winsock reset | Out-Null'); return 'Winsock réinitialisé (redémarrage recommandé).';
+    // netsh fails without administrator rights but only says so in its exit code.
+    case 'resetwinsock': await runPS('netsh winsock reset | Out-Null; if ($LASTEXITCODE) { throw "Droits administrateur requis" }'); return 'Winsock réinitialisé (redémarrage recommandé).';
     default: throw new Error('Réparation inconnue');
   }
 }

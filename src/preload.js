@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('pcm', {
   firstRun: process.argv.includes('--bmp-welcome'),
   caps: () => call('app:caps'),
   latest: () => call('app:latest'),
+  update: () => call('app:update'),
   notify: (n) => call('app:notify', n),
   adminMode: () => call('app:adminMode'),
   setAdminMode: (mode) => call('app:setAdminMode', mode),

@@ -1,5 +1,5 @@
 // Electron main process: windows, tray icon, and IPC for the Windows and Linux services.
-const { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage, dialog, net, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage, dialog, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -233,13 +233,11 @@ function registerIpc() {
     n.show();
     return true;
   });
-  // Latest published version, shown in Settings > About.
-  handle('app:latest', async () => {
-    const res = await net.fetch('https://api.github.com/repos/Finoana-Randri/FastBoost/releases/latest', { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error(`GitHub ${res.status}`);
-    const r = await res.json();
-    return { version: String(r.tag_name || '').replace(/^v/, ''), url: r.html_url };
-  });
+  // Latest published version (Settings > About), and the in-app update to it.
+  const updater = require('./updater');
+  setTimeout(updater.cleanup, 30000);
+  handle('app:latest', () => updater.latest());
+  handle('app:update', () => updater.update(progress('update')));
   handle('system:stats', () => system.getStats());
   handle('system:disks', () => system.getDisks());
   handle('system:info', () => system.getSystemInfo());
@@ -449,8 +447,9 @@ async function runElevated(script, timeout = 120000) {
   const { runPS } = require('./services/ps');
   if (isElevated()) return runPS(script, { timeout });
   const enc = Buffer.from(script, 'utf16le').toString('base64');
-  await runPS(`$p = Start-Process -FilePath powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${enc}'; exit $p.ExitCode`, { timeout })
-    .catch((e) => { throw new Error(/annul|cancel/i.test(e.message) ? 'Autorisation administrateur refusée.' : e.message); });
+  // A declined or dismissed Windows prompt makes Start-Process fail: report it, never as a success.
+  await runPS(`try { $p = Start-Process -FilePath powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${enc}' -ErrorAction Stop } catch { throw 'Autorisation administrateur refusée.' }; exit $p.ExitCode`, { timeout })
+    .catch((e) => { throw new Error(/annul|cancel|refusée/i.test(e.message) ? 'Autorisation administrateur refusée.' : e.message); });
 }
 
 function adminTaskExists() {

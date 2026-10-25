@@ -33,7 +33,7 @@ function linuxTasks() {
 
 function windowsTasks() {
   return [
-    { id: 'dns', name: 'Vider le cache DNS', desc: 'Corrige des sites inaccessibles ou qui chargent mal.', recommended: true, available: true, ps: 'ipconfig /flushdns | Out-Null', admin: false },
+    { id: 'dns', name: 'Vider le cache DNS', desc: 'Corrige des sites inaccessibles ou qui chargent mal.', recommended: true, available: true, ps: 'ipconfig /flushdns | Out-Null; if ($LASTEXITCODE) { throw "Droits administrateur requis" }', admin: true },
     { id: 'iconcache', name: 'Actualiser le cache des icônes', desc: 'Corrige des icônes manquantes ou incorrectes.', recommended: true, available: true, ps: 'Start-Process ie4uinit.exe -ArgumentList "-show" -WindowStyle Hidden -Wait', admin: false },
     { id: 'ram', name: 'Libérer la mémoire vive', desc: 'Réduit la mémoire inutilisée des processus.', recommended: true, available: true, special: 'boost', admin: false },
     { id: 'trim', name: 'Optimiser les SSD (TRIM)', desc: 'Informe les SSD des blocs libres pour garder des écritures rapides.', recommended: true, available: true, ps: 'Get-Volume | Where-Object { $_.DriveLetter -and $_.DriveType -eq "Fixed" } | ForEach-Object { Optimize-Volume -DriveLetter $_.DriveLetter -ReTrim -ErrorAction SilentlyContinue }', admin: true },

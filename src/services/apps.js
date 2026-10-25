@@ -92,7 +92,7 @@ function extractExe(cmd = '') {
 async function setStartup(item, enabled) {
   const ap = `${item.hive}:\\${APPROVED_BASE}${item.approved}`;
   const bytes = enabled
-    ? '[byte[]](2,0,0,0,0,0,0,0,0,0,0,0)'
+    ? '([byte[]](2,0,0,0,0,0,0,0,0,0,0,0))'
     : '([byte[]](3,0,0,0) + [BitConverter]::GetBytes([DateTime]::Now.ToFileTime()))';
   await runPS(`
     $ap = ${psq(ap)}

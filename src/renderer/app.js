@@ -1334,7 +1334,12 @@ async function fixDiag(token, ids) {
     j.update('Nouvelle vérification…', '');
     return (diagResult = await pcm.v2.diagScan());
   });
-  if (job && alive(token)) diagSection(token);
+  if (!job) return;
+  // Say what the new check still finds, instead of leaving the same warning without a word.
+  const left = checks.filter((c) => c.status !== 'info' && diagResult.checks.some((n) => n.id === c.id && n.status !== 'ok'));
+  if (left.length) toast(`Non corrigé : ${left.map((c) => c.title).join(', ')}. Réessayez ou redémarrez le PC.`, true);
+  else toast(checks.length > 1 ? 'Problèmes corrigés' : `${checks[0].title} : corrigé`);
+  if (alive(token)) diagSection(token);
 }
 
 async function perfStartup(token, top) {
@@ -2615,6 +2620,18 @@ PAGES.settings = async (token, tab = 'health') => {
   }
 };
 
+// In-app update: progress shown on the About button, kept while the user visits other pages.
+let updateRun = null;
+function updateButton() {
+  const b = $('#s-update');
+  if (!b || !updateRun) return;
+  b.disabled = true;
+  b.innerHTML = updateRun.phase === 'install'
+    ? `<span class="spinner mini"></span> Installation…`
+    : `<span class="spinner mini"></span> Téléchargement… ${updateRun.total ? Math.floor((updateRun.done / updateRun.total) * 100) : 0} %`;
+}
+pcm.onProgress((p) => { if (p.channel === 'update' && updateRun) { Object.assign(updateRun, p); updateButton(); } });
+
 async function settingsAbout(token, top) {
   page(`${top}<div class="card glass about"><img src="../../assets/icon-256.png" alt=""/><div><b>Boost My Pc</b><span>Version ${esc(CAPS.version || '')}</span>
       <span class="about-by">Créé par <a href="https://github.com/Finoana-Randri" id="s-author">${icon('github')} Finoana-Randri</a></span></div><span id="s-latest"></span></div>
@@ -2623,11 +2640,19 @@ async function settingsAbout(token, top) {
   pcm.latest().then((l) => {
     const el = $('#s-latest');
     if (!el || !l?.version) return;
-    const newer = l.version.localeCompare(CAPS.version || '', undefined, { numeric: true }) > 0;
-    el.outerHTML = newer
-      ? `<button class="btn" id="s-update">${icon('download')} Version ${esc(l.version)} disponible</button>`
-      : `<span class="pill ok">${icon('check')} À jour</span>`;
-    $('#s-update') && ($('#s-update').onclick = () => window.open(l.url));
+    if (!l.newer) { el.outerHTML = `<span class="pill ok">${icon('check')} À jour</span>`; return; }
+    el.outerHTML = `<button class="btn primary" id="s-update">${icon('download')} ${l.asset ? `Mettre à jour vers la version ${esc(l.version)}` : `Version ${esc(l.version)} disponible`}</button>`;
+    if (updateRun) updateButton();
+    $('#s-update').onclick = async () => {
+      // Started from the sources or an unknown package: open the release page instead.
+      if (!l.asset) return window.open(l.url);
+      if (updateRun) return;
+      if (!(await confirmBox('Mettre à jour Boost My Pc ?', `La version ${l.version} (${fmtBytes(l.asset.size)}) va être téléchargée depuis GitHub puis installée. Boost My Pc redémarrera tout seul.`, 'Mettre à jour'))) return;
+      updateRun = { phase: 'download', done: 0, total: l.asset.size };
+      updateButton();
+      try { await pcm.update(); }
+      catch (e) { updateRun = null; toast(e.message, true); if ($('#s-update')) { $('#s-update').disabled = false; $('#s-update').innerHTML = `${icon('download')} Mettre à jour vers la version ${esc(l.version)}`; } }
+    };
   }).catch(() => {});
   const info = await pcm.system.info().catch(() => ({}));
   if (!alive(token)) return;

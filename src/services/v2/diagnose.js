@@ -33,12 +33,13 @@ async function windowsChecks() {
     $off = $null
     $sc = w32tm /stripchart /computer:time.windows.com /samples:1 /dataonly 2>$null | Select-String -Pattern '([+-]\\d+\\.\\d+)s' | Select-Object -Last 1
     if ($sc) { $off = [double]$sc.Matches[0].Groups[1].Value }
+    $w32 = [string](Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\W32Time\\Parameters').Type
     $reboot = (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired') -or (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending')
     $errs = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Level = 1, 2; StartTime = (Get-Date).AddDays(-1) } -MaxEvents 200).Count
     $tmp = (Get-ChildItem $env:TEMP -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
     [pscustomobject]@{ svc = $svc; fw = $fw; rt = $(if ($mp) { [bool]$mp.RealTimeProtectionEnabled } else { $null })
       vol = [pscustomobject]@{ letter = $sys; size = [int64]$vol.Size; free = [int64]$vol.SizeRemaining; health = [string]$vol.HealthStatus }
-      dns = $dns; offset = $off; reboot = $reboot; errors = $errs; temp = [int64]$tmp } | ConvertTo-Json -Compress -Depth 4
+      dns = $dns; offset = $off; w32 = $w32; reboot = $reboot; errors = $errs; temp = [int64]$tmp } | ConvertTo-Json -Compress -Depth 4
   `, { timeout: 120000 });
   const out = [];
   // Services that Windows needs.
@@ -68,10 +69,11 @@ async function windowsChecks() {
     ? { id: 'dns', title: 'Résolution des noms (DNS)', status: 'warn', detail: 'Les adresses web ne se résolvent pas : cache DNS ou pile réseau à réinitialiser.', fix: { label: 'Réparer le réseau', admin: true } }
     : { id: 'dns', title: 'Résolution des noms (DNS)', status: 'ok', detail: 'Les adresses web se résolvent normalement.' });
   if (r?.offset != null && Math.abs(r.offset) > 60) out.push({ id: 'time', title: 'Horloge', status: 'warn', detail: `L'heure du PC est décalée de ${fmtOffset(Math.abs(r.offset))} : certificats et connexions peuvent échouer.`, fix: { label: 'Synchroniser', admin: true } });
+  else if (r?.w32 === 'NoSync') out.push({ id: 'time', title: 'Horloge', status: 'warn', detail: 'La synchronisation automatique de l\'heure est désactivée.', fix: { label: 'Synchroniser', admin: true } });
   else if (r?.offset != null) out.push({ id: 'time', title: 'Horloge', status: 'ok', detail: 'L\'heure est synchronisée avec time.windows.com.' });
   // System files: verified and repaired by DISM and SFC (long, administrator).
   out.push({ id: 'sysfiles', title: 'Fichiers système', status: 'info', detail: 'Vérifie et répare les fichiers de Windows corrompus (DISM puis SFC, 10 à 30 minutes).', fix: { label: 'Vérifier et réparer', admin: true, long: true } });
-  if (r?.temp > 2 * 1024 ** 3) out.push({ id: 'temp', title: 'Fichiers temporaires', status: 'warn', detail: `${(r.temp / 1024 ** 3).toFixed(1)} Go de fichiers temporaires.`, route: { label: 'Nettoyer', go: 'cleanup' } });
+  if (r?.temp > 2 * 1024 ** 3) out.push({ id: 'temp', title: 'Fichiers temporaires', status: 'warn', detail: `${(r.temp / 1024 ** 3).toFixed(1).replace('.', ',')} Go de fichiers temporaires.`, route: { label: 'Nettoyer', go: 'cleanup' } });
   if (r?.reboot) out.push({ id: 'reboot', title: 'Redémarrage en attente', status: 'warn', detail: 'Des mises à jour attendent un redémarrage pour se terminer.' });
   if (r?.errors > 20) out.push({ id: 'events', title: 'Erreurs système récentes', status: 'info', detail: `${r.errors} erreurs dans le journal Système depuis 24 h.` });
   return out;
@@ -83,7 +85,17 @@ const WIN_FIX = {
   firewall: 'Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True',
   defender: 'Set-MpPreference -DisableRealtimeMonitoring $false',
   dns: 'ipconfig /flushdns | Out-Null; netsh winsock reset | Out-Null; netsh int ip reset | Out-Null',
-  time: 'Set-Service w32time -StartupType Manual; Start-Service w32time; w32tm /resync /force | Out-Null',
+  // Turn network time back on (it may be set to NoSync, where /resync does nothing), then resync.
+  // If NTP is blocked, take the time from a web server's Date header.
+  time: `Set-Service w32time -StartupType Automatic; Start-Service w32time
+    w32tm /config /manualpeerlist:"time.windows.com,0x9 time.google.com,0x9 pool.ntp.org,0x9" /syncfromflags:manual /reliable:no /update | Out-Null
+    Restart-Service w32time -Force; Start-Sleep -Seconds 2
+    w32tm /resync /force /rediscover | Out-Null; Start-Sleep -Seconds 2
+    $s = w32tm /stripchart /computer:time.google.com /samples:1 /dataonly 2>$null | Select-String -Pattern '([+-]\\d+\\.\\d+)s' | Select-Object -Last 1
+    if (-not $s -or [math]::Abs([double]$s.Matches[0].Groups[1].Value) -gt 60) {
+      $d = (Invoke-WebRequest 'https://www.google.com' -Method Head -UseBasicParsing -TimeoutSec 15).Headers['Date']
+      Set-Date -Date ([DateTimeOffset]::ParseExact($d, 'r', [Globalization.CultureInfo]::InvariantCulture).LocalDateTime) | Out-Null
+    }`,
   sysfiles: 'DISM /Online /Cleanup-Image /RestoreHealth | Out-Null; sfc /scannow | Out-Null',
 };
 

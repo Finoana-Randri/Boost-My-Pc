@@ -72,6 +72,16 @@ Nothing is deleted without confirmation. Deletions go through the trash, except 
 
 Choose the interface language in **Settings → Preferences → Language**: Français, English, or Malagasy. On first launch, Boost My Pc follows the system language (French or Malagasy when the system uses them, English otherwise). The menu of the notification-area icon and the alerts use the same language. Translations live in `src/renderer/i18n-dict.js`, one line per text (`French | English | Malagasy`).
 
+## Updates
+
+**Settings → About** shows when a new version is published on GitHub. **Update to version …** downloads the installer that matches your installation (size and SHA-256 checksum verified), installs it, and restarts Boost My Pc:
+
+- Windows: silent install of the new setup (an all-users install uses the administrator rights the app already has, or Windows asks once).
+- Linux AppImage: the file is replaced in place.
+- Linux .deb: installed with apt; your password is requested through polkit.
+
+When Boost My Pc runs from source, the button opens the release page instead.
+
 ## Installation
 
 Download the installers from the [latest release](https://github.com/Finoana-Randri/FastBoost/releases/latest).
@@ -80,17 +90,17 @@ Download the installers from the [latest release](https://github.com/Finoana-Ran
 
 ```bash
 # Debian / Ubuntu / Mint / Pop!_OS
-sudo apt install ./Boost-My-Pc-2.2.0.deb
+sudo apt install ./Boost-My-Pc-2.3.0.deb
 
 # All distributions
-chmod +x Boost-My-Pc-2.2.0.AppImage && ./Boost-My-Pc-2.2.0.AppImage
+chmod +x Boost-My-Pc-2.3.0.AppImage && ./Boost-My-Pc-2.3.0.AppImage
 ```
 
 On standard GNOME desktops (Fedora, Debian), install the *AppIndicator and KStatusNotifierItem Support* extension to show the top-bar icon.
 
 ### Windows
 
-1. Download `Boost-My-Pc-Setup-2.2.0.exe` from the latest release.
+1. Download `Boost-My-Pc-Setup-2.3.0.exe` from the latest release.
 2. Run it and accept the Windows prompt. The setup wizard (in French) lets you choose the install folder, then creates **Boost My Pc** shortcuts on the desktop and in the Start menu, and launches the app.
 3. The installer is not code-signed yet, so Windows SmartScreen may show *Windows protected your PC*. Select **More info**, then **Run anyway**.
 
@@ -142,6 +152,7 @@ With Docker, run `scripts/docker-test.sh` (Debian 12, Fedora 41, Arch Linux) or 
 ```
 src/main.js                 Main process, IPC, lightweight mode
 src/menubar.js              Top-bar icon, mini panel, alerts
+src/updater.js              In-app update from the latest GitHub release
 src/services/               Windows (PowerShell), Linux (src/services/linux), and shared services
 src/services/v2/            v2 modules: Smart Care, maintenance, privacy, permissions,
                             leftovers, threats, shredder, Disk Map, similar images, cloud
