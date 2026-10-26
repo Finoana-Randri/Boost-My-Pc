@@ -313,7 +313,7 @@ function registerIpc() {
   handle('protect:status', () => protection.securityStatus());
   handle('protect:quickScan', () => protection.quickScan());
   handle('protect:updateSignatures', () => protection.updateSignatures());
-  handle('protect:action', (id) => protection.securityAction(id));
+  handle('protect:action', (id) => protection.securityAction(id, { runElevated, openExternal: (u) => shell.openExternal(u) }));
   handle('protect:updates', () => protection.checkWindowsUpdates());
   handle('protect:installUpdates', () => protection.installUpdates());
   handle('net:diagnose', () => protection.networkDiagnose());

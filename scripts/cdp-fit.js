@@ -17,7 +17,7 @@ const PAGES = [
   ['lens-intro', "lensData=null;go('lens')"],
   ['shredder', "go('shredder')"],
   ['tools', "go('tools')"],
-  ['settings-prefs', "go('settings/prefs')"],
+  // settings/prefs scrolls on small windows on purpose (one column, full text): see cdp-reach.js.
   ['settings-about', "go('settings/about')"],
   ['done', "page(doneView('cleanup','2,4 Go libérés','1 234 fichiers supprimés','cleanup'))"],
   ['scanning', "page(scanning('cleanup','Recherche des fichiers inutiles…','Caches des navigateurs (2/11)',{stop:true}))"],

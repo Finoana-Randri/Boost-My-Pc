@@ -14,12 +14,42 @@ async function securityStatus() {
         enabled = $mp.AntivirusEnabled; realtime = $mp.RealTimeProtectionEnabled
         signatureAge = $mp.AntivirusSignatureAge; signatureVersion = $mp.AntivirusSignatureVersion
         lastQuickScan = if ($mp.QuickScanEndTime) { $mp.QuickScanEndTime.ToString('s') } else { $null }
-        tamper = $mp.IsTamperProtected } } else { $null }
+        tamper = $mp.IsTamperProtected; mode = [string]$mp.AMRunningMode } } else { $null }
       firewall = @($fw | ForEach-Object { [pscustomobject]@{ name = [string]$_.Name; enabled = [bool]$_.Enabled } })
       antivirus = @($av)
     } | ConvertTo-Json -Compress -Depth 4
   `, { timeout: 60000 });
   return r;
+}
+
+// Security actions (Settings cards and threat list). `runElevated` runs a script with
+// administrator rights (one Windows prompt when the app doesn't have them).
+async function securityAction(id, { runElevated, openExternal } = {}) {
+  switch (id) {
+    case 'winRealtime': {
+      // Policies left by tweak tools or old antivirus products block Defender: remove them first.
+      await runElevated(`
+        $p = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows Defender'
+        Remove-ItemProperty -Path $p -Name DisableAntiSpyware, DisableAntiVirus -ErrorAction SilentlyContinue
+        Remove-ItemProperty -Path "$p\\Real-Time Protection" -Name DisableRealtimeMonitoring, DisableBehaviorMonitoring, DisableOnAccessProtection, DisableIOAVProtection -ErrorAction SilentlyContinue
+        Start-Service WinDefend -ErrorAction SilentlyContinue
+        Set-MpPreference -DisableRealtimeMonitoring $false -DisableBehaviorMonitoring $false -DisableIOAVProtection $false -ErrorAction SilentlyContinue`, 120000);
+      await new Promise((r) => setTimeout(r, 3000));
+      const s = await runPSJson('$m = Get-MpComputerStatus; [pscustomobject]@{ on = [bool]$m.RealTimeProtectionEnabled; mode = [string]$m.AMRunningMode; tamper = [bool]$m.IsTamperProtected } | ConvertTo-Json -Compress').catch(() => null);
+      if (s?.on) return 'Protection en temps réel activée.';
+      if (/passive/i.test(s?.mode || '')) return 'Un autre antivirus protège ce PC : Microsoft Defender reste en mode passif.';
+      // Tamper protection only lets the user change it in Windows Security.
+      openExternal?.('windowsdefender://threatsettings');
+      return 'Windows n\'autorise pas cette modification depuis une application (protection contre la falsification).\nDans la fenêtre Sécurité Windows qui vient de s\'ouvrir, activez « Protection en temps réel ».';
+    }
+    case 'winFirewall':
+      await runElevated('Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True', 60000);
+      return 'Pare-feu activé.';
+    case 'winSecurity':
+      openExternal?.('windowsdefender://threatsettings');
+      return 'Sécurité Windows est ouvert.';
+    default: throw new Error('Action inconnue');
+  }
 }
 
 async function quickScan() {
@@ -127,4 +157,4 @@ async function networkFix(id) {
   }
 }
 
-module.exports = { securityStatus, quickScan, updateSignatures, checkWindowsUpdates, networkDiagnose, networkFix };
+module.exports = { securityStatus, securityAction, quickScan, updateSignatures, checkWindowsUpdates, networkDiagnose, networkFix };

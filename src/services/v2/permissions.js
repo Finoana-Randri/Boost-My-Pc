@@ -78,13 +78,31 @@ async function windowsList() {
     const name = isPath ? r.key.split('#').pop().replace(/\.exe$/i, '') : r.key.replace(/_[a-z0-9]{13}$/, '').split('.').pop();
     const id = r.key;
     if (!apps.has(name)) apps.set(name, { id, name, icon: isPath ? r.key.replace(/#/g, '\\') : null, perms: [] });
-    apps.get(name).perms.push({ id: r.cap, label: LABEL[r.cap], risk: r.cap === 'location' ? 'medium' : 'high', allowed: r.value !== 'Deny', last: r.last });
+    apps.get(name).perms.push({ id: r.cap, label: LABEL[r.cap], risk: r.cap === 'location' ? 'medium' : 'high', allowed: r.value !== 'Deny', last: r.last, key: r.key });
   }
-  return { supported: true, readOnly: true, settings: { webcam: 'ms-settings:privacy-webcam', microphone: 'ms-settings:privacy-microphone', location: 'ms-settings:privacy-location' }, apps: [...apps.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr')) };
+  return { supported: true, settings: { webcam: 'ms-settings:privacy-webcam', microphone: 'ms-settings:privacy-microphone', location: 'ms-settings:privacy-location' }, apps: [...apps.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr')) };
 }
 
+// Per-app consent lives in the user's registry: Deny blocks the app, Allow gives access back.
+async function windowsSet(key, caps, value) {
+  const { runPS, psq } = require('../ps');
+  if (!/^[\w.#:\\ ()&'-]+$/.test(key)) throw new Error('Application inconnue');
+  await runPS(`
+    $base = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore'
+    $n = 0
+    foreach ($cap in @(${caps.map(psq).join(',')})) {
+      foreach ($p in @((Join-Path (Join-Path $base $cap) ${psq(key)}), (Join-Path (Join-Path (Join-Path $base $cap) 'NonPackaged') ${psq(key)}))) {
+        if (Test-Path -LiteralPath $p) { Set-ItemProperty -LiteralPath $p -Name Value -Value ${psq(value)} -ErrorAction Stop; $n++ }
+      }
+    }
+    if (-not $n) { throw 'Autorisation introuvable' }
+  `);
+  return true;
+}
+
+const CAPS = ['webcam', 'microphone', 'location'];
 module.exports = {
   list: () => (isLinux ? linuxList() : windowsList()),
-  revoke: (appId, permId) => (isLinux ? linuxRevoke(appId, permId) : Promise.reject(new Error('Utilisez les paramètres de confidentialité de Windows'))),
-  reset: (appId) => (isLinux ? linuxReset(appId) : Promise.reject(new Error('Non disponible sous Windows'))),
+  revoke: (appId, permId) => (isLinux ? linuxRevoke(appId, permId) : windowsSet(appId, [permId], 'Deny')),
+  reset: (appId) => (isLinux ? linuxReset(appId) : windowsSet(appId, CAPS, 'Allow')),
 };

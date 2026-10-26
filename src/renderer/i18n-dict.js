@@ -336,9 +336,9 @@ Encombrement · étape {0} sur {1} | Clutter · step {0} of {1} | Fikorontanana 
 Enregistrer de l'audio | Record audio | Raketo feo
 Enregistreur vocal | Sound Recorder | Mpandrakitra feo
 Enregistreur vocal : Enregistrer de l'audio | Sound Recorder: Record audio | Mpandrakitra feo: Raketo feo
-Entretien en cours… | Care in progress… | Mikojakoja…
-Entretien intelligent | Smart Care | Fikojakojana marani-tsaina
-Entretien terminé | Care finished | Vita ny fikojakojana
+Entretien en cours… | Care in progress… | Mikarakara…
+Entretien intelligent | Smart Care | Fikarakarana
+Entretien terminé | Care finished | Vita ny fikarakarana
 Erreur | Error | Hadisoana
 Erreurs système récentes | Recent system errors | Hadisoan'ny rafitra vao haingana
 Espace disque faible | Low disk space | Kely ny toerana amin'ny kapila
@@ -440,7 +440,7 @@ Ko | KB | Ko
 Mo | MB | Mo
 Go | GB | Go
 To | TB | To
-L'Entretien intelligent analyse votre PC en une fois et propose les actions utiles. | Smart Care scans your PC in one go and suggests useful actions. | Mandinika ny solosainanao indray mandeha ny Fikojakojana marani-tsaina ary manolotra ny asa ilaina.
+L'Entretien intelligent analyse votre PC en une fois et propose les actions utiles. | Smart Care scans your PC in one go and suggests useful actions. | Mandinika ny solosainanao indray mandeha ny Fikarakarana ary manolotra ny asa ilaina.
 L'heure du PC est décalée de {0} : certificats et connexions peuvent échouer. | The PC clock is off by {0}: certificates and connections may fail. | Diso {0} ny oran'ny solosaina: mety tsy hahomby ny taratasy fanamarinana sy ny fifandraisana.
 L'heure du PC est décalée de {0} h : certificats et connexions peuvent échouer. | The PC clock is off by {0} h: certificates and connections may fail. | Diso {0} ora ny oran'ny solosaina: mety tsy hahomby ny taratasy fanamarinana sy ny fifandraisana.
 L'heure est synchronisée avec time.windows.com. | The time is synced with time.windows.com. | Mifanaraka amin'ny time.windows.com ny ora.
@@ -1120,6 +1120,26 @@ Gestionnaire : zypper | Manager: zypper | Mpitantana: zypper
 Dossiers | Folders | Lahatahiry
 La synchronisation automatique de l'heure est désactivée. | Automatic time sync is turned off. | Tsy mandeha ny fampifanarahana ho azy ny ora.
 Problèmes corrigés | Problems fixed | Voahitsy ny olana
+Ouvrir Sécurité Windows | Open Windows Security | Sokafy ny Sécurité Windows
+Protection en temps réel activée. | Real-time protection turned on. | Mandeha indray ny fiarovana mivantana.
+Un autre antivirus protège ce PC : Microsoft Defender reste en mode passif. | Another antivirus protects this PC: Microsoft Defender stays in passive mode. | Antivirus hafa no miaro ity solosaina ity: mijanona ho tsy miasa ny Microsoft Defender.
+Windows n'autorise pas cette modification depuis une application (protection contre la falsification). Dans la fenêtre Sécurité Windows qui vient de s'ouvrir, activez « Protection en temps réel ». | Windows doesn't allow apps to make this change (tamper protection). In the Windows Security window that just opened, turn on "Real-time protection". | Tsy avelan'ny Windows hanova izany ny rindranasa (fiarovana amin'ny fanovana). Ao amin'ny varavarankely Sécurité Windows vao nisokatra, alefaso ny « Fiarovana mivantana ».
+Sécurité Windows est ouvert. | Windows Security is open. | Misokatra ny Sécurité Windows.
+La protection en temps réel est désactivée | Real-time protection is off | Tsy mandeha ny fiarovana mivantana
+Microsoft Defender ne surveille plus les fichiers. Réactivez-le pour rester protégé. | Microsoft Defender no longer watches files. Turn it back on to stay protected. | Tsy manara-maso ny rakitra intsony ny Microsoft Defender. Alefaso indray mba ho voaaro.
+Microsoft Defender inactif, signatures à jour | Microsoft Defender off, signatures up to date | Tsy mandeha ny Microsoft Defender, vaovao ny sonia
+Microsoft Defender actif, signatures datant de {0} jours | Microsoft Defender on, signatures {0} days old | Mandeha ny Microsoft Defender, sonia efa {0} andro
+Microsoft Defender inactif, signatures datant de {0} jours | Microsoft Defender off, signatures {0} days old | Tsy mandeha ny Microsoft Defender, sonia efa {0} andro
+bloqué | blocked | voasakana
+menace | threat | fandrahonana
+menaces | threats | fandrahonana
+gros fichier | large file | rakitra lehibe
+gros fichiers | large files | rakitra lehibe
+app au démarrage | startup app | rindranasa amin'ny fanombohana
+apps au démarrage | startup apps | rindranasa amin'ny fanombohana
+Retirer cette autorisation ? | Remove this permission? | Hesorina ity fahazoan-dalana ity?
+Autorisation introuvable | Permission not found | Tsy hita ny fahazoan-dalana
+Cet outil n'a pas pu être ouvert. | This tool couldn't be opened. | Tsy afaka nosokafana io fitaovana io.
 Mettre à jour vers la version {0} | Update to version {0} | Havaozy ho dikany {0}
 Version {0} disponible | Version {0} available | Misy ny dikany {0}
 Mettre à jour Boost My Pc ? | Update Boost My Pc? | Havaozina ve ny Boost My Pc?

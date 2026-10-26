@@ -952,7 +952,7 @@ PAGES.protection = async (token, tab) => {
 function renderProtectionOverview(token) {
   const { quick, perms, privacy, status } = overviewCache.protection;
   const threats = quick?.threats || [];
-  const sensitive = (perms?.apps || []).filter((a) => a.perms.some((p) => ['webcam', 'microphone', 'devices-all', 'audio'].includes(p.id)));
+  const sensitive = (perms?.apps || []).filter((a) => a.perms.some((p) => p.allowed !== false && ['webcam', 'microphone', 'devices-all', 'audio'].includes(p.id)));
   const browser = privacy.filter((i) => i.group !== 'Système');
   const browserSize = browser.reduce((a, i) => a + i.size, 0);
   const topBrowser = [...new Set(browser.map((i) => i.group))];
@@ -961,6 +961,7 @@ function renderProtectionOverview(token) {
   const fw = status?.cards ? status.cards.find((c) => c.id === 'firewall') : null;
   const fwOk = fw ? fw.ok : (status?.firewall || []).every((f) => f.enabled);
   const issues = threats.length + (sensitive.length ? 1 : 0) + (browserSize ? 1 : 0);
+  const settingsOnly = threats.length > 0 && threats.every((t) => t.fix);
   page(overview('protection', {
     title: threats.length ? `${plural(threats.length, 'menace détectée', 'menaces détectées')}.` : 'Aucune menace détectée.',
     sub: `${threats.length ? 'Supprimez les menaces et gérez vos éléments de confidentialité.' : issues ? 'Gérez vos éléments de confidentialité.' : 'Votre PC est protégé.'} Pare-feu ${fwOk ? 'activé' : 'désactivé'}.`,
@@ -968,10 +969,11 @@ function renderProtectionOverview(token) {
     cards: [
       ovCard({
         size: 'big',
-        title: threats.length ? plural(threats.length, 'menace détectée', 'menaces détectées') : 'Aucune menace',
-        sub: threats.length ? 'Supprimez-les dès que vous pouvez pour profiter d\'une bonne protection.' : (quick?.note || 'Lancez une analyse normale ou approfondie pour vérifier tout le système.'),
+        // Only settings to turn back on (no file to delete): say so and offer to fix them.
+        title: settingsOnly ? 'La protection en temps réel est désactivée' : threats.length ? plural(threats.length, 'menace détectée', 'menaces détectées') : 'Aucune menace',
+        sub: settingsOnly ? 'Microsoft Defender ne surveille plus les fichiers. Réactivez-le pour rester protégé.' : threats.length ? 'Supprimez-les dès que vous pouvez pour profiter d\'une bonne protection.' : (quick?.note || 'Lancez une analyse normale ou approfondie pour vérifier tout le système.'),
         art: threats.length ? artTrio(['warn', 'bug', 'folder']) : artTrio(['lock', 'shieldCheck', 'eye']),
-        actions: threats.length ? [{ label: 'Examiner', go: 'protection/threats' }, { label: 'Supprimer', go: 'protection/threats', primary: true }] : [{ label: 'Analyser', go: 'protection/threats' }],
+        actions: settingsOnly ? [{ label: 'Activer', go: 'protection/threats', primary: true }] : threats.length ? [{ label: 'Examiner', go: 'protection/threats' }, { label: 'Supprimer', go: 'protection/threats', primary: true }] : [{ label: 'Analyser', go: 'protection/threats' }],
       }),
       ovCard({
         size: 'wide',
@@ -1024,6 +1026,7 @@ async function protectionThreats(token, top) {
 
 function renderThreats(token, top) {
   const r = malwareResult;
+  const files = r.threats.some((t) => t.removable && t.path);
   const kinds = { quick: 'rapide', normal: 'normale', deep: 'approfondie' };
   page(`${top}
     <div class="card glass" style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
@@ -1038,9 +1041,19 @@ function renderThreats(token, top) {
       <div class="pc-ico g-protection">${ficon('virus')}</div>
       <div class="pc-title">${esc(t.threat)}</div>
       <div class="pc-sub" title="${esc(t.detail)}">${esc(t.path)}</div><div class="pc-sub">${esc(t.detail)}</div>
-      ${t.path && t.path !== 'crontab' ? `<button class="btn ghost pc-corner" data-reveal="${esc(t.path)}" title="Afficher">${icon('folder')}</button>` : ''}</label>`).join('')}</div>${trashBar('Supprimer les menaces')}` : ''}`);
+      ${t.fix ? `<div class="pc-foot"><button class="btn primary" data-secfix="${esc(t.fix)}">Activer</button></div>` : ''}
+      ${t.path && t.path !== 'crontab' ? `<button class="btn ghost pc-corner" data-reveal="${esc(t.path)}" title="Afficher">${icon('folder')}</button>` : ''}</label>`).join('')}</div>${files ? trashBar('Supprimer les menaces') : ''}` : ''}`);
   $('#new-scan').onclick = () => { malwareResult = null; go('protection/threats'); };
-  if (r.threats.length) {
+  // Problems that are settings, not files (e.g. real-time protection turned off).
+  $$('[data-secfix]').forEach((b) => (b.onclick = async (e) => {
+    e.preventDefault();
+    b.disabled = true; b.innerHTML = '<span class="spinner mini"></span>';
+    const msg = await safe(() => pcm.protect.action(b.dataset.secfix), 'Activer');
+    if (msg) { if (String(msg).includes('\n')) await confirmBox('Antivirus', msg, 'OK'); else toast(msg); }
+    malwareResult = null; delete overviewCache.protection;
+    if (alive(token)) go('protection');
+  }));
+  if (files) {
     bindSelection($('#threats'), {
       confirmText: 'Les fichiers sélectionnés seront placés dans la corbeille. Les entrées non supprimables (crontab, scripts de session) doivent être corrigées à la main.',
       onDone: () => { malwareResult = null; delete overviewCache.protection; go('protection'); },
@@ -1084,19 +1097,24 @@ async function protectionPermissions(token, top) {
     <div class="cards c3">${r.apps.map((a, i) => `<div class="pick-card glass static">
       <div class="pc-ico plain">${fileIcon(a.icon, 'apps')}</div>
       <div class="pc-title">${esc(a.name)}</div>
-      <div class="pc-pills">${a.perms.length ? a.perms.map((p) => `<span class="pill ${riskCls[p.risk]}">${esc(p.label)}${p.last ? ` · ${new Date(p.last).toLocaleDateString('fr-FR')}` : ''}${IS_LINUX ? ` <button class="btn ghost" style="min-height:0;padding:0 4px" data-revoke="${i}:${p.id}" title="Retirer">${icon('x')}</button>` : ''}</span>`).join('') : '<span class="pill ok">Aucun accès sensible</span>'}</div>
-      ${IS_LINUX ? `<div class="pc-foot"><button class="btn" data-reset="${i}">Réinitialiser</button></div>` : ''}</div>`).join('')}</div>`;
+      <div class="pc-pills">${a.perms.length ? a.perms.map((p) => p.allowed === false
+        ? `<span class="pill ok">${esc(p.label)} · bloqué</span>`
+        : `<span class="pill ${riskCls[p.risk]}">${esc(p.label)}${p.last ? ` · ${new Date(p.last).toLocaleDateString('fr-FR')}` : ''} <button class="btn ghost" style="min-height:0;padding:0 4px" data-revoke="${i}:${p.id}" title="Retirer">${icon('x')}</button></span>`).join('') : '<span class="pill ok">Aucun accès sensible</span>'}</div>
+      <div class="pc-foot"><button class="btn" data-reset="${i}">Réinitialiser</button></div></div>`).join('')}</div>`;
   loadIcons();
   $$('[data-revoke]').forEach((b) => (b.onclick = async (e) => {
     e.preventDefault();
     const [i, perm] = b.dataset.revoke.split(':');
     const a = r.apps[Number(i)];
     if (!(await confirmBox('Retirer cette autorisation ?', `« ${a.name} » ne pourra plus utiliser : ${a.perms.find((p) => p.id === perm).label}. L'application peut cesser de fonctionner correctement ; « Réinitialiser » annule ce changement.`, 'Retirer'))) return;
-    if (await safe(() => pcm.v2.permRevoke(a.id, perm))) { toast('Autorisation retirée'); delete overviewCache.protection; go('protection/permissions'); }
+    const p = a.perms.find((x) => x.id === perm);
+    if (await safe(() => pcm.v2.permRevoke(p.key || a.id, perm))) { toast('Autorisation retirée'); delete overviewCache.protection; go('protection/permissions'); }
   }));
   $$('[data-reset]').forEach((b) => (b.onclick = async () => {
     const a = r.apps[Number(b.dataset.reset)];
-    if (await safe(() => pcm.v2.permReset(a.id))) { toast(`Autorisations de ${a.name} réinitialisées`); delete overviewCache.protection; go('protection/permissions'); }
+    // On Windows one app can have several entries (one per program path).
+    const keys = [...new Set(a.perms.map((p) => p.key || a.id))];
+    if (await safe(async () => { for (const k of keys) await pcm.v2.permReset(k); return true; })) { toast(`Autorisations de ${a.name} réinitialisées`); delete overviewCache.protection; go('protection/permissions'); }
   }));
 }
 
@@ -1126,12 +1144,18 @@ async function protectionStatus(token, top) {
 function windowsSecurityCards(s) {
   const d = s.defender;
   const fwAll = (s.firewall || []).length && s.firewall.every((f) => f.enabled);
+  // Another antivirus is in charge: Defender stays passive on purpose.
+  const other = (s.antivirus || []).filter((n) => !/defender/i.test(n));
+  const passive = d && /passive/i.test(d.mode || '') && other.length;
   return [
-    { icon: 'virus', title: 'Antivirus', ok: !!(d && d.enabled && d.realtime), status: d ? (d.realtime ? 'Microsoft Defender actif' : 'Protection en temps réel désactivée') : (s.antivirus || []).join(', ') || 'Inconnu',
-      details: d ? [['Signatures', `${d.signatureVersion} (${d.signatureAge} j)`], ['Dernière analyse', d.lastQuickScan ? new Date(d.lastQuickScan).toLocaleString('fr-FR') : 'Jamais']] : [],
-      actions: d ? [{ id: 'winSig', label: 'Mettre à jour les signatures' }] : [] },
-    { icon: 'firewall', title: 'Pare-feu', ok: !!fwAll, warn: !fwAll, status: fwAll ? 'Activé sur tous les réseaux' : 'Désactivé sur certains profils', details: (s.firewall || []).map((f) => [f.name, f.enabled ? 'Activé' : 'Désactivé']) },
-    { icon: 'shield', title: 'Protection contre la falsification', ok: !!d?.tamper, warn: !d?.tamper, status: d?.tamper ? 'Activée' : 'Désactivée ou inconnue', details: [['Rôle', 'Empêche la désactivation de la sécurité']] },
+    { icon: 'virus', title: 'Antivirus', ok: !!(passive || (d && d.enabled && d.realtime)),
+      status: passive ? `Protégé par ${other.join(', ')}` : d ? (d.realtime ? 'Microsoft Defender actif' : 'Protection en temps réel désactivée') : other.join(', ') || 'Inconnu',
+      details: d && !passive ? [['Signatures', `${d.signatureVersion} (${d.signatureAge} j)`], ['Dernière analyse', d.lastQuickScan ? new Date(d.lastQuickScan).toLocaleString('fr-FR') : 'Jamais']] : [],
+      actions: !d || passive ? [] : [...(d.realtime ? [] : [{ id: 'winRealtime', label: 'Activer', primary: true }]), { id: 'winSig', label: 'Mettre à jour les signatures' }] },
+    { icon: 'firewall', title: 'Pare-feu', ok: !!fwAll, warn: !fwAll, status: fwAll ? 'Activé sur tous les réseaux' : 'Désactivé sur certains profils', details: (s.firewall || []).map((f) => [f.name, f.enabled ? 'Activé' : 'Désactivé']),
+      actions: fwAll ? [] : [{ id: 'winFirewall', label: 'Activer', primary: true }] },
+    { icon: 'shield', title: 'Protection contre la falsification', ok: !!d?.tamper, warn: !d?.tamper, status: d?.tamper ? 'Activée' : 'Désactivée ou inconnue', details: [['Rôle', 'Empêche la désactivation de la sécurité']],
+      actions: d && !d.tamper ? [{ id: 'winSecurity', label: 'Ouvrir Sécurité Windows' }] : [] },
   ];
 }
 
@@ -2555,7 +2579,7 @@ PAGES.settings = async (token, tab = 'health') => {
   const row = (ic, title, sub, ctrl) => `<div class="row"><div class="r-ico tint">${ficon(ic)}</div><div class="r-main"><div class="r-title">${title}</div><div class="r-sub" style="white-space:normal">${sub}</div></div>${ctrl}</div>`;
   const sw = (id, on) => `<label class="switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}/><span></span></label>`;
   page(`${top}
-    <div class="list glass prefs-grid">
+    <div class="prefs-wrap"><div class="list glass prefs-grid">
       ${row('globe', 'Langue', 'Langue de l\'interface', `<select id="s-lang" data-no-i18n>${Object.entries(i18n.LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>`)}
       ${row('image', 'Thème', 'Apparence de l\'application', '<select id="s-theme"><option value="system">Système</option><option value="dark">Sombre</option><option value="light">Clair</option></select>')}
       ${row('sparkle', 'Effets visuels', 'Verre dépoli et animations. « Automatique » les désactive si la carte graphique n\'est pas accélérée.', '<select id="s-fx"><option value="auto">Automatique</option><option value="on">Activés</option><option value="off">Désactivés</option></select>')}
@@ -2572,7 +2596,7 @@ PAGES.settings = async (token, tab = 'health') => {
       ${row('shield', 'Démarrer en administrateur', '<span id="s-adm-sub">Évite de redemander l\'autorisation pendant l\'utilisation.</span>', `<select id="s-adm">
         <option value="off">À la demande</option><option value="prompt">À l'ouverture</option><option value="task">Toujours</option></select>`)}`}
       ${row('refresh', 'Réinitialiser l\'application', 'Rétablit les préférences par défaut et affiche à nouveau l\'écran de bienvenue', '<button class="btn" id="s-reset">Réinitialiser</button>')}
-    </div>`);
+    </div></div>`);
   $('#s-lang').value = i18n.lang;
   $('#s-lang').onchange = async (e) => { await pcm.prefs.set({ lang: e.target.value }); location.reload(); };
   $('#s-theme').value = p.theme;

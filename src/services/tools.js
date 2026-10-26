@@ -1,5 +1,5 @@
 // Cross-platform tool allowlist, with an implementation for each OS.
-const { shell } = require('electron');
+const { app, shell } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -8,21 +8,24 @@ const path = require('path');
 const isLinux = process.platform === 'linux';
 const appsFolder = (aumid) => ({ cmd: 'explorer.exe', args: [`shell:AppsFolder\\${aumid}`] });
 const url = (u) => ({ url: u });
-const screenshots = path.join(os.homedir(), 'Pictures', 'Screenshots');
+// The Pictures folder can be moved (OneDrive): ask the system where it is.
+const pictures = () => { try { return app.getPath('pictures'); } catch { return path.join(os.homedir(), 'Pictures'); } };
+const screenshots = () => path.join(pictures(), 'Screenshots');
+const sys32 = (f) => path.join(process.env.WINDIR || 'C:\\Windows', 'System32', f);
 
 const WINDOWS = {
   screenshot: url('ms-screenclip:'),
   screenshotFolder: { folder: screenshots },
   snipping: appsFolder('Microsoft.ScreenSketch_8wekyb3d8bbwe!App'),
   calculator: appsFolder('Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'),
-  notepad: { cmd: 'notepad.exe' },
+  notepad: { file: sys32('notepad.exe') },
   recorder: appsFolder('Microsoft.WindowsSoundRecorder_8wekyb3d8bbwe!App'),
-  captions: { cmd: path.join(process.env.WINDIR || 'C:\\Windows', 'System32', 'LiveCaptions.exe'), mustExist: true },
+  captions: { file: sys32('LiveCaptions.exe'), mustExist: true },
   calendar: url('outlookcal:'),
   edge: url('microsoft-edge:'),
-  taskmgr: { cmd: 'taskmgr.exe' },
-  devmgmt: { cmd: 'mmc.exe', args: ['devmgmt.msc'] },
-  cleanmgr: { cmd: 'cleanmgr.exe' },
+  taskmgr: { file: sys32('Taskmgr.exe') },
+  devmgmt: { file: sys32('devmgmt.msc') },
+  cleanmgr: { file: sys32('cleanmgr.exe') },
   storageSense: url('ms-settings:storagesense'),
   windowsUpdate: url('ms-settings:windowsupdate'),
   windowsSecurity: url('windowsdefender:'),
@@ -41,7 +44,7 @@ const desktopSettings = (gnome, kde, other = []) => [
 ];
 const LINUX = {
   screenshot: [['gnome-screenshot', ['-i']], ['spectacle', ['-r']], ['flameshot', ['gui']], ['xfce4-screenshooter', ['-r']], ['ksnip', []]],
-  screenshotFolder: { folder: fs.existsSync(screenshots) ? screenshots : path.join(os.homedir(), 'Pictures') },
+  screenshotFolder: { folder: () => (fs.existsSync(screenshots()) ? screenshots() : pictures()) },
   calculator: [['gnome-calculator', []], ['kcalc', []], ['qalculate-gtk', []], ['galculator', []], ['mate-calc', []]],
   notepad: [['gnome-text-editor', []], ['gedit', []], ['kate', []], ['kwrite', []], ['mousepad', []], ['xed', []], ['pluma', []]],
   recorder: [['gnome-sound-recorder', []], ['audacity', []]],
@@ -84,7 +87,7 @@ function resolve(id) {
     for (const [cmd, args] of t) if (which(cmd)) return { cmd, args };
     return null;
   }
-  if (t.mustExist && !fs.existsSync(t.cmd)) return null;
+  if (t.mustExist && !fs.existsSync(t.file || t.cmd)) return null;
   return t;
 }
 
@@ -94,8 +97,21 @@ async function launch(id) {
   const t = resolve(id);
   if (!t) throw new Error('Cet outil n\'est pas disponible sur ce PC.');
   if (t.url) return shell.openExternal(t.url);
-  if (t.folder) { fs.mkdirSync(t.folder, { recursive: true }); return shell.openPath(t.folder); }
-  spawn(t.cmd, t.args || [], { detached: true, stdio: 'ignore' }).unref();
+  if (t.folder) {
+    const dir = typeof t.folder === 'function' ? t.folder() : t.folder;
+    fs.mkdirSync(dir, { recursive: true });
+    const err = await shell.openPath(dir);
+    if (err) throw new Error(err);
+    return;
+  }
+  // Opened the way Explorer does, so Windows can ask for administrator rights when a tool needs
+  // them (Device Manager, for example); a direct start fails.
+  if (t.file) { const err = await shell.openPath(t.file); if (err) throw new Error(err); return; }
+  await new Promise((resolve, reject) => {
+    const p = spawn(t.cmd, t.args || [], { detached: true, stdio: 'ignore' });
+    p.once('error', () => reject(new Error('Cet outil n\'a pas pu être ouvert.')));
+    p.once('spawn', () => { p.unref(); resolve(); });
+  });
 }
 
 module.exports = { launch, available };

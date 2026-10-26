@@ -549,7 +549,8 @@ body:not(.view-cards) .pick-card > .pc-corner { position: relative; inset: auto;
 .sc-grid {
   flex: 1; max-height: 700px; display: grid; gap: 12px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr);
-  grid-template-rows: minmax(120px, 1fr) minmax(120px, 1fr) minmax(140px, auto);
+  /* Rows are never smaller than their content (nothing is cut); on a short window the page scrolls. */
+  grid-template-rows: minmax(min-content, 1fr) minmax(min-content, 1fr) minmax(min-content, auto);
   grid-template-areas: "clean hero perf" "clean hero perf" "apps center clut";
 }
 .sc-tile[data-id="cleanup"] { grid-area: clean; --t1: #0f9b6c; --t2: #4be3a0; }
@@ -672,7 +673,7 @@ body:not(.view-cards) .pick-card > .pc-corner { position: relative; inset: auto;
   .sc-head h1 { font-size: 25px; }
   .sc-head .lead { font-size: 13px; }
   .sc-head { margin-bottom: 8px; }
-  .sc-grid { gap: 10px; grid-template-rows: minmax(90px, 1fr) minmax(90px, 1fr) minmax(118px, auto); }
+  .sc-grid { gap: 10px; }
   .sc-tile { padding: 14px 14px; border-radius: 22px; }
   .sc-val { font-size: 19px; }
   .sc-hero .sc-val { font-size: 21px; }
@@ -694,7 +695,6 @@ body:not(.view-cards) .pick-card > .pc-corner { position: relative; inset: auto;
 }
 @media (max-height: 640px) {
   .sc-head .lead { display: none; }
-  .sc-grid { grid-template-rows: minmax(80px, 1fr) minmax(80px, 1fr) minmax(104px, auto); }
   .sc-log li { padding: 3px 10px; }
   .sc-btn { width: 88px; height: 88px; }
 }
@@ -703,6 +703,13 @@ body:not(.view-cards) .pick-card > .pc-corner { position: relative; inset: auto;
   .sc-hero .sc-text { max-width: calc(100% - 84px); }
   .sc-tile.wide .sc-text { max-width: 100%; }
   .sc-log-val { max-width: 48%; }
+}
+/* Narrow windows: two columns, Protection on top and the round button below the tiles. */
+@media (max-width: 880px) {
+  .sc-grid { max-height: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: auto;
+    grid-template-areas: "hero hero" "clean perf" "apps clut" "center center"; }
+  .sc-hero .sc-text { max-width: calc(100% - 120px); }
+  .sc-center { padding: 6px 0 4px; }
 }
 .confetti { position: fixed; width: 8px; height: 8px; border-radius: 2px; pointer-events: none; z-index: 100; animation: burst .95s cubic-bezier(.15, .7, .3, 1) both; }
 @keyframes burst { from { transform: translate(-50%, -50%); opacity: 1; } to { transform: translate(calc(var(--dx) - 50%), calc(var(--dy) - 50%)) rotate(260deg) scale(.4); opacity: 0; } }
@@ -1426,9 +1433,17 @@ select:focus { border-color: var(--a2); }
 .prefs-grid .row { border-top: 1px solid var(--line); min-height: 64px; padding: 10px 16px; align-items: center; }
 .prefs-grid .row:nth-child(-n+2) { border-top: 0; }
 .prefs-grid .row:nth-child(odd) { border-right: 1px solid var(--line); }
-.prefs-grid .r-sub { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal !important; }
+/* Titles and descriptions are shown in full (never cut with "…"). */
+.prefs-grid .r-title, .prefs-grid .r-sub { white-space: normal !important; overflow: visible; text-overflow: clip; }
 .prefs-grid select { min-width: 0; max-width: 150px; }
-@media (max-height: 640px) { .prefs-grid .row { min-height: 56px; padding: 8px 14px; } .prefs-grid .r-sub { -webkit-line-clamp: 1; } }
+@media (max-height: 640px) { .prefs-grid .row { min-height: 56px; padding: 8px 14px; } }
+/* Not enough room for two readable columns: one column. */
+.prefs-wrap { container-type: inline-size; }
+@container (max-width: 860px) {
+  .prefs-grid { grid-template-columns: minmax(0, 1fr); }
+  .prefs-grid .row:nth-child(odd) { border-right: 0; }
+  .prefs-grid .row:nth-child(2) { border-top: 1px solid var(--line); }
+}
 @media (max-height: 640px) {
   .dropzone { padding: 22px 18px !important; }
   .dropzone > .svg-ico { width: 30px; height: 30px; }
@@ -1492,6 +1507,8 @@ select:focus { border-color: var(--a2); }
   -webkit-mask: linear-gradient(transparent, #000 16px, #000 calc(100% - 12px), transparent); mask: linear-gradient(transparent, #000 16px, #000 calc(100% - 12px), transparent);
 }
 .dbody::-webkit-scrollbar { display: none; }
+/* Other pages: same soft edge when they scroll, instead of a cut line. */
+.content:not(.split) { -webkit-mask: linear-gradient(transparent, #000 14px, #000 calc(100% - 10px), transparent); mask: linear-gradient(transparent, #000 14px, #000 calc(100% - 10px), transparent); }
 .dfoot { flex-shrink: 0; display: flex; justify-content: center; padding: 6px 0 14px; }
 .dfoot:empty { display: none; }
 .dfoot > .action-bar { position: static; margin: 0 auto; }
@@ -1558,3 +1575,30 @@ select:focus { border-color: var(--a2); }
 .about-by a { display: inline-flex; align-items: center; gap: 5px; color: color-mix(in srgb, var(--a2) 70%, var(--text)); font-weight: 800; text-decoration: none; }
 .about-by a:hover { text-decoration: underline; }
 .about-by .svg-ico { width: 14px; height: 14px; }
+
+/* PC health, compact: smaller cards, four in a row when there is room (two otherwise), and the
+   Recommendations / System panel under the cards (the page is at most 1060 px wide). */
+.hx-body { grid-template-columns: minmax(0, 1fr); container-type: inline-size; }
+.hx-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@container (min-width: 880px) { .hx-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.hx-card { padding: 12px 14px; gap: 6px; border-radius: 18px; }
+.hx-ico { width: 28px; height: 28px; border-radius: 9px; }
+.hx-gauge { width: 108px; }
+.hx-gauge-val b { font-size: 20px; }
+.hx-spark { height: 26px; }
+.hx-big b { font-size: 19px; }
+.hx-big.small b { font-size: 17px; }
+.hx-bat-body { height: 30px; }
+.hx-bat-body span { font-size: 12.5px; }
+.hx-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 20px; padding: 12px 16px; border-radius: 18px; }
+.hx-side-head.sys { margin-top: 0; padding-top: 0; border-top: 0; }
+.hx-side > :nth-child(1), .hx-side > :nth-child(2) { grid-column: 1; }
+.hx-side > :nth-child(3), .hx-side > :nth-child(4) { grid-column: 2; }
+.hx-side > :nth-child(1) { grid-row: 1; } .hx-side > :nth-child(3) { grid-row: 1; }
+@media (max-width: 1100px), (max-height: 720px) {
+  .hx-hero { padding: 12px 18px; gap: 16px; }
+  .hx-orb { width: 84px; height: 84px; }
+  .hx-score b { font-size: 25px; }
+  .hx-chip { font-size: 11px; }
+}
+@media (max-width: 640px) { .hx-side { grid-template-columns: minmax(0, 1fr); } .hx-side > * { grid-column: 1 !important; grid-row: auto !important; } }

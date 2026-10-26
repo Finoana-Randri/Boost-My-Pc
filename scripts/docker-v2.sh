@@ -40,4 +40,5 @@ rm -f "$RES/app.asar" && mkdir -p "$RES/app" && cp -r /src/src /src/assets /src/
 su alix -c "cd /home/alix/app && (XDG_CURRENT_DESKTOP=GNOME xvfb-run -a -s '-screen 0 1280x800x24' boost-my-pc --no-sandbox --disable-gpu --remote-debugging-port=9350 >/tmp/electron.log 2>&1 &) && \
   node scripts/cdp-shots.js /out 9350 smart:2500 cleanup:1500 protection:1500 performance:1500 applications:2500 lens:1500 shredder:1200 tools:2500 settings:2000 && \
   node scripts/cdp-flows.js /out 9350 smart cleanup threats privacy permissions status maintenance startup leftovers updates lens similar large downloads cloud shredder && \
-  sh scripts/readme-shots.sh 9350 /out || cat /tmp/electron.log"
+  sh scripts/readme-shots.sh 9350 /out && \
+  echo '===== Actions (test data)' && node scripts/cdp-actions.js 9350 || cat /tmp/electron.log"
