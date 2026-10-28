@@ -10,6 +10,7 @@ const admin = require('./admin');
 const { createMenubar } = require('./menubar');
 const { notifySend, integrateAppImage } = require('./linux-desktop');
 const { attachRoundedShape, registerWindowControls } = require('./linux-window');
+const { createUpdateService } = require('./updater');
 
 const isLinux = platform === 'linux';
 const ICON = path.join(__dirname, '..', 'assets', 'icon.png');
@@ -31,6 +32,15 @@ let quitting = false;
 let prefs = Prefs.DEFAULTS;
 
 const T = require('./i18n-main').makeT(() => uiLang());
+
+const updates = createUpdateService({
+  autoDownload: () => prefs.autoUpdate !== false,
+  onChange: (state) => sendToWindow('update:state', state),
+  onReady: (version) => {
+    if (prefs.notifications === false) return;
+    notify({ title: T('Mise à jour prête'), body: T(`Redémarrez Boost My Pc pour passer à la version ${version}.`) });
+  },
+});
 
 const windowAlive = () => win && !win.isDestroyed();
 const sendToWindow = (channel, data) => { if (windowAlive()) win.webContents.send(channel, data); };
@@ -312,10 +322,10 @@ function registerAppIpc() {
   handle('app:notify', notify);
   handle('app:paths', () => ({ home: os.homedir(), pictures: app.getPath('pictures'), downloads: app.getPath('downloads'), root: path.parse(os.homedir()).root }));
 
-  const updater = require('./updater');
-  setTimeout(updater.cleanup, 30000);
-  handle('app:latest', () => updater.latest());
-  handle('app:update', () => updater.update(progress('update')));
+  handle('update:state', () => updates.state());
+  handle('update:check', () => updates.check());
+  handle('update:download', () => updates.download());
+  handle('update:install', () => updates.install());
 
   handle('app:adminMode', () => admin.status(prefs.adminMode));
   handle('app:setAdminMode', async (mode) => {
@@ -522,6 +532,7 @@ function start() {
     // A few seconds later, so the window shows first.
     if (isLinux) setTimeout(() => { try { integrateAppImage(); } catch {} }, 4000);
     if (menubar && process.argv.includes('--mini')) menubar.showMini('corner');
+    updates.start();
   });
 }
 

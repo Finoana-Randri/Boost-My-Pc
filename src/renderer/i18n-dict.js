@@ -1188,6 +1188,25 @@ Mises à jour de micrologiciels | Firmware updates | Fanavaozana firmware
 depuis {0} an | for {0} year | nandritra ny {0} taona
 depuis {0} mois | for {0} months | nandritra ny {0} volana
 Version {0} · Electron {1} | Version {0} · Electron {1} | Dikany {0} · Electron {1}
+Mise à jour prête | Update ready | Vonona ny fanavaozana
+Redémarrez Boost My Pc pour passer à la version {0}. | Restart Boost My Pc to switch to version {0}. | Avereno alefa ny Boost My Pc mba hampiasa ny dikany {0}.
+Mises à jour automatiques | Automatic updates | Fanavaozana ho azy
+Les nouvelles versions se téléchargent en arrière-plan et s'installent quand vous redémarrez Boost My Pc | New versions download in the background and install when you restart Boost My Pc | Alaina ao ambadika ny dikany vaovao ary apetraka rehefa averinao alefa ny Boost My Pc
+Mise à jour disponible | Update available | Misy fanavaozana
+Redémarrer pour mettre à jour | Restart to update | Avereno alefa hanavaozana
+Recherche de mises à jour… | Checking for updates… | Mitady fanavaozana…
+Rechercher les mises à jour | Check for updates | Hitady fanavaozana
+Version {0} disponible ({1}) | Version {0} available ({1}) | Misy ny dikany {0} ({1})
+Télécharger | Download | Alaina
+Téléchargement de la version {0}… {1} % | Downloading version {0}… {1} % | Maka ny dikany {0}… {1} %
+Version {0} prête | Version {0} ready | Vonona ny dikany {0}
+Installation de la version {0}… | Installing version {0}… | Mametraka ny dikany {0}…
+Version {0} disponible. Cette copie de Boost My Pc ne peut pas s'installer elle-même : réinstallez-la avec le programme d'installation. | Version {0} available. This copy of Boost My Pc can't update itself: reinstall it with the installer. | Misy ny dikany {0}. Tsy afaka manavao ny tenany ity dika Boost My Pc ity: apetraho indray amin'ny programa fametrahana.
+Vérification impossible. | Couldn't check. | Tsy afaka nanamarina.
+Réessayer | Try again | Andramo indray
+Aucune mise à jour prête. | No update ready. | Tsy misy fanavaozana vonona.
+Fichier téléchargé incomplet ou corrompu. | Downloaded file is incomplete or corrupted. | Tsy feno na simba ny rakitra nalaina.
+L'installation n'a pas pu démarrer. | The installation couldn't start. | Tsy nanomboka ny fametrahana.
 `;
 
 const I18N_DICT = { en: {}, mg: {} };

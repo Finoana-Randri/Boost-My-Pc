@@ -12,6 +12,7 @@ const DEFAULTS = {
   boostDropCaches: false,
   alerts: true,
   effects: 'auto',
+  autoUpdate: true,
   welcomed: false,
 };
 

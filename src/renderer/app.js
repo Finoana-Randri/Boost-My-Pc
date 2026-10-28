@@ -2586,6 +2586,7 @@ PAGES.settings = async (token, tab = 'health') => {
       ${row('bell', 'Son de fin', 'Petit son quand une analyse ou une action se termine', sw('s-sounds', p.sounds !== false))}
       ${row('bell', 'Notifications système', 'Prévient quand une analyse se termine alors que Boost My Pc est en arrière-plan', sw('s-notif', p.notifications !== false))}
       ${row('power', 'Lancer à l\'ouverture de session', 'Boost My Pc démarre réduit dans la zone de notification', sw('s-startup', p.startup))}
+      ${row('download', 'Mises à jour automatiques', 'Les nouvelles versions se téléchargent en arrière-plan et s\'installent quand vous redémarrez Boost My Pc', sw('s-autoupdate', p.autoUpdate !== false))}
       ${row('apps', 'Réduire dans la zone de notification', 'La fermeture de la fenêtre laisse l\'application active', sw('s-tray', p.minimizeToTray))}
       ${IS_LINUX ? `
       ${row('warn', 'Alertes', 'Mémoire saturée, disque plein, corbeille volumineuse, mises à jour de sécurité', sw('s-alerts', p.alerts !== false))}
@@ -2608,6 +2609,10 @@ PAGES.settings = async (token, tab = 'health') => {
   };
   $('#s-theme').onchange = (e) => pcm.prefs.set({ theme: e.target.value });
   $('#s-startup').onchange = (e) => pcm.prefs.set({ startup: e.target.checked });
+  $('#s-autoupdate').onchange = async (e) => {
+    await pcm.prefs.set({ autoUpdate: e.target.checked });
+    if (e.target.checked) pcm.updates.check().catch(() => {});
+  };
   $('#s-sounds').onchange = (e) => { soundPrefs.sounds = e.target.checked; pcm.prefs.set({ sounds: e.target.checked }); if (e.target.checked) chime(); };
   $('#s-notif').onchange = (e) => {
     soundPrefs.notifications = e.target.checked;
@@ -2644,40 +2649,88 @@ PAGES.settings = async (token, tab = 'health') => {
   }
 };
 
-// In-app update: progress shown on the About button, kept while the user visits other pages.
-let updateRun = null;
-function updateButton() {
-  const b = $('#s-update');
-  if (!b || !updateRun) return;
-  b.disabled = true;
-  b.innerHTML = updateRun.phase === 'install'
-    ? `<span class="spinner mini"></span> Installation…`
-    : `<span class="spinner mini"></span> Téléchargement… ${updateRun.total ? Math.floor((updateRun.done / updateRun.total) * 100) : 0} %`;
+// ===================== Updates =====================
+// The main process checks, downloads and verifies new versions on its own. The interface shows
+// where it stands: a button in the title bar, and the details on the About page.
+let updateState = { status: 'idle' };
+let updateWanted = false; // The user started this download: its progress shows in the title bar.
+
+const updatePercent = (s) => (s.total ? Math.floor((s.done / s.total) * 100) : 0);
+
+async function runUpdate(action) {
+  if (action === 'download') updateWanted = true;
+  try { await pcm.updates[action](); }
+  catch (e) { toast(e.message, true); }
 }
-pcm.onProgress((p) => { if (p.channel === 'update' && updateRun) { Object.assign(updateRun, p); updateButton(); } });
+
+function renderUpdateChip(s) {
+  const chip = $('#update-chip');
+  const busy = s.status === 'installing' || (s.status === 'downloading' && updateWanted);
+  const label = {
+    available: 'Mise à jour disponible',
+    downloading: `Téléchargement… ${updatePercent(s)} %`,
+    ready: 'Redémarrer pour mettre à jour',
+    installing: 'Installation…',
+  }[s.status];
+  chip.classList.toggle('hidden', !label || (s.status === 'downloading' && !updateWanted));
+  if (!label) return;
+  chip.disabled = busy;
+  chip.dataset.update = s.status === 'ready' ? 'install' : 'download';
+  chip.innerHTML = `${busy ? '<span class="spinner mini"></span>' : icon(s.status === 'ready' ? 'refresh' : 'download')}<span>${label}</span>`;
+  chip.title = `Version ${s.version}`;
+}
+
+function updateStatusHtml(s) {
+  const v = esc(s.version || '');
+  const button = (action, label, primary) => `<button class="btn${primary ? ' primary' : ''}" data-update="${action}">${label}</button>`;
+  switch (s.status) {
+    case 'idle':
+    case 'checking':
+      return `<span class="update-note"><span class="spinner mini"></span>Recherche de mises à jour…</span>`;
+    case 'current':
+      return `<span class="pill ok">${icon('check')} À jour</span>${button('check', 'Rechercher les mises à jour')}`;
+    case 'available':
+      return `<span class="update-note">Version ${v} disponible${s.size ? ` (${fmtBytes(s.size)})` : ''}</span>${button('download', `${icon('download')} Télécharger`, true)}`;
+    case 'downloading':
+      return `<span class="update-note"><span class="spinner mini"></span>Téléchargement de la version ${v}… ${updatePercent(s)} %</span>`;
+    case 'ready':
+      return `<span class="update-note">Version ${v} prête</span>${button('install', `${icon('refresh')} Redémarrer pour mettre à jour`, true)}`;
+    case 'installing':
+      return `<span class="update-note"><span class="spinner mini"></span>Installation de la version ${v}…</span>`;
+    case 'unsupported':
+      return `<span class="update-note">Version ${v} disponible. Cette copie de Boost My Pc ne peut pas s'installer elle-même : réinstallez-la avec le programme d'installation.</span>`;
+    default:
+      return `<span class="update-note bad">${esc(s.message || 'Vérification impossible.')}</span>${button('check', 'Réessayer')}`;
+  }
+}
+
+function renderUpdateStatus(s) {
+  const el = $('#s-update');
+  if (el) el.innerHTML = updateStatusHtml(s);
+}
+
+function showUpdateState(s) {
+  if (s.status === 'ready' || s.status === 'error') updateWanted = false;
+  updateState = s;
+  renderUpdateChip(s);
+  renderUpdateStatus(s);
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-update]');
+  if (b && !b.disabled) runUpdate(b.dataset.update);
+});
+pcm.updates.onState(showUpdateState);
+pcm.updates.state().then(showUpdateState).catch(() => {});
 
 async function settingsAbout(token, top) {
   page(`${top}<div class="card glass about"><img src="../../assets/icon-256.png" alt=""/><div><b>Boost My Pc</b><span>Version ${esc(CAPS.version || '')}</span>
-      <span class="about-by">Créé par <a href="https://github.com/Finoana-Randri" id="s-author">${icon('github')} Finoana-Randri</a></span></div><span id="s-latest"></span></div>
+      <span class="about-by">Créé par <a href="https://github.com/Finoana-Randri" id="s-author">${icon('github')} Finoana-Randri</a></span></div><div class="update-status" id="s-update"></div></div>
     <h2>Informations système</h2><div class="card glass" id="s-info"><div class="loading"><span class="spinner"></span></div></div>`);
   $('#s-author').onclick = (e) => { e.preventDefault(); window.open('https://github.com/Finoana-Randri'); };
-  pcm.latest().then((l) => {
-    const el = $('#s-latest');
-    if (!el || !l?.version) return;
-    if (!l.newer) { el.outerHTML = `<span class="pill ok">${icon('check')} À jour</span>`; return; }
-    el.outerHTML = `<button class="btn primary" id="s-update">${icon('download')} ${l.asset ? `Mettre à jour vers la version ${esc(l.version)}` : `Version ${esc(l.version)} disponible`}</button>`;
-    if (updateRun) updateButton();
-    $('#s-update').onclick = async () => {
-      // Started from the sources or an unknown package: open the release page instead.
-      if (!l.asset) return window.open(l.url);
-      if (updateRun) return;
-      if (!(await confirmBox('Mettre à jour Boost My Pc ?', `La version ${l.version} (${fmtBytes(l.asset.size)}) va être téléchargée depuis GitHub puis installée. Boost My Pc redémarrera tout seul.`, 'Mettre à jour'))) return;
-      updateRun = { phase: 'download', done: 0, total: l.asset.size };
-      updateButton();
-      try { await pcm.update(); }
-      catch (e) { updateRun = null; toast(e.message, true); if ($('#s-update')) { $('#s-update').disabled = false; $('#s-update').innerHTML = `${icon('download')} Mettre à jour vers la version ${esc(l.version)}`; } }
-    };
-  }).catch(() => {});
+  renderUpdateStatus(updateState);
+  // Nothing checked yet in this session: look now rather than waiting for the scheduled check.
+  if (updateState.status === 'idle') runUpdate('check');
   const info = await pcm.system.info().catch(() => ({}));
   if (!alive(token)) return;
   $('#s-info').innerHTML = `<div class="kv">

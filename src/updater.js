@@ -1,5 +1,5 @@
-// In-app update from the latest GitHub release. The installer that matches this installation is
-// downloaded (size and SHA-256 checked), installed, and the app restarts:
+// Updates from the latest GitHub release, like most desktop apps: checked in the background,
+// downloaded silently (size and SHA-256 checked), installed when the user restarts the app.
 //   Windows   silent setup, which reopens the app;
 //   AppImage  the new file replaces the old one;
 //   .deb      installed with apt, the password is asked through polkit.
@@ -14,6 +14,8 @@ const { pipeline } = require('stream/promises');
 const REPO = 'Finoana-Randri/Boost-My-Pc';
 // Tests point this to a local feed in the GitHub format.
 const FEED = process.env.BMP_UPDATE_FEED || `https://api.github.com/repos/${REPO}/releases/latest`;
+const FIRST_CHECK_DELAY = 20 * 1000;
+const CHECK_INTERVAL = 4 * 3600 * 1000;
 const isLinux = process.platform === 'linux';
 
 const ASSET_PATTERNS = {
@@ -32,18 +34,14 @@ function installKind() {
   return fs.existsSync('/usr/bin/dpkg') ? 'deb' : null;
 }
 
-async function latest() {
-  const res = await net.fetch(FEED, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(10000) });
+async function fetchLatest() {
+  const res = await net.fetch(FEED, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error(`GitHub ${res.status}`);
   const release = await res.json();
-  const version = String(release.tag_name || '').replace(/^v/, '');
   const kind = installKind();
   const asset = kind && (release.assets || []).find((a) => ASSET_PATTERNS[kind].test(a.name));
   return {
-    version,
-    url: release.html_url,
-    current: app.getVersion(),
-    newer: isNewer(version, app.getVersion()),
+    version: String(release.tag_name || '').replace(/^v/, ''),
     asset: asset && {
       name: asset.name,
       url: asset.browser_download_url,
@@ -55,21 +53,36 @@ async function latest() {
 
 const downloadDir = () => path.join(app.getPath('temp'), 'boost-my-pc-update');
 
-// Removes the installer of the previous update, once the new version runs.
-function cleanup() {
+function sha256Of(file) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    fs.createReadStream(file).on('error', reject).on('data', (d) => hash.update(d)).on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+async function isComplete(file, asset) {
+  if (!fs.existsSync(file) || fs.statSync(file).size !== asset.size) return false;
+  return !asset.sha256 || (await sha256Of(file)) === asset.sha256;
+}
+
+// Keeps only the installer of the release in progress (or nothing when up to date).
+function removeOldDownloads(keep) {
   try {
-    fs.rmSync(downloadDir(), { recursive: true, force: true });
+    for (const name of fs.readdirSync(downloadDir())) {
+      if (name !== keep) fs.rmSync(path.join(downloadDir(), name), { recursive: true, force: true });
+    }
   } catch {
-    // Still locked by the installer: removed at the next start.
+    // No folder yet, or a file still locked by the installer: retried at the next check.
   }
 }
 
 async function download(asset, onProgress) {
   fs.mkdirSync(downloadDir(), { recursive: true });
   const file = path.join(downloadDir(), path.basename(asset.name));
-  const res = await net.fetch(asset.url, { signal: AbortSignal.timeout(30 * 60000) });
-  if (!res.ok || !res.body) throw new Error(`Téléchargement impossible (${res.status})`);
+  if (await isComplete(file, asset)) return file;
 
+  const res = await net.fetch(asset.url, { signal: AbortSignal.timeout(60 * 60000) });
+  if (!res.ok || !res.body) throw new Error(`Téléchargement impossible (${res.status})`);
   const total = asset.size || Number(res.headers.get('content-length')) || 0;
   const hash = crypto.createHash('sha256');
   let received = 0;
@@ -78,21 +91,19 @@ async function download(asset, onProgress) {
     transform(chunk, _encoding, next) {
       hash.update(chunk);
       received += chunk.length;
-      if (Date.now() - reportedAt > 200) {
+      if (Date.now() - reportedAt > 500) {
         reportedAt = Date.now();
-        onProgress({ phase: 'download', done: received, total });
+        onProgress(received, total);
       }
       next(null, chunk);
     },
   });
   await pipeline(Readable.fromWeb(res.body), meter, fs.createWriteStream(file));
 
-  if (total && received !== total) throw new Error('Téléchargement incomplet.');
-  if (asset.sha256 && hash.digest('hex') !== asset.sha256) {
+  if ((total && received !== total) || (asset.sha256 && hash.digest('hex') !== asset.sha256)) {
     fs.rmSync(file, { force: true });
-    throw new Error('Fichier téléchargé corrompu (somme de contrôle différente).');
+    throw new Error('Fichier téléchargé incomplet ou corrompu.');
   }
-  onProgress({ phase: 'download', done: received, total: total || received });
   return file;
 }
 
@@ -143,14 +154,90 @@ async function install(file, kind) {
   }
 }
 
-async function update(onProgress) {
-  const release = await latest();
-  if (!release.newer) throw new Error('Boost My Pc est déjà à jour.');
-  if (!release.asset) throw new Error('Mise à jour automatique indisponible pour cette installation.');
-  const file = await download(release.asset, onProgress);
-  onProgress({ phase: 'install' });
-  await install(file, installKind());
-  return { version: release.version };
+// States sent to the interface:
+//   idle, checking, current, unsupported (newer version, but this copy can't install it),
+//   available (waiting for the user, automatic download off), downloading, ready, installing, error.
+function createUpdateService({ autoDownload, onChange, onReady }) {
+  let state = { status: 'idle', current: app.getVersion() };
+  let release = null;
+  let file = null;
+  let queue = Promise.resolve();
+
+  const setState = (next) => {
+    state = { ...next, current: app.getVersion() };
+    onChange(state);
+  };
+
+  async function downloadRelease() {
+    const { version, asset } = release;
+    setState({ status: 'downloading', version, done: 0, total: asset.size });
+    try {
+      file = await download(asset, (done, total) => setState({ status: 'downloading', version, done, total }));
+      setState({ status: 'ready', version });
+      onReady(version);
+    } catch (err) {
+      setState({ status: 'error', version, message: err.message });
+    }
+  }
+
+  async function check({ forceDownload = false } = {}) {
+    if (['downloading', 'installing'].includes(state.status)) return state;
+    // With an update ready, check quietly: the restart button stays unless a newer release came out.
+    const ready = state.status === 'ready' ? state : null;
+    if (!ready) setState({ status: 'checking' });
+    try {
+      release = await fetchLatest();
+    } catch (err) {
+      if (!ready) setState({ status: 'error', message: err.message });
+      return state;
+    }
+    const { version, asset } = release;
+    if (ready && version === ready.version) return state;
+    if (!isNewer(version, app.getVersion())) {
+      removeOldDownloads(null);
+      setState({ status: 'current', version });
+    } else if (!asset) {
+      setState({ status: 'unsupported', version });
+    } else {
+      removeOldDownloads(path.basename(asset.name));
+      if (autoDownload() || forceDownload) await downloadRelease();
+      else setState({ status: 'available', version, size: asset.size });
+    }
+    return state;
+  }
+
+  // One run at a time: a click during the scheduled check waits for it.
+  const exclusive = (task) => (...args) => {
+    queue = queue.catch(() => {}).then(() => task(...args));
+    return queue;
+  };
+
+  async function installReady() {
+    if (state.status !== 'ready' || !file) throw new Error('Aucune mise à jour prête.');
+    const { version } = state;
+    setState({ status: 'installing', version });
+    try {
+      await install(file, installKind());
+    } catch (err) {
+      setState({ status: 'ready', version });
+      throw err;
+    }
+    return state;
+  }
+
+  function start() {
+    setTimeout(() => runCheck(), FIRST_CHECK_DELAY);
+    setInterval(() => runCheck(), CHECK_INTERVAL);
+  }
+
+  const runCheck = exclusive(check);
+  return {
+    start,
+    state: () => state,
+    check: () => runCheck(),
+    download: () => runCheck({ forceDownload: true }),
+    install: exclusive(installReady),
+  };
 }
 
-module.exports = { latest, update, installKind, cleanup };
+module.exports = { createUpdateService, installKind };

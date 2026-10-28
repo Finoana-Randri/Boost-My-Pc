@@ -1631,3 +1631,21 @@ html.maximized .rz { display: none; }
 /* Light edge along the 14 px rounded corners cut by linux-window.js. */
 html.round body::after { content: ""; position: fixed; inset: 0; z-index: 200; border-radius: 14px; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); }
 html.round.maximized body::after { display: none; }
+
+/* Update ready or available: button in the title bar, status on the About page. */
+.update-chip {
+  margin-left: auto; margin-right: 12px; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px;
+  border: 0; border-radius: 999px; font: inherit; font-size: 12px; font-weight: 800; color: #fff; cursor: pointer;
+  background: linear-gradient(135deg, var(--a1), var(--a2)); box-shadow: 0 4px 14px color-mix(in srgb, var(--a2) 35%, transparent);
+  -webkit-app-region: no-drag; animation: chip-in .35s ease;
+}
+.update-chip:hover { filter: brightness(1.08); }
+.update-chip:disabled { cursor: default; filter: saturate(.7); }
+.update-chip .svg-ico { width: 14px; height: 14px; }
+.update-chip .spinner.mini { border-color: rgba(255, 255, 255, .35); border-top-color: #fff; margin-right: 0; }
+body.windows .update-chip { margin-right: 150px; } /* Room for the system window buttons. */
+.update-chip:not(.hidden) ~ .wc { margin-left: 0; }
+@keyframes chip-in { from { opacity: 0; transform: translateY(-4px); } }
+.about > .update-status { flex: none; flex-direction: row; align-items: center; gap: 10px; max-width: 46%; justify-content: flex-end; flex-wrap: wrap; }
+.update-note { font-size: 12.5px; text-align: right; }
+.update-note.bad { color: var(--bad); }

@@ -74,13 +74,13 @@ Choose the interface language in **Settings → Preferences → Language**: Fran
 
 ## Updates
 
-**Settings → About** shows when a new version is published on GitHub. **Update to version …** downloads the installer that matches your installation (size and SHA-256 checksum verified), installs it, and restarts Boost My Pc:
+Boost My Pc updates itself, like most desktop apps. It checks GitHub shortly after it starts and every 4 hours, then downloads the installer that matches your installation in the background (size and SHA-256 checksum verified). When the download is ready, a **Restart to update** button appears in the title bar (and in **Settings → About**); one click installs the new version and reopens the app:
 
 - Windows: silent install of the new setup (an all-users install uses the administrator rights the app already has, or Windows asks once).
 - Linux AppImage: the file is replaced in place.
 - Linux .deb: installed with apt; your password is requested through polkit.
 
-When Boost My Pc runs from source, the button opens the release page instead.
+Turn off **Settings → Preferences → Automatic updates** to download only when you choose: the title bar then shows **Update available**. A copy run from source doesn't update itself.
 
 ## Installation
 
@@ -90,10 +90,10 @@ Download the installers from the [latest release](https://github.com/Finoana-Ran
 
 ```bash
 # Debian / Ubuntu / Mint / Pop!_OS
-sudo apt install ./Boost-My-Pc-2.4.2.deb
+sudo apt install ./Boost-My-Pc-2.5.0.deb
 
 # All distributions
-chmod +x Boost-My-Pc-2.4.2.AppImage && ./Boost-My-Pc-2.4.2.AppImage
+chmod +x Boost-My-Pc-2.5.0.AppImage && ./Boost-My-Pc-2.5.0.AppImage
 ```
 
 On Ubuntu 22.04 and later, AppImages need FUSE 2: `sudo apt install libfuse2t64` (`libfuse2` on 22.04). The first time an AppImage starts, it adds itself to the application menu (entry and icons in `~/.local/share`), on any distribution; moving the file updates the entry. The .deb installs its own entry and icons.
@@ -104,7 +104,7 @@ The window has rounded corners and its own buttons on Linux (resize it from any 
 
 ### Windows
 
-1. Download `Boost-My-Pc-Setup-2.4.2.exe` from the latest release.
+1. Download `Boost-My-Pc-Setup-2.5.0.exe` from the latest release.
 2. Run it and accept the Windows prompt. The setup wizard (in French) lets you choose the install folder, then creates **Boost My Pc** shortcuts on the desktop and in the Start menu, and launches the app.
 3. The installer is not code-signed yet, so Windows SmartScreen may show *Windows protected your PC*. Select **More info**, then **Run anyway**.
 
