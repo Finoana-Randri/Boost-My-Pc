@@ -3,6 +3,7 @@
 const { app, BrowserWindow, Tray, Menu, nativeTheme, screen, Notification, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { notifySend } = require('./linux-desktop');
 
 const W = 380;
 const H = 620;
@@ -164,11 +165,14 @@ function createMenubar({ iconPath, trayImage, T = (x) => x, showMain, sendToMain
   const lastAlert = {};
   let highMem = 0;
   function alert(key, cooldownMs, title, body) {
-    if (!getPrefs().alerts || !Notification.isSupported()) return;
+    if (!getPrefs().alerts) return;
     if (lastAlert[key] && Date.now() - lastAlert[key] < cooldownMs) return;
     lastAlert[key] = Date.now();
+    if (!Notification.isSupported()) { notifySend(T(title), T(body)); return; }
     const n = new Notification({ title: T(title), body: T(body), icon: iconPath, silent: false });
     n.on('click', () => showMini());
+    // The notification service refused it (no daemon on the session bus): try notify-send.
+    n.on('failed', () => notifySend(T(title), T(body)));
     n.show();
   }
 

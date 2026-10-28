@@ -73,8 +73,35 @@ def sidebar(icon, path):
     bg.convert('RGB').resize((164, 314), Image.LANCZOS).save(path)
 
 
+def tray_white(path, size=128):
+    # Top-bar icon for Linux desktops: one white shape (monitor and bolt), like the system icons.
+    k = 8
+    S = size * k
+    im = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    u = S / 128
+    def box(x0, y0, x1, y1):
+        return [x0 * u, y0 * u, x1 * u, y1 * u]
+    d.rounded_rectangle(box(8, 14, 120, 90), radius=16 * u, outline=(255, 255, 255, 255), width=round(9 * u))
+    d.rectangle(box(58, 88, 70, 104), fill=(255, 255, 255, 255))
+    d.rounded_rectangle(box(34, 102, 94, 114), radius=6 * u, fill=(255, 255, 255, 255))
+    bolt = [(72, 26), (46, 58), (60, 58), (54, 80), (84, 46), (68, 46)]
+    d.polygon([(x * u, y * u) for x, y in bolt], fill=(255, 255, 255, 255))
+    im.resize((size, size), Image.LANCZOS).save(path)
+
+
+def linux_icons(icon):
+    # Standard sizes only: icon themes ignore a folder such as 1254x1254.
+    out = os.path.join(ROOT, 'build', 'icons')
+    os.makedirs(out, exist_ok=True)
+    for s in (16, 24, 32, 48, 64, 128, 256, 512):
+        sized(icon, s, 0.02 if s >= 48 else 0).save(os.path.join(out, f'{s}x{s}.png'), optimize=True)
+
+
 def main():
     icon = load_clean()
+    tray_white(os.path.join(ROOT, 'assets', 'tray-white.png'))
+    linux_icons(icon)
     # Tray: full bleed so the shape stays readable at 16 px; 64 px source, reduced by the app.
     sized(icon, 64).save(os.path.join(ROOT, 'assets', 'tray.png'))
     # Windows icon with the usual sizes (taskbar, Start menu, Explorer, installer).
@@ -86,7 +113,7 @@ def main():
     sized(icon, 256).save(os.path.join(ROOT, 'assets', 'icon-256.png'), optimize=True)
     for name in ('installerSidebar.bmp', 'uninstallerSidebar.bmp'):
         sidebar(icon, os.path.join(ROOT, 'build', name))
-    print('ok: assets/tray.png, assets/icon-256.png, build/icon.ico, docs/logo.png, build/*Sidebar.bmp')
+    print('ok: assets/tray.png, assets/tray-white.png, assets/icon-256.png, build/icon.ico, build/icons/, docs/logo.png, build/*Sidebar.bmp')
 
 
 if __name__ == '__main__':

@@ -1131,6 +1131,10 @@ Microsoft Defender inactif, signatures à jour | Microsoft Defender off, signatu
 Microsoft Defender actif, signatures datant de {0} jours | Microsoft Defender on, signatures {0} days old | Mandeha ny Microsoft Defender, sonia efa {0} andro
 Microsoft Defender inactif, signatures datant de {0} jours | Microsoft Defender off, signatures {0} days old | Tsy mandeha ny Microsoft Defender, sonia efa {0} andro
 bloqué | blocked | voasakana
+Réduire | Minimize | Ahena
+Agrandir | Maximize | Ampitomboy
+Restaurer | Restore | Avereno ny habe
+Fermer | Close | Hidio
 menace | threat | fandrahonana
 menaces | threats | fandrahonana
 gros fichier | large file | rakitra lehibe

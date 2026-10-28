@@ -12,6 +12,14 @@ contextBridge.exposeInMainWorld('pcm', {
   lite: process.argv.includes('--bmp-lite'),
   lang: ipcRenderer.sendSync('app:lang') || 'fr', // Read once per page load: a language change reloads the page
   firstRun: process.argv.includes('--bmp-welcome'),
+  // Linux: the window has no system frame, so the interface draws its own corners and buttons.
+  frameless: process.argv.includes('--bmp-frameless'),
+  round: process.argv.includes('--bmp-round'),
+  win: {
+    control: (action) => ipcRenderer.send('win:control', action),
+    resize: (edge) => ipcRenderer.send('win:resize', edge),
+    onState: (cb) => ipcRenderer.on('win:state', (_e, s) => cb(s)),
+  },
   caps: () => call('app:caps'),
   latest: () => call('app:latest'),
   update: () => call('app:update'),

@@ -1,5 +1,5 @@
 // Electron main process: windows, tray icon, and IPC for the Windows and Linux services.
-const { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage, dialog, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage, dialog, Notification, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -7,12 +7,16 @@ const os = require('os');
 const { platform, system, cleaner, storage, apps, protection, tools } = require('./services');
 const isLinux = platform === 'linux';
 const { createMenubar } = require('./menubar');
+const { notifySend, integrateAppImage } = require('./linux-desktop');
 
 // Native Wayland does not let apps place their windows, so use XWayland
 // to keep the mini panel below the top bar.
 if (isLinux && process.env.DISPLAY && !app.commandLine.hasSwitch('ozone-platform')) {
   app.commandLine.appendSwitch('ozone-platform', 'x11');
 }
+
+// Links the window, the notifications and the menu entry (boost-my-pc.desktop) on Linux.
+if (isLinux) app.setDesktopName('boost-my-pc.desktop');
 
 let win = null;
 let tray = null;
@@ -41,6 +45,24 @@ let prefs = defaultPrefs;
 const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
 const T = require('./i18n-main').makeT(() => uiLang());
 
+// Linux: no system frame. The interface draws its own buttons, and the window's shape is cut with
+// rounded corners (X11 shape). No transparent window: rendered without graphics acceleration, a
+// transparent window can freeze the interface.
+const RADIUS = 14;
+function roundShape(w) {
+  if (w.isDestroyed()) return;
+  if (w.isMaximized() || w.isFullScreen()) return w.setShape([]);
+  const { width, height } = w.getContentBounds();
+  const rects = [];
+  // One strip per row of the corners, then the middle part.
+  for (let y = 0; y < RADIUS; y++) {
+    const inset = Math.ceil(RADIUS - Math.sqrt(RADIUS * RADIUS - (RADIUS - y - 0.5) ** 2));
+    rects.push({ x: inset, y, width: width - 2 * inset, height: 1 });
+    rects.push({ x: inset, y: height - 1 - y, width: width - 2 * inset, height: 1 });
+  }
+  rects.push({ x: 0, y: RADIUS, width, height: Math.max(0, height - 2 * RADIUS) });
+  w.setShape(rects);
+}
 function createWindow() {
   win = new BrowserWindow({
     width: 1120,
@@ -50,14 +72,14 @@ function createWindow() {
     title: 'Boost My Pc',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     backgroundColor: backgroundColor(),
-    titleBarStyle: 'hidden',
-    titleBarOverlay: titleBarColors(),
-    ...(isLinux ? {} : { backgroundMaterial: 'mica' }),
+    ...(isLinux
+      ? { frame: false }
+      : { titleBarStyle: 'hidden', titleBarOverlay: titleBarColors(), backgroundMaterial: 'mica' }),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       // Lets the page start in lightweight mode before its first render.
-      additionalArguments: [liteMode() ? '--bmp-lite' : '--bmp-full', ...(prefs.welcomed ? [] : ['--bmp-welcome'])],
+      additionalArguments: [liteMode() ? '--bmp-lite' : '--bmp-full', ...(prefs.welcomed ? [] : ['--bmp-welcome']), ...(isLinux ? ['--bmp-frameless', '--bmp-round'] : [])],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -88,6 +110,15 @@ function createWindow() {
   win.on('close', (e) => {
     if (!quitting && prefs.minimizeToTray && tray) { e.preventDefault(); win.hide(); }
   });
+  // The interface draws square corners again when the window fills the screen.
+  const sendState = () => {
+    if (win.isDestroyed()) return;
+    win.webContents.send('win:state', { maximized: win.isMaximized() || win.isFullScreen() });
+    if (isLinux) roundShape(win);
+  };
+  for (const ev of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) win.on(ev, sendState);
+  if (isLinux) { win.on('resize', () => roundShape(win)); win.once('ready-to-show', () => roundShape(win)); }
+  win.webContents.on('did-finish-load', sendState);
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   if (process.argv.includes('--dev')) win.webContents.openDevTools({ mode: 'detach' });
 }
@@ -124,7 +155,8 @@ function titleBarColors() {
 // Tray icon from assets/tray.png (made from icon.png by scripts/make-icons.py), with one
 // image per display scale so it stays sharp at 125 %, 150 % and 200 %.
 function trayImage(size) {
-  const src = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'tray.png'));
+  // Linux top bars use one-colour white icons; the colour logo stays on Windows.
+  const src = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', isLinux ? 'tray-white.png' : 'tray.png'));
   const img = nativeImage.createEmpty();
   for (const scale of [1, 1.25, 1.5, 2]) {
     const px = Math.round(size * scale);
@@ -154,7 +186,9 @@ function showWindow() { if (!win) createWindow(); win.show(); win.focus(); }
 
 function applyTheme() {
   nativeTheme.themeSource = prefs.theme;
-  if (win) { win.setTitleBarOverlay?.(titleBarColors()); win.setBackgroundColor(backgroundColor()); }
+  // Windows only: Linux windows have no system buttons (the interface draws them), and the call
+  // throws there.
+  if (win) { if (!isLinux) win.setTitleBarOverlay?.(titleBarColors()); win.setBackgroundColor(backgroundColor()); }
 }
 
 // ---------- Launch at startup ----------
@@ -224,14 +258,45 @@ function registerIpc() {
   handle('app:caps', capabilities);
   // System notification (Windows action center, Linux notification daemon); a click opens the result.
   handle('app:notify', ({ title, body, route } = {}) => {
-    if (!Notification.isSupported()) return false;
-    const n = new Notification({ title: String(title || 'Boost My Pc'), body: String(body || ''), icon: iconPath, silent: true });
+    const t = String(title || 'Boost My Pc'), b = String(body || '');
+    if (!Notification.isSupported()) return isLinux ? notifySend(t, b) : false;
+    const n = new Notification({ title: t, body: b, icon: iconPath, silent: true });
     n.on('click', () => {
       showWindow();
       if (route) win?.webContents.send('action', `go:${route}`);
     });
+    // The notification service refused it (no daemon on the session bus): try notify-send.
+    n.on('failed', () => { if (isLinux) notifySend(t, b); });
     n.show();
     return true;
+  });
+  // Window buttons and edges, for the frameless Linux window.
+  ipcMain.on('win:control', (_e, action) => {
+    if (!win || win.isDestroyed()) return;
+    if (action === 'minimize') win.minimize();
+    else if (action === 'maximize') (win.isMaximized() ? win.unmaximize() : win.maximize());
+    else if (action === 'close') win.close();
+  });
+  let resizing = null;
+  ipcMain.on('win:resize', (_e, edge) => {
+    clearInterval(resizing?.timer);
+    resizing = null;
+    if (!edge || !win || win.isDestroyed() || win.isMaximized()) return;
+    const start = { edge, b: win.getBounds(), p: screen.getCursorScreenPoint() };
+    const [minW, minH] = win.getMinimumSize();
+    // Follows the pointer until the interface says it was released (or after one minute).
+    start.timer = setInterval(() => {
+      if (!win || win.isDestroyed() || Date.now() - start.t0 > 60000) return clearInterval(start.timer);
+      const p = screen.getCursorScreenPoint(), dx = p.x - start.p.x, dy = p.y - start.p.y;
+      let { x, y, width, height } = start.b;
+      if (edge.includes('e')) width = Math.max(minW, start.b.width + dx);
+      if (edge.includes('s')) height = Math.max(minH, start.b.height + dy);
+      if (edge.includes('w')) { width = Math.max(minW, start.b.width - dx); x = start.b.x + start.b.width - width; }
+      if (edge.includes('n')) { height = Math.max(minH, start.b.height - dy); y = start.b.y + start.b.height - height; }
+      win.setBounds({ x, y, width, height });
+    }, 12);
+    start.t0 = Date.now();
+    resizing = start;
   });
   // Latest published version (Settings > About), and the in-app update to it.
   const updater = require('./updater');
@@ -565,8 +630,10 @@ if (elevateAtLaunch()) {
       createTray();
     }
     createWindow();
+    // AppImage: add it to the application menu (a moment later, so the window appears first).
+    if (isLinux) setTimeout(() => { try { integrateAppImage(); } catch {} }, 4000);
     if (menubar && process.argv.includes('--mini')) menubar.showMini('corner');
-    nativeTheme.on('updated', () => { win?.setTitleBarOverlay?.(titleBarColors()); });
+    nativeTheme.on('updated', () => { if (!isLinux) win?.setTitleBarOverlay?.(titleBarColors()); });
   });
   app.on('before-quit', () => { quitting = true; });
   app.on('window-all-closed', () => { if (!tray) app.quit(); });

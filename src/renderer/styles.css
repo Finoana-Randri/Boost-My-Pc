@@ -1512,6 +1512,9 @@ select:focus { border-color: var(--a2); }
 .dfoot { flex-shrink: 0; display: flex; justify-content: center; padding: 6px 0 14px; }
 .dfoot:empty { display: none; }
 .dfoot > .action-bar { position: static; margin: 0 auto; }
+/* In this column, lists and cards keep their height (their overflow is hidden: they would shrink and
+   hide their last rows); the whole page scrolls instead. */
+.dbody > * { flex-shrink: 0; }
 .dbody > .action-bar { margin-top: auto; }
 .dhead .tabs { margin-bottom: 4px; }
 
@@ -1602,3 +1605,29 @@ select:focus { border-color: var(--a2); }
   .hx-chip { font-size: 11px; }
 }
 @media (max-width: 640px) { .hx-side { grid-template-columns: minmax(0, 1fr); } .hx-side > * { grid-column: 1 !important; grid-row: auto !important; } }
+
+/* ---------- Linux window without a system frame ---------- */
+.wc { margin-left: auto; margin-right: 12px; display: flex; align-items: center; gap: 8px; -webkit-app-region: no-drag; }
+.wc button {
+  width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: var(--text-2); background: var(--glass); box-shadow: inset 0 0 0 1px var(--glass-border);
+  transition: background .15s, color .15s, transform .15s cubic-bezier(.2, 1.4, .4, 1);
+}
+.wc button:hover { background: var(--glass-hover); color: var(--text); }
+.wc button:active { transform: scale(.9); }
+.wc .wc-close:hover { background: #e5484d; color: #fff; box-shadow: none; }
+.wc svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+/* Invisible edges and corners to resize with the mouse. */
+.rz { position: fixed; z-index: 90; -webkit-app-region: no-drag; }
+.rz-n { top: 0; left: 14px; right: 14px; height: 5px; cursor: ns-resize; }
+.rz-s { bottom: 0; left: 14px; right: 14px; height: 5px; cursor: ns-resize; }
+.rz-e { right: 0; top: 14px; bottom: 14px; width: 5px; cursor: ew-resize; }
+.rz-w { left: 0; top: 14px; bottom: 14px; width: 5px; cursor: ew-resize; }
+.rz-ne { top: 0; right: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.rz-sw { bottom: 0; left: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.rz-nw { top: 0; left: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.rz-se { bottom: 0; right: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+html.maximized .rz { display: none; }
+/* Round window: the window's shape is cut with 14 px corners (main.js); a thin light edge follows them. */
+html.round body::after { content: ""; position: fixed; inset: 0; z-index: 200; border-radius: 14px; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); }
+html.round.maximized body::after { display: none; }

@@ -116,8 +116,14 @@ async function checkWindowsUpdates() {
     }
   } catch {}
   if (which('flatpak')) {
-    const out = await run('flatpak', ['remote-ls', '--updates', '--columns=name,application,version'], { timeout: 120000 }).catch(() => '');
-    for (const l of out.split('\n')) { const [n, id, v] = l.split('\t'); if (id) updates.push({ title: n || id, version: v, category: 'Flatpak' }); }
+    const out = await run('flatpak', ['remote-ls', '--updates', '--columns=name,application,branch,version'], { timeout: 120000 }).catch(() => '');
+    for (const l of out.split('\n')) {
+      const [n, id, branch, v] = l.split('\t');
+      if (!id) continue;
+      // Runtimes and graphics extensions are all named "default": the package id says more.
+      const name = n && !/^(default|locale|extension|extra)$/i.test(n.trim()) ? n.trim() : id;
+      updates.push({ title: name, version: v || branch || '', category: 'Flatpak' });
+    }
   }
   if (which('snap')) {
     const out = await run('snap', ['refresh', '--list'], { okCodes: [0, 1] }).catch(() => '');

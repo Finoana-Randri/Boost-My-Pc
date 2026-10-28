@@ -25,6 +25,42 @@ const APP_TYPES = IS_LINUX
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const content = $('#content');
+
+// ===================== Frameless window (Linux) =====================
+// No system frame: round corners, our own buttons, and invisible edges to resize with the mouse.
+if (pcm.frameless) {
+  const root = document.documentElement;
+  root.classList.add('frameless');
+  if (pcm.round) root.classList.add('round');
+  const svg = (d) => `<svg viewBox="0 0 16 16" aria-hidden="true">${d}</svg>`;
+  const WC = {
+    minimize: svg('<path d="M3.5 8.5h9"/>'),
+    maximize: svg('<rect x="3.5" y="3.5" width="9" height="9" rx="2"/>'),
+    restore: svg('<rect x="3" y="5.5" width="7.5" height="7.5" rx="2"/><path d="M6 3.5h5.5a2 2 0 0 1 2 2V11"/>'),
+    close: svg('<path d="M4 4l8 8M12 4l-8 8"/>'),
+  };
+  $('.titlebar').insertAdjacentHTML('beforeend', `<div class="wc">
+    <button data-wc="minimize" title="Réduire" aria-label="Réduire">${WC.minimize}</button>
+    <button data-wc="maximize" title="Agrandir" aria-label="Agrandir">${WC.maximize}</button>
+    <button data-wc="close" class="wc-close" title="Fermer" aria-label="Fermer">${WC.close}</button></div>`);
+  $$('[data-wc]').forEach((b) => (b.onclick = () => pcm.win.control(b.dataset.wc)));
+  document.body.insertAdjacentHTML('beforeend', ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map((e) => `<i class="rz rz-${e}" data-rz="${e}" aria-hidden="true"></i>`).join(''));
+  $$('.rz').forEach((h) => h.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    h.setPointerCapture(ev.pointerId); // the release is received even outside the window
+    pcm.win.resize(h.dataset.rz);
+    const end = () => { pcm.win.resize(null); h.removeEventListener('pointerup', end); h.removeEventListener('pointercancel', end); };
+    h.addEventListener('pointerup', end);
+    h.addEventListener('pointercancel', end);
+  }));
+  pcm.win.onState(({ maximized }) => {
+    root.classList.toggle('maximized', maximized);
+    const b = $('[data-wc="maximize"]');
+    b.innerHTML = maximized ? WC.restore : WC.maximize;
+    b.title = b.ariaLabel = maximized ? 'Restaurer' : 'Agrandir';
+  });
+}
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function fmtBytes(b, d = 1) {
