@@ -90,10 +90,10 @@ Download the installers from the [latest release](https://github.com/Finoana-Ran
 
 ```bash
 # Debian / Ubuntu / Mint / Pop!_OS
-sudo apt install ./Boost-My-Pc-2.4.1.deb
+sudo apt install ./Boost-My-Pc-2.4.2.deb
 
 # All distributions
-chmod +x Boost-My-Pc-2.4.1.AppImage && ./Boost-My-Pc-2.4.1.AppImage
+chmod +x Boost-My-Pc-2.4.2.AppImage && ./Boost-My-Pc-2.4.2.AppImage
 ```
 
 On Ubuntu 22.04 and later, AppImages need FUSE 2: `sudo apt install libfuse2t64` (`libfuse2` on 22.04). The first time an AppImage starts, it adds itself to the application menu (entry and icons in `~/.local/share`), on any distribution; moving the file updates the entry. The .deb installs its own entry and icons.
@@ -104,7 +104,7 @@ The window has rounded corners and its own buttons on Linux (resize it from any 
 
 ### Windows
 
-1. Download `Boost-My-Pc-Setup-2.4.1.exe` from the latest release.
+1. Download `Boost-My-Pc-Setup-2.4.2.exe` from the latest release.
 2. Run it and accept the Windows prompt. The setup wizard (in French) lets you choose the install folder, then creates **Boost My Pc** shortcuts on the desktop and in the Start menu, and launches the app.
 3. The installer is not code-signed yet, so Windows SmartScreen may show *Windows protected your PC*. Select **More info**, then **Run anyway**.
 
@@ -154,7 +154,11 @@ With Docker, run `scripts/docker-test.sh` (Debian 12, Fedora 41, Arch Linux) or 
 ## Project structure
 
 ```
-src/main.js                 Main process, IPC, lightweight mode
+src/main.js                 Main process: window, tray icon, IPC
+src/prefs.js                User preferences
+src/admin.js                Administrator rights on Windows (UAC, scheduled task)
+src/linux-window.js         Linux window: rounded shape, window buttons, resizing
+src/linux-desktop.js        Linux menu entry for the AppImage, notify-send fallback
 src/menubar.js              Top-bar icon, mini panel, alerts
 src/updater.js              In-app update from the latest GitHub release
 src/services/               Windows (PowerShell), Linux (src/services/linux), and shared services
@@ -163,7 +167,7 @@ src/services/v2/            v2 modules: Smart Care, maintenance, privacy, permis
 src/renderer/               App interface and mini panel
 src/renderer/i18n*.js       Interface languages (translator and dictionary)
 assets/                     App and tray icons
-build/                      Windows installer resources (icon.ico, wizard banners)
+build/                      Installer resources (icons, wizard banners, .deb scripts, Linux launcher)
 scripts/                    Tests and Docker builds
 docs/                       Logo and screenshots
 ```

@@ -12,12 +12,10 @@ else
     ln -sf "$APP/boost-my-pc" '/usr/bin/boost-my-pc'
 fi
 
-# Chromium's SUID helper can't be started from a folder with spaces: not used (the launcher asks
-# for the user-namespace sandbox).
+# Not used: the SUID helper can't start from a path with spaces (see build/afterPack.js).
 chmod 0755 "$APP/chrome-sandbox" || true
 
-# Ubuntu 24.04 and later forbid user namespaces to ordinary programs unless an AppArmor profile
-# allows them: install the profile for this program (same method as Chrome or VS Code).
+# Ubuntu 24.04+ only allows user namespaces to programs with an AppArmor profile that says so.
 if [ -e /etc/apparmor.d/abi/4.0 ]; then
     cat > /etc/apparmor.d/boost-my-pc <<'EOF'
 abi <abi/4.0>,
