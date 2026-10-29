@@ -40,6 +40,8 @@ h1, h2, .big, .sc-val, .hx-big, .ov-card-title, .titlebar-title { font-family: "
 h1 { font-weight: 700; }
 .hx-eyebrow, .wl-eyebrow { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 700; }
 :root { --blob-op: .36; }
+/* The background holds still: a moving full-window layer is distracting and redraws every glass panel. */
+.aurora i { animation: none !important; will-change: auto; }
 @media (prefers-color-scheme: light) { :root { --blob-op: .38; } }
 
 /* Icons inside lists and cards sit on a quiet tinted glass, the color carried by the glyph;
@@ -54,13 +56,12 @@ h1 { font-weight: 700; }
 }
 
 /* ===================== Liquid glass material ===================== */
-/* Light frost, a bright rim where light catches the edge, a sheen on top. Surfaces marked
-   data-refract also bend what lies behind them (liquid-glass.js). */
+/* Light frost, a bright rim where light catches the edge, a sheen on top. */
 .lg {
   position: relative;
   isolation: isolate;
   background: linear-gradient(170deg, var(--lg-fill-hi), var(--lg-fill) 40%, var(--lg-fill) 70%, color-mix(in srgb, var(--lg-fill-hi) 55%, transparent));
-  backdrop-filter: var(--lg-refract,) blur(var(--lg-blur, 14px)) saturate(180%);
+  backdrop-filter: blur(var(--lg-blur, 14px)) saturate(180%);
   box-shadow: inset 0 -14px 26px -16px rgba(255, 255, 255, .22), var(--lg-shadow);
 }
 .lg::before,
@@ -74,16 +75,15 @@ h1 { font-weight: 700; }
 }
 .lg::after { background: radial-gradient(90% 55% at 30% 0%, var(--lg-sheen), transparent 70%); }
 
-/* Panels are clear glass too: light catches their top-left rim, the inner edge glows faintly,
-   and the larger ones bend the background along their border (liquid-glass.js). */
+/* Panels are clear glass too: light catches their top-left rim and the inner edge glows faintly. */
 .glass {
   background-image: var(--sheen); border-color: transparent;
-  backdrop-filter: var(--lg-refract,) blur(16px) saturate(190%);
+  backdrop-filter: blur(16px) saturate(190%);
   box-shadow: var(--edge), var(--shadow);
 }
-.action-bar, .toast { backdrop-filter: var(--lg-refract,) blur(20px) saturate(190%); }
+.toast { backdrop-filter: blur(20px) saturate(190%); }
 
-@keyframes lgIn { from { opacity: 0; scale: .94; filter: blur(6px); } }
+@keyframes lgIn { from { opacity: 0; scale: .94; } }
 @keyframes rise { from { opacity: 0; translate: 0 12px; } }
 
 h1 { letter-spacing: -.022em; }
@@ -92,7 +92,7 @@ h1 { letter-spacing: -.022em; }
 .sidebar.glass {
   border-radius: 22px;
   background-color: color-mix(in srgb, var(--glass) 70%, rgba(20, 8, 40, .35));
-  backdrop-filter: var(--lg-refract,) blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
 }
 @media (prefers-color-scheme: light) { .sidebar.glass { background-color: rgba(255, 255, 255, .36); } }
 .nav-group { text-transform: none; letter-spacing: 0; font-size: 11.5px; font-weight: 800; color: var(--text-3); margin: 14px 12px 4px; }
@@ -144,10 +144,10 @@ body {
 .btn, .back, .sc-link {
   border-color: transparent;
   background: var(--glass-clear);
-  backdrop-filter: var(--lg-refract,) blur(10px) saturate(190%);
+  backdrop-filter: none;
   box-shadow: var(--rim-clear), 0 4px 14px rgba(8, 0, 24, .18);
 }
-select { border-color: transparent; background-color: var(--glass); backdrop-filter: blur(10px) saturate(190%); box-shadow: var(--rim-clear), 0 4px 14px rgba(8, 0, 24, .18); }
+select { border-color: transparent; background-color: var(--glass); backdrop-filter: none; box-shadow: var(--rim-clear), 0 4px 14px rgba(8, 0, 24, .18); }
 .btn:hover, .back:hover, .sc-link:hover { background: var(--glass-clear); box-shadow: var(--rim-clear), inset 0 0 0 100px rgba(255, 255, 255, .05), 0 6px 18px rgba(8, 0, 24, .22); }
 .btn.ghost { background: transparent; backdrop-filter: none; box-shadow: none; }
 .btn.ghost:hover { background: var(--glass); }
@@ -155,7 +155,7 @@ select { border-color: transparent; background-color: var(--glass); backdrop-fil
 .btn.primary, .btn-main, .view-toggle button.active {
   color: #fff;
   background: var(--glass-tint);
-  backdrop-filter: var(--lg-refract,) blur(6px) saturate(190%);
+  backdrop-filter: none;
   box-shadow: var(--rim-tint), 0 8px 20px color-mix(in srgb, var(--a1) 26%, transparent);
 }
 .btn.primary:hover, .btn-main:hover { background: var(--glass-tint); filter: none; transform: translateY(-1px); box-shadow: var(--rim-tint), inset 0 0 0 100px rgba(255, 255, 255, .06), 0 12px 26px color-mix(in srgb, var(--a1) 34%, transparent); }
@@ -202,21 +202,20 @@ select { border-color: transparent; background-color: var(--glass); backdrop-fil
 .intro.ms { display: flex; flex-direction: column; align-items: center; justify-content: safe center; text-align: center; padding: 4px 0 8px; }
 
 /* The module icon in a piece of colored glass. Three lights turn inside it, each on its own orbit
-   and speed, so the color moves like a liquid without ever leaving the glass. The lens leans
-   towards the pointer (--px and --py, set by motion.js). */
+   and speed (turned by motion.js), so the color moves like a liquid without ever leaving
+   the glass. The lens leans towards the pointer (--px and --py). */
 .ms-hero { position: relative; width: 240px; height: 196px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; perspective: 700px; }
 .ms-glow { position: absolute; inset: -24px; border-radius: 50%; pointer-events: none; background: radial-gradient(closest-side, color-mix(in srgb, var(--a2) 30%, transparent), transparent); animation: auraIn 1s var(--spring) both; }
 .ms-aura { position: absolute; inset: 0; z-index: -2; translate: calc(var(--px, 0) * -7px) calc(var(--py, 0) * -6px); animation: auraIn .9s var(--spring) both; }
-.ms-aura i { position: absolute; inset: 0; animation: orbit 15s linear infinite; }
+.ms-aura i { position: absolute; inset: 0; }
 .ms-aura i::before { content: ""; position: absolute; border-radius: 50%; background: radial-gradient(closest-side, var(--c), color-mix(in srgb, var(--c) 72%, transparent) 50%, transparent); }
 .ms-aura i:nth-child(1) { --c: var(--a2); }
 .ms-aura i:nth-child(1)::before { width: 80%; height: 80%; left: -8%; top: -6%; }
-.ms-aura i:nth-child(2) { --c: var(--a1); animation-duration: 21s; animation-direction: reverse; }
+.ms-aura i:nth-child(2) { --c: var(--a1); }
 .ms-aura i:nth-child(2)::before { width: 86%; height: 86%; right: -10%; bottom: -10%; }
-.ms-aura i:nth-child(3) { --c: color-mix(in srgb, var(--a2) 45%, #fff); animation-duration: 27s; opacity: .85; }
+.ms-aura i:nth-child(3) { --c: color-mix(in srgb, var(--a2) 45%, #fff); opacity: .85; }
 .ms-aura i:nth-child(3)::before { width: 52%; height: 52%; left: 46%; top: 4%; }
 @keyframes auraIn { from { opacity: 0; scale: .7; } }
-@keyframes orbit { to { rotate: 360deg; } }
 
 .ms-lens {
   width: 152px; height: 152px; border-radius: 46px; display: flex; align-items: center; justify-content: center; color: #fff;
@@ -241,7 +240,7 @@ select { border-color: transparent; background-color: var(--glass); backdrop-fil
   width: 100%; max-width: 780px; margin: 0 0 26px; text-align: left;
 }
 .ms-feature {
-  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 20px; --lg-blur: 20px;
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 20px; --lg-blur: 12px;
   animation: lgIn .6s var(--spring) var(--d) both; transition: transform var(--t-bounce) var(--spring-bounce);
 }
 .ms-feature { --lg-fill: rgba(255, 255, 255, .035); --lg-fill-hi: rgba(255, 255, 255, .075); --lg-rim: rgba(255, 255, 255, .5); --lg-rim-low: rgba(255, 255, 255, .14); }
@@ -266,41 +265,40 @@ button.ms-feature { border: 0; font: inherit; color: inherit; text-align: left; 
 .ms-feature.choice:active { transform: scale(.97); transition: transform .1s ease-out; }
 .ms-feature.choice > div > span { -webkit-line-clamp: 1; word-break: break-all; }
 
-/* Scan button: a drop of tinted glass inside a thin bezel, lit from the top-left, with the
-   module color glowing underneath. */
+/* Scan button: a colored glass core lit from the top-left, with a little volume underneath, a fine
+   ring set apart from it (it opens slightly under the pointer) and the module color glowing below. */
 .scan-btn {
-  width: 128px; height: 128px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; color: #fff; font-size: 17px; font-weight: 900; letter-spacing: .005em;
+  width: 124px; height: 124px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16.5px; font-weight: 700; letter-spacing: .01em;
   background:
-    radial-gradient(110% 65% at 50% -12%, rgba(255, 255, 255, .34), transparent 58%),
-    radial-gradient(80% 50% at 50% 112%, color-mix(in srgb, var(--a2) 55%, transparent), transparent 70%),
-    linear-gradient(165deg, color-mix(in srgb, var(--a2) 94%, transparent), color-mix(in srgb, var(--a1) 94%, transparent));
-  backdrop-filter: var(--lg-refract,) blur(6px) saturate(180%);
+    radial-gradient(75% 60% at 32% 22%, rgba(255, 255, 255, .42), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(100% 80% at 50% 100%, color-mix(in srgb, var(--a1) 85%, #000) 0%, transparent 60%),
+    linear-gradient(160deg, var(--a2), var(--a1));
+  backdrop-filter: none;
   box-shadow:
-    inset 1.5px 1.5px 1px -1px rgba(255, 255, 255, .9), inset -1.5px -1.5px 1px -1px rgba(255, 255, 255, .4),
-    inset 0 0 0 1px rgba(255, 255, 255, .14),
-    0 0 0 9px rgba(255, 255, 255, .03), 0 0 0 10px rgba(255, 255, 255, .1),
-    0 22px 48px -12px color-mix(in srgb, var(--a1) 60%, transparent);
-  transition: transform var(--t-bounce) var(--spring-bounce), box-shadow .3s;
+    inset 0 1.5px 1px rgba(255, 255, 255, .55), inset 0 -10px 18px -6px rgba(20, 0, 40, .28), inset 0 0 0 1px rgba(255, 255, 255, .12),
+    0 2px 4px rgba(10, 0, 30, .25), 0 22px 46px -14px color-mix(in srgb, var(--a1) 70%, transparent);
+  outline: 1.5px solid color-mix(in srgb, var(--a2) 32%, rgba(255, 255, 255, .22));
+  outline-offset: 7px;
+  transition: transform var(--t-bounce) var(--spring-bounce), outline-offset var(--t-bounce) var(--spring-bounce), box-shadow .3s;
   animation: lgIn .7s var(--spring) .22s both;
 }
 .scan-btn::before, .scan-btn::after { content: none; }
-.scan-btn > span { text-shadow: 0 1px 8px rgba(30, 0, 50, .28); }
+.scan-btn > span { text-shadow: 0 1px 6px rgba(20, 0, 40, .3); }
 .scan-btn:hover {
-  transform: scale(1.04);
+  transform: scale(1.03); outline-offset: 10px;
   box-shadow:
-    inset 1.5px 1.5px 1px -1px rgba(255, 255, 255, .95), inset -1.5px -1.5px 1px -1px rgba(255, 255, 255, .45),
-    inset 0 0 0 1px rgba(255, 255, 255, .16),
-    0 0 0 9px rgba(255, 255, 255, .04), 0 0 0 10px rgba(255, 255, 255, .14),
-    0 28px 60px -10px color-mix(in srgb, var(--a1) 85%, transparent);
+    inset 0 1.5px 1px rgba(255, 255, 255, .6), inset 0 -10px 18px -6px rgba(20, 0, 40, .25), inset 0 0 0 1px rgba(255, 255, 255, .14),
+    0 2px 4px rgba(10, 0, 30, .25), 0 26px 54px -14px color-mix(in srgb, var(--a1) 80%, transparent);
 }
-.scan-btn:active { transform: scale(.95); transition: transform .1s ease-out; }
+.scan-btn:active { transform: scale(.95); outline-offset: 5px; transition: transform .1s ease-out, outline-offset .1s ease-out; }
 .scan-btn:disabled { cursor: default; opacity: .7; transform: none; }
 @media (prefers-color-scheme: light) {
-  .scan-btn { box-shadow: inset 1.5px 1.5px 1px -1px #fff, inset -1.5px -1.5px 1px -1px rgba(255, 255, 255, .5), inset 0 0 0 1px rgba(255, 255, 255, .2),
-    0 0 0 9px rgba(255, 255, 255, .35), 0 0 0 10px rgba(255, 255, 255, .8), 0 24px 52px -12px color-mix(in srgb, var(--a1) 55%, transparent); }
+  .scan-btn { outline-color: color-mix(in srgb, var(--a1) 30%, transparent); box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, .6), inset 0 -10px 18px -6px rgba(20, 0, 40, .18), inset 0 0 0 1px rgba(255, 255, 255, .2),
+    0 2px 4px rgba(60, 20, 100, .15), 0 22px 44px -14px color-mix(in srgb, var(--a1) 55%, transparent); }
 }
-.scan-btn:focus-visible { outline: 2px solid var(--a2); outline-offset: 6px; }
+.scan-btn:focus-visible { outline-color: var(--a2); outline-width: 2px; }
 
 .ms-last { display: inline-flex; align-items: center; gap: 6px; margin-top: 18px; font-size: 12px; font-weight: 700; color: var(--text-3); animation: rise var(--t-spring) var(--spring) .3s both; }
 .ms-last .svg-ico { width: 13px; height: 13px; }
@@ -375,30 +373,29 @@ button.ms-feature { border: 0; font: inherit; color: inherit; text-align: left; 
 .sc-log li[data-state="active"] { background-color: rgba(255, 255, 255, .1); }
 @media (prefers-color-scheme: light) { .sc-log li { background-color: rgba(255, 255, 255, .4); } }
 
-/* Main button: the same drop of glass as on the home screens, with its progress ring. */
+/* Main button: drawn like the scan buttons of the home screens, with its progress ring inside. */
 .sc-btn {
   isolation: isolate;
-  background: linear-gradient(170deg, color-mix(in srgb, var(--a2) 92%, #fff) 0%, color-mix(in srgb, var(--a2) 85%, transparent) 40%, color-mix(in srgb, var(--a1) 80%, transparent) 100%);
-  backdrop-filter: var(--lg-refract,) blur(4px) saturate(180%);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .6), inset 0 -16px 26px -10px color-mix(in srgb, var(--a2) 60%, #fff),
-    0 0 0 9px color-mix(in srgb, var(--a2) 12%, transparent), 0 18px 46px color-mix(in srgb, var(--a1) 55%, transparent);
-  transition: transform var(--t-bounce) var(--spring-bounce), box-shadow .3s;
+  background:
+    radial-gradient(75% 60% at 32% 22%, rgba(255, 255, 255, .42), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(100% 80% at 50% 100%, color-mix(in srgb, var(--a1) 85%, #000) 0%, transparent 60%),
+    linear-gradient(160deg, var(--a2), var(--a1));
+  backdrop-filter: none;
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, .55), inset 0 -10px 18px -6px rgba(20, 0, 40, .28), inset 0 0 0 1px rgba(255, 255, 255, .12),
+    0 2px 4px rgba(10, 0, 30, .25), 0 22px 46px -14px color-mix(in srgb, var(--a1) 70%, transparent);
+  outline: 1.5px solid color-mix(in srgb, var(--a2) 32%, rgba(255, 255, 255, .22));
+  outline-offset: 7px;
+  transition: transform var(--t-bounce) var(--spring-bounce), outline-offset var(--t-bounce) var(--spring-bounce), box-shadow .3s;
 }
-.sc-btn::before {
-  inset: 0; z-index: -1;
-  background: radial-gradient(90% 55% at 30% 0%, rgba(255, 255, 255, .45), transparent 70%);
-  -webkit-mask: none; mask: none;
-}
-.sc-btn.ready:hover { transform: scale(1.05); box-shadow: inset 0 1px 1px rgba(255, 255, 255, .6), inset 0 -16px 26px -10px color-mix(in srgb, var(--a2) 60%, #fff), 0 0 0 10px color-mix(in srgb, var(--a2) 16%, transparent), 0 22px 54px color-mix(in srgb, var(--a1) 62%, transparent); }
+.sc-btn::before { content: none; }
+.sc-btn.ready:hover { transform: scale(1.03); outline-offset: 10px; }
 .sc-btn:active { transform: scale(.95); transition: transform .1s ease-out; }
-/* While it works, the bezel breathes in place: nothing grows over the cards around it. */
-.sc-center { padding-top: 18px; gap: 14px; }
-.sc-btn.busy::after, .sc-btn.ready:not(.finished)::after {
-  inset: -10px; border: 1px solid color-mix(in srgb, var(--a2) 60%, #fff); box-shadow: 0 0 18px color-mix(in srgb, var(--a2) 35%, transparent);
-  animation: bezel 2.4s ease-in-out infinite;
-}
-.sc-btn.ready:not(.finished)::after { animation-iteration-count: 3; }
-@keyframes bezel { 0%, 100% { opacity: .25; transform: scale(.98); } 50% { opacity: .9; transform: scale(1.02); } }
+/* While it works, the ring around the button breathes in place: nothing grows over the cards. */
+.sc-center { padding-top: 18px; gap: 16px; }
+.sc-btn.busy::after, .sc-btn.ready:not(.finished)::after { content: none; }
+.sc-btn.busy { animation: ringBreath 2.4s ease-in-out infinite; }
+@keyframes ringBreath { 50% { outline-color: color-mix(in srgb, var(--a2) 75%, #fff); outline-offset: 9px; } }
 .sc-btn span .svg-ico { animation: lgIn .5s var(--spring-bounce); }
 .sc-btn > svg circle { stroke-width: 3.5; }
 .sc-btn .sc-track { stroke: rgba(255, 255, 255, .16); }
@@ -408,7 +405,7 @@ button.ms-feature { border: 0; font: inherit; color: inherit; text-align: left; 
    underneath blur away instead of showing through the text. */
 .action-bar {
   background-color: color-mix(in srgb, var(--bg) 66%, transparent);
-  backdrop-filter: var(--lg-refract,) blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
   box-shadow: var(--edge), 0 18px 44px rgba(6, 0, 20, .5), 0 0 0 1px rgba(255, 255, 255, .04);
 }
 @media (prefers-color-scheme: light) { .action-bar { background-color: rgba(255, 255, 255, .72); box-shadow: var(--edge), 0 16px 40px rgba(80, 30, 140, .2); } }
@@ -445,6 +442,29 @@ input[type=checkbox]:disabled { opacity: .4; cursor: default; }
 .pref-group select { min-width: 0; max-width: 150px; }
 @media (max-width: 1080px) { .prefs { grid-template-columns: minmax(0, 1fr); } }
 
+/* ===================== Health ===================== */
+/* Same language as the rest: quiet tinted icons, glass chips, soft tracks with a lit fill. */
+.hx-ico.g-performance { --c: #ff9f40; } .hx-ico.g-applications { --c: #4fa8ff; } .hx-ico.g-clutter { --c: #36d6c3; } .hx-ico.g-cleanup { --c: #4be3a0; }
+.hx-ico {
+  background: color-mix(in srgb, var(--c) 24%, rgba(255, 255, 255, .04)) !important; color: color-mix(in srgb, var(--c) 88%, #fff);
+  box-shadow: inset 1px 1px 1px -.5px rgba(255, 255, 255, .35), inset 0 0 0 1px color-mix(in srgb, var(--c) 24%, transparent);
+}
+.hx-ico::before { content: none; }
+.hx-card, .hx-side { animation: lgIn .6s var(--spring) backwards; }
+.hx-card { gap: 12px; }
+.hx-card-head b { font-size: 15px; font-weight: 700; }
+.hx-big b { font-weight: 700; letter-spacing: -.02em; }
+.hx-chip { border-color: transparent; background: var(--glass-clear); box-shadow: var(--rim-clear); font-weight: 600; }
+.hx-seg { background: rgba(255, 255, 255, .07); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .25), inset 0 0 0 1px rgba(255, 255, 255, .05); }
+.hx-seg i { position: relative; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35); transition: width .9s var(--spring); }
+.hx-tip { border-color: transparent; box-shadow: var(--edge); }
+.hx-sys-ico { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
+.hx-spark .l { stroke-width: 1.6; }
+@media (prefers-color-scheme: light) {
+  .hx-ico { background: color-mix(in srgb, var(--c) 14%, rgba(255, 255, 255, .6)) !important; color: color-mix(in srgb, var(--c) 80%, #000); }
+  .hx-seg { background: rgba(60, 20, 100, .07); box-shadow: inset 0 1px 2px rgba(60, 20, 100, .12); }
+}
+
 /* ===================== Details ===================== */
 /* Scan screen: a thin ring and a soft light, without decorative particles. */
 .ring-big svg circle { stroke-width: 7; }
@@ -462,8 +482,7 @@ button.row { width: 100%; border: 0; font: inherit; color: inherit; text-align: 
 .hx-bolt { width: 15px; height: 15px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35)); }
 
 /* ===================== Calm and fallback states ===================== */
-body.paused .ms-aura i { animation-play-state: paused !important; }
-body.lite .ms-aura i { animation: none; }
+body.paused .sc-btn.busy { animation-play-state: paused !important; }
 @media (prefers-reduced-motion: reduce) {
   .lg, .ms-glow, .ms-aura, .ms-aura i, .ms-feature, .scan-btn, .tab-thumb, .nav-glider { animation: none !important; transition: none !important; }
   .ms-hero { --px: 0 !important; --py: 0 !important; }

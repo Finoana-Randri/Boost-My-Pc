@@ -197,7 +197,9 @@ function createMenubar({ iconPath, trayImage, traySize = 22, decorate = () => {}
     for (const d of disks) {
       if (d.size && d.free / d.size < 0.1) alert(`disk:${d.id}`, 6 * 3600 * 1000, 'Espace disque faible', `Il reste ${fmtBytes(d.free)} sur ${d.label} (${d.id}). Lancez un nettoyage pour libérer de l'espace.`);
     }
-    const sum = await refreshSummary().catch(() => null);
+    // On Windows the summary (cleanup scan, Defender, Windows Update) is heavy: it is computed when the
+    // panel opens, and the alerts reuse the last one instead of running it in the background.
+    const sum = process.platform === 'linux' ? await refreshSummary().catch(() => null) : summary.updatedAt ? summary : null;
     if (sum?.trash > 1024 ** 3) alert('trash', 24 * 3600 * 1000, 'Corbeille volumineuse', `La corbeille occupe ${fmtBytes(sum.trash)}. Videz-la depuis le mini-panneau.`);
     if (sum?.security > 0) alert('updates', 24 * 3600 * 1000, 'Mises à jour de sécurité', `${sum.security} mise(s) à jour de sécurité disponible(s).`);
   }

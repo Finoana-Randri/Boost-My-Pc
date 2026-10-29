@@ -53,6 +53,26 @@
   document.addEventListener('pointerleave', settle);
   window.addEventListener('blur', settle);
 
+  // Home screens: the lights inside the lens turn on a 30 fps clock. A CSS animation would be
+  // stepped on the main thread at the screen's refresh rate, three times, for a motion this slow.
+  // The clock runs only while a home screen is shown.
+  const SPEEDS = [24, -17, 13]; // degrees per second, one per light
+  let orbitAt = 0, orbiting = false;
+  const orbit = (now) => {
+    const aura = document.querySelector('.ms-aura');
+    if (!aura) { orbiting = false; return; }
+    requestAnimationFrame(orbit);
+    if (now - orbitAt < 33 || document.body.classList.contains('paused') || reduced()) return;
+    orbitAt = now;
+    const t = now / 1000;
+    aura.querySelectorAll('i').forEach((light, k) => { light.style.transform = `rotate(${(t * SPEEDS[k]) % 360}deg)`; });
+  };
+  const startOrbit = () => {
+    if (orbiting || !document.querySelector('.ms-aura')) return;
+    orbiting = true;
+    requestAnimationFrame(orbit);
+  };
+
   // Segmented tabs: a thumb slides from the tab that was selected to the new one, also when the
   // page is redrawn in between.
   const lastTab = new Map(); // tab group -> { x, w }
@@ -84,5 +104,5 @@
     });
   }
 
-  window.Motion = { spring, slideTabs };
+  window.Motion = { spring, slideTabs, startOrbit };
 })();

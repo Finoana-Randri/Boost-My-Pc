@@ -203,6 +203,7 @@ document.addEventListener('pointermove', (e) => {
 
 function pageMotion(root) {
   Motion.slideTabs(root);
+  Motion.startOrbit();
   countUpIn(root);
 }
 
@@ -272,7 +273,7 @@ function intro(mod, { title, lead, features = [], button = 'Analyser', extra = '
   return `<div class="intro ms">
     <div class="ms-hero" aria-hidden="true">
       <div class="ms-glow"></div>
-      <div class="ms-lens lg" data-refract><div class="ms-aura"><i></i><i></i><i></i></div>${micon(mod)}</div>
+      <div class="ms-lens lg"><div class="ms-aura"><i></i><i></i><i></i></div>${micon(mod)}</div>
     </div>
     <span class="ms-eyebrow">${esc(MODULE_GROUP[mod] || '')}</span>
     <h1>${esc(title || MODULES[mod].title)}</h1>
@@ -284,7 +285,7 @@ function intro(mod, { title, lead, features = [], button = 'Analyser', extra = '
     }).join('')}
     </div>` : ''}
     ${extra ? `<div class="ms-extra">${extra}</div>` : ''}
-    <button class="scan-btn lg" id="scan" data-refract><span>${esc(button)}</span></button>
+    <button class="scan-btn" id="scan"><span>${esc(button)}</span></button>
     <span class="ms-last">${icon('clock')} ${lastScanText(mod)}</span>
   </div>`;
 }
@@ -2709,5 +2710,5 @@ pcm.onAction((a) => {
   $('#admin-badge').classList.toggle('hidden', !CAPS.isAdmin);
   if (['tools', 'settings'].includes(currentRoute)) go(currentRoute);
   // Measured ahead, so the Health tab opens on a result.
-  setTimeout(() => measureHealth().catch(() => {}), 6000);
+  setTimeout(() => measureHealth().catch(() => {}), 15000);
 })();
