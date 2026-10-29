@@ -987,9 +987,6 @@ body.paused .wv-spin, body.paused .wv-moon { animation-play-state: paused !impor
 .hx-tip .btn { grid-column: 2; justify-self: start; padding: 5px 12px; font-size: 12px; margin-top: 4px; }
 .hx-tip-ico { width: 26px; height: 26px; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
 .hx-tip-ico .svg-ico { width: 15px; height: 15px; }
-.hx-tip.warn .hx-tip-ico { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
-.hx-tip.bad .hx-tip-ico { background: color-mix(in srgb, var(--bad) 20%, transparent); color: var(--bad); }
-.hx-tip.info .hx-tip-ico { background: var(--glass-strong); color: var(--text-2); }
 .hx-allgood { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 18px 8px; }
 .hx-allgood > span { width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); box-shadow: 0 0 0 8px color-mix(in srgb, var(--ok) 8%, transparent); }
 .hx-allgood .svg-ico { width: 26px; height: 26px; }
@@ -998,7 +995,7 @@ body.paused .wv-spin, body.paused .wv-moon { animation-play-state: paused !impor
 .hx-sys-row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 700; color: var(--text-2); padding: 6px 0; }
 .hx-sys-row b { margin-left: auto; color: var(--text); }
 .hx-sys-row b.ok { color: var(--ok); } .hx-sys-row b.warn { color: var(--warn); } .hx-sys-row b.bad { color: var(--bad); }
-.hx-sys-ico { width: 26px; height: 26px; border-radius: 8px; background: var(--glass-strong); display: flex; align-items: center; justify-content: center; color: var(--text-2); }
+.hx-sys-ico { width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .hx-sys-ico .f-ico-svg { width: 15px; height: 15px; }
 .shimmer { min-height: 230px; background: linear-gradient(100deg, var(--glass) 30%, var(--glass-strong) 50%, var(--glass) 70%) !important; background-size: 300% 100% !important; animation: sweep 1.6s linear infinite !important; }
 @media (max-width: 1100px) {

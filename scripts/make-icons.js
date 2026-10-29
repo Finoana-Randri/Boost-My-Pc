@@ -97,7 +97,8 @@ const NAMES = {
 // On cards a bare mark looks lost: these use the circled version.
 const DUOTONE_NAMES = { check: 'check-circle', x: 'x-circle', info: 'info' };
 
-const FILLED = ['smart', 'cleanup', 'protection', 'performance', 'applications', 'clutter', 'lens', 'cloud', 'shredder', 'tools', 'settings', 'bolt'];
+const FILLED = ['smart', 'cleanup', 'protection', 'performance', 'applications', 'clutter', 'lens', 'cloud', 'shredder', 'tools', 'settings', 'bolt',
+  'process', 'memory', 'storage', 'battery', 'shield', 'update', 'refresh', 'clock', 'warn', 'check'];
 const BOLD = ['check', 'chevron', 'back', 'x', 'warn'];
 
 // Phosphor has no shredder: drawn here on the same 256 grid and 16 px stroke.

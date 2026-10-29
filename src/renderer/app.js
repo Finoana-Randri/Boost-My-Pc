@@ -2399,6 +2399,8 @@ function renderHealth(token, h, quiet = false) {
     ...(b ? [['battery', 'Batterie', `<b>${b.health ?? b.charge ?? '–'} %</b>`, batLvl]] : []),
   ];
   const tipIcon = { bad: 'warn', warn: 'warn', info: 'clock', ok: 'check' };
+  const TIP_TINT = { bad: 'g-shredder', warn: 'g-performance', info: 'g-lens', ok: 'g-cleanup' };
+  const SYS_TINT = { shield: 'g-protection', update: 'g-applications', refresh: 'g-performance', warn: 'g-shredder', clock: 'g-lens' };
   const sysRows = [
     h.system.antivirus ? ['shield', 'Protection en temps réel', h.system.antivirus.on ? 'Active' : 'Désactivée', h.system.antivirus.on ? 'ok' : 'bad'] : null,
     h.system.antivirus ? ['update', 'Signatures antivirus', h.system.antivirus.signatureAge > 0 ? `${plural(h.system.antivirus.signatureAge, 'jour', 'jours')}` : 'À jour', h.system.antivirus.signatureAge > 7 ? 'warn' : 'ok'] : null,
@@ -2418,27 +2420,27 @@ function renderHealth(token, h, quiet = false) {
         <span class="hx-eyebrow"><i class="hx-led"></i>Indice de santé · ${esc(h.label)}</span>
         <h2>${HEALTH_TITLES[h.label] || h.label}</h2>
         <p>${h.tips.length ? `${plural(h.tips.length, 'recommandation', 'recommandations')} pour l'améliorer.` : 'Aucun problème détecté.'} Mesuré à ${at} · ${esc(h.system.os || '')}</p>
-        <div class="hx-chips">${chips.map(([ic, t, v, l, id]) => `<span class="hx-chip ${l}" ${id ? `id="${id}"` : ''}>${ficon(ic)}<span>${t}</span>${v}</span>`).join('')}</div>
+        <div class="hx-chips">${chips.map(([ic, t, v, l, id]) => `<span class="hx-chip ${l}" ${id ? `id="${id}"` : ''}>${micon(ic)}<span>${t}</span>${v}</span>`).join('')}</div>
       </div>
       <button class="btn hx-refresh" id="hl-refresh">${icon('refresh')} Actualiser</button>
     </section>
     <div class="hx-body">
       <div class="hx-cards">
         <div class="hx-card glass">
-          <div class="hx-card-head"><span class="hx-ico g-performance">${ficon('process')}</span><div><b>Processeur</b><span title="${esc(h.cpu.name || '')}">${esc(h.cpu.name || '')}</span></div></div>
+          <div class="hx-card-head"><span class="hx-ico g-performance">${micon('process')}</span><div><b>Processeur</b><span title="${esc(h.cpu.name || '')}">${esc(h.cpu.name || '')}</span></div></div>
           <div class="hx-gauge">${arcGauge('hx-cpu-arc', h.cpu.usage)}<div class="hx-gauge-val"><b id="hx-cpu">${h.cpu.usage}</b><span>%</span></div></div>
           ${spark('hx-cpu-spark', 'cpu')}
           <div class="hx-meta"><span>${plural(h.cpu.cores, 'cœur', 'cœurs')}</span>${h.cpu.temp != null ? `<span class="hx-pill ${lvlOf(h.cpu.temp, 80, 90)}">${h.cpu.temp} °C</span>` : '<span class="muted">Température non communiquée</span>'}</div>
         </div>
         <div class="hx-card glass">
-          <div class="hx-card-head"><span class="hx-ico g-applications">${ficon('memory')}</span><div><b>Mémoire</b><span>${fmtBytes(h.memory.total)} au total</span></div></div>
+          <div class="hx-card-head"><span class="hx-ico g-applications">${micon('memory')}</span><div><b>Mémoire</b><span>${fmtBytes(h.memory.total)} au total</span></div></div>
           <div class="hx-big"><b id="hx-mem-used">${fmtBytes(h.memory.used)}</b><span>utilisés</span></div>
           <div class="hx-seg"><i id="hx-mem-bar" class="${lvlOf(h.memory.percent, 80, 90)}" style="width:${h.memory.percent}%"></i></div>
           <div class="hx-legend"><span><i class="u ${lvlOf(h.memory.percent, 80, 90)}" id="hx-mem-dot"></i>Utilisée <b id="hx-mem-pct">${h.memory.percent} %</b></span><span><i class="f"></i>Disponible <b id="hx-mem-free">${fmtBytes(h.memory.free)}</b></span></div>
           ${spark('hx-mem-spark', 'mem')}
         </div>
         <div class="hx-card glass">
-          <div class="hx-card-head"><span class="hx-ico g-clutter">${ficon('storage')}</span><div><b>Stockage</b><span>${plural(vols.length, 'volume', 'volumes')} · ${plural(h.disks.length, 'disque', 'disques')}</span></div></div>
+          <div class="hx-card-head"><span class="hx-ico g-clutter">${micon('storage')}</span><div><b>Stockage</b><span>${plural(vols.length, 'volume', 'volumes')} · ${plural(h.disks.length, 'disque', 'disques')}</span></div></div>
           <div class="hx-vols">${vols.slice(0, 3).map((v) => `<div class="hx-vol">
             <div class="hx-vol-top"><b>${esc(v.id)}</b><span>${fmtBytes(v.free)} libres sur ${fmtBytes(v.size)}</span></div>
             <div class="hx-seg thin"><i class="${lvlOf(usedPct(v), 80, 90)}" style="width:${usedPct(v)}%"></i></div></div>`).join('')}</div>
@@ -2448,7 +2450,7 @@ function renderHealth(token, h, quiet = false) {
           }).join('')}</div>
         </div>
         <div class="hx-card glass">
-          <div class="hx-card-head"><span class="hx-ico g-cleanup">${ficon('battery')}</span><div><b>Batterie</b><span>${b ? (b.charging ? 'En charge' : 'Sur batterie') : 'Aucune batterie'}</span></div></div>
+          <div class="hx-card-head"><span class="hx-ico g-cleanup">${micon('battery')}</span><div><b>Batterie</b><span>${b ? (b.charging ? 'En charge' : 'Sur batterie') : 'Aucune batterie'}</span></div></div>
           ${b ? `<div class="hx-bat ${batLvl}">
               <div class="hx-bat-body"><i style="width:${b.charge ?? 0}%"></i><span>${b.charge ?? '–'} %${b.charging ? micon('bolt', 'hx-bolt') : ''}</span></div><div class="hx-bat-cap"></div></div>
             <div class="hx-big small"><b class="${batLvl}">${b.health != null ? `${b.health} %` : '–'}</b><span>de la capacité d'origine</span></div>
@@ -2458,10 +2460,10 @@ function renderHealth(token, h, quiet = false) {
       </div>
       <aside class="hx-side glass">
         <div class="hx-side-head"><b>Recommandations</b>${h.tips.length ? `<span class="hx-count">${h.tips.length}</span>` : ''}</div>
-        ${h.tips.length ? `<div class="hx-tips">${h.tips.map((t) => `<div class="hx-tip ${t.level}"><span class="hx-tip-ico">${icon(tipIcon[t.level] || 'warn')}</span><p>${esc(t.text)}</p>${t.route ? `<button class="btn" data-go="${t.route}">Corriger</button>` : ''}</div>`).join('')}</div>`
+        ${h.tips.length ? `<div class="hx-tips">${h.tips.map((t) => `<div class="hx-tip ${t.level}"><span class="hx-tip-ico ${TIP_TINT[t.level] || 'g-performance'}">${micon(tipIcon[t.level] || 'warn')}</span><p>${esc(t.text)}</p>${t.route ? `<button class="btn" data-go="${t.route}">Corriger</button>` : ''}</div>`).join('')}</div>`
           : `<div class="hx-allgood"><span>${icon('check', 'bold')}</span><b>Tout est en ordre</b><p>Aucune action n'est nécessaire pour le moment.</p></div>`}
         <div class="hx-side-head sys"><b>Système</b></div>
-        <div class="hx-sys">${sysRows.map(([ic, t, v, l]) => `<div class="hx-sys-row"><span class="hx-sys-ico">${icon(ic)}</span><span>${t}</span><b class="${l}">${esc(v)}</b></div>`).join('')}</div>
+        <div class="hx-sys">${sysRows.map(([ic, t, v, l]) => `<div class="hx-sys-row"><span class="hx-sys-ico ${SYS_TINT[ic] || 'g-tools'}">${micon(ic)}</span><span>${t}</span><b class="${l}">${esc(v)}</b></div>`).join('')}</div>
       </aside>
     </div>
   </div>`;
