@@ -353,11 +353,35 @@ button.ms-feature { border: 0; font: inherit; color: inherit; text-align: left; 
 .sc-val { letter-spacing: -.02em; }
 .sc-tile[data-state="ok"] .sc-val, .sc-tile[data-state="done"] .sc-val, .sc-tile[data-state="warn"] .sc-val, .sc-tile[data-state="bad"] .sc-val { animation: rise var(--t-spring) var(--spring) backwards; }
 
-/* Every state reads the same way: a colored dot before the value. */
-.sc-tile[data-state="ok"] .sc-val::before, .sc-tile[data-state="done"] .sc-val::before {
-  content: ""; display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin: 0 9px 3px 0; vertical-align: middle;
-  background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 22%, transparent);
+/* Status: a small lit glass bead carrying its symbol, the same before each value and in the summary.
+   The symbol says the state without relying on color: a check when all is well, a mark when something
+   needs attention (dark on amber, where white would not read). */
+.sc-tile, .sc-log li {
+  --glyph-ok: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6.5 12.5l3.6 3.6 7.4-8.2' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --glyph-warn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 6.5v6.5' stroke='%23402a00' stroke-width='3.2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.4' r='1.9' fill='%23402a00'/%3E%3C/svg%3E");
+  --glyph-bad: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 6.5v6.5' stroke='white' stroke-width='3.2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.4' r='1.9' fill='white'/%3E%3C/svg%3E");
 }
+.sc-tile[data-state="ok"], .sc-tile[data-state="done"], .sc-log li[data-state="ok"], .sc-log li[data-state="done"] { --st: var(--ok); --glyph: var(--glyph-ok); }
+.sc-log li[data-state="scanned"] { --st: color-mix(in srgb, var(--text) 45%, transparent); --glyph: var(--glyph-ok); }
+.sc-tile[data-state="warn"], .sc-log li[data-state="warn"] { --st: var(--warn); --glyph: var(--glyph-warn); }
+.sc-tile[data-state="bad"], .sc-log li[data-state="bad"] { --st: var(--bad); --glyph: var(--glyph-bad); }
+.sc-tile:is([data-state="ok"], [data-state="done"], [data-state="warn"], [data-state="bad"]) .sc-val::before,
+.sc-log li:is([data-state="ok"], [data-state="done"], [data-state="warn"], [data-state="bad"], [data-state="scanned"]) .sc-dot {
+  content: ""; display: inline-block; flex-shrink: 0; width: 22px; height: 22px; border: 0; border-radius: 50%;
+  background:
+    var(--glyph) center / 72% no-repeat,
+    radial-gradient(90% 60% at 50% 8%, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 70%),
+    linear-gradient(170deg, color-mix(in srgb, var(--st) 82%, #fff), var(--st) 50%, color-mix(in srgb, var(--st) 78%, #000));
+  box-shadow: inset 0 1px .5px rgba(255, 255, 255, .7), inset 0 -2px 3px rgba(0, 0, 0, .16),
+    0 0 0 1px color-mix(in srgb, var(--st) 50%, rgba(0, 0, 0, .2)), 0 4px 10px -3px color-mix(in srgb, var(--st) 75%, transparent);
+  animation: beadIn var(--t-bounce) var(--spring-bounce) backwards;
+}
+.sc-tile .sc-val::before { margin: 0 10px 0 0; vertical-align: -3px; }
+.sc-tile.wide .sc-val::before { width: 20px; height: 20px; vertical-align: -2px; }
+.sc-log li .sc-dot { width: 17px; height: 17px; }
+.sc-log li[data-state="scanned"] .sc-dot { box-shadow: inset 0 1px .5px rgba(255, 255, 255, .4), 0 0 0 1px rgba(255, 255, 255, .08); }
+.sc-log li[data-state="wait"] .sc-dot { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text) 22%, transparent); }
+@keyframes beadIn { from { transform: scale(.4); opacity: 0; } }
 /* Artwork: a glass tile in the corner that leans when the card is hovered. */
 .sc-art { transition: filter .5s, opacity .5s, transform var(--t-bounce) var(--spring-bounce); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 -14px 28px rgba(0, 0, 0, .18), 0 18px 36px color-mix(in srgb, var(--t1) 38%, transparent); }
 
@@ -480,6 +504,24 @@ body.paused .nav-item.busy::after { animation-play-state: paused; }
 button.row { width: 100%; border: 0; font: inherit; color: inherit; text-align: left; }
 .hx-bat-body span { gap: 3px; }
 .hx-bolt { width: 15px; height: 15px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35)); }
+
+/* ===================== Scrollbars ===================== */
+/* A thin pill inside a reserved gutter, so content never shifts. It shows only over an area that
+   actually scrolls, while the pointer is on it or it moves, and thickens under the pointer. */
+::-webkit-scrollbar { width: 12px; height: 12px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-button { display: none; }
+::-webkit-scrollbar-thumb {
+  min-height: 44px; border-radius: 99px; border: 4px solid transparent; background-clip: padding-box;
+  background-color: transparent;
+}
+:hover::-webkit-scrollbar-thumb, .scrolling::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--text) 22%, transparent); }
+::-webkit-scrollbar-thumb:hover { border-width: 3px; background-color: color-mix(in srgb, var(--text) 38%, transparent); }
+::-webkit-scrollbar-thumb:active { border-width: 3px; background-color: color-mix(in srgb, var(--a2) 75%, var(--text) 10%); }
+.sidebar::-webkit-scrollbar { width: 0; }
+.content:not(.split) { scrollbar-gutter: stable; padding-right: 18px; }
+.dbody { scrollbar-gutter: stable; padding-right: 2px; }
+@media (max-width: 1080px) { .content:not(.split) { padding-right: 8px; } }
 
 /* ===================== Calm and fallback states ===================== */
 body.paused .sc-btn.busy { animation-play-state: paused !important; }

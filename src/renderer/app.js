@@ -107,7 +107,7 @@ let currentRoute = 'smart';
 const progressHandlers = {};
 pcm.onProgress((p) => { progressHandlers[p.channel]?.(p); jobProgress[p.channel]?.(p); });
 
-function go(route) {
+function go(route, { scan = false } = {}) {
   route = LEGACY[route] || route;
   const [mod, tab] = route.split('/');
   const m = MODULES[mod] ? mod : 'smart';
@@ -118,13 +118,15 @@ function go(route) {
   for (const k of Object.keys(progressHandlers)) delete progressHandlers[k];
   const token = ++pageToken;
   content.scrollTop = 0;
-  PAGES[m](token, tab);
+  const shown = PAGES[m](token, tab);
+  // Opened from a Smart Care result: start the module's own analysis instead of waiting for a click.
+  if (scan) Promise.resolve(shown).then(() => { if (alive(token)) $('#scan')?.click(); });
 }
 const alive = (token) => token === pageToken;
 
 document.addEventListener('click', (e) => {
   const g = e.target.closest('[data-go]');
-  if (g) { e.preventDefault(); go(g.dataset.go); return; }
+  if (g) { e.preventDefault(); go(g.dataset.go, { scan: g.hasAttribute('data-scan') }); return; }
   const v = e.target.closest('[data-view]');
   if (v) {
     const cards = v.dataset.view === 'cards';
@@ -201,6 +203,16 @@ document.addEventListener('pointermove', (e) => {
   });
 });
 
+// Scrollbars show while their area is scrolled, then fade back out.
+const scrollIdle = new WeakMap();
+document.addEventListener('scroll', (e) => {
+  const el = e.target;
+  if (!(el instanceof Element)) return;
+  if (!scrollIdle.has(el)) el.classList.add('scrolling');
+  clearTimeout(scrollIdle.get(el));
+  scrollIdle.set(el, setTimeout(() => { el.classList.remove('scrolling'); scrollIdle.delete(el); }, 900));
+}, { capture: true, passive: true });
+
 function pageMotion(root) {
   Motion.slideTabs(root);
   Motion.startOrbit();
@@ -211,8 +223,17 @@ function pageMotion(root) {
 function page(html) {
   content.innerHTML = `<div class="page">${html}</div>`;
   const el = $('.page');
-  // Only what follows the header scrolls.
-  const head = el.querySelector(':scope > .dhead');
+  // Only what follows the header scrolls. Pages that start with a plain title get the same header.
+  let head = el.querySelector(':scope > .dhead');
+  const TITLE = 'h1, .lead, .tabs, .sc-head, .tools-head';
+  if (!head && el.firstElementChild?.matches(TITLE)) {
+    head = document.createElement('div');
+    head.className = 'dhead';
+    el.prepend(head);
+    while (head.nextElementSibling?.matches(TITLE)) head.appendChild(head.nextElementSibling);
+  }
+  // A search or filter bar right under the title stays with it.
+  if (head?.nextElementSibling?.matches('.list-head')) head.appendChild(head.nextElementSibling);
   content.classList.toggle('split', !!head);
   if (head) {
     const body = document.createElement('div');
@@ -578,7 +599,7 @@ function smartTile(id, cls = '') {
   return `<div class="sc-tile glass ${cls}" data-id="${id}" data-state="wait">
     <div class="sc-art ${g}">${micon(id)}</div>
     <div class="sc-text"><div class="sc-name">${title}</div><div class="sc-val">En attente…</div><div class="sc-sub"></div></div>
-    <button class="sc-link hidden" data-go="${link}">Examiner ${icon('chevron')}</button>
+    <button class="sc-link hidden" data-go="${link}" data-scan>Examiner ${icon('chevron')}</button>
   </div>`;
 }
 
@@ -593,7 +614,7 @@ function smartBoard() {
         <div class="sc-art g-protection">${micon('protection')}</div>
         <div class="sc-text"><div class="sc-name">Protection</div><div class="sc-val">En attente…</div><div class="sc-sub"></div></div>
         <ul class="sc-log">${SMART_ORDER.map((id) => `<li data-log="${id}" data-state="wait"><span class="sc-dot"></span><b>${SMART_STEPS[id][0]}</b><span class="sc-log-val">En attente</span></li>`).join('')}</ul>
-        <button class="sc-link hidden" data-go="protection">Examiner ${icon('chevron')}</button>
+        <button class="sc-link hidden" data-go="protection" data-scan>Examiner ${icon('chevron')}</button>
       </div>
       ${smartTile('performance')}
       ${smartTile('applications', 'wide')}
