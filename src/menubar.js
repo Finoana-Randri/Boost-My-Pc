@@ -1,5 +1,4 @@
-// Tray panel: click the icon to see system status and quick actions.
-// The tooltip shows live status and alerts.
+// Tray icon, its menu, the live tooltip and the mini panel.
 const { app, BrowserWindow, Tray, Menu, nativeTheme, screen, Notification, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -50,7 +49,6 @@ function createMenubar({ iconPath, trayImage, T = (x) => x, showMain, sendToMain
       },
     });
     mini.loadFile(path.join(__dirname, 'renderer', 'mini.html'));
-    // Hide when the user clicks elsewhere, like a menu.
     mini.on('blur', () => {
       if (Date.now() - shownAt > 400 && !mini.webContents.isDevToolsOpened()) { mini.hide(); hiddenAt = Date.now(); }
     });

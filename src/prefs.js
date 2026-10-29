@@ -1,4 +1,3 @@
-// User preferences, saved as JSON in the app's data folder.
 const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');

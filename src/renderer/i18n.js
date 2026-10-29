@@ -9,7 +9,6 @@
   const SIZE = /\d+(?:[.,  ]\d+)*(?: ?(?:o|Ko|Mo|Go|To)\b)?/g;
   const UNITS = { o: 'B', Ko: 'KB', Mo: 'MB', Go: 'GB', To: 'TB' };
 
-  // Write a number or a size the target language's way.
   function localize(v) {
     if (lang !== 'en') return v;
     return v.replace(/(\d) (?=\d)/g, '$1,').replace(/(\d) (?=\d)/g, '$1,').replace(/(\d),(\d)/g, '$1.$2')

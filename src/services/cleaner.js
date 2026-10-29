@@ -1,4 +1,3 @@
-// Cleanup rules for `HealthCheck` and `DeepClean`, based on `CleanTrash.Options`.
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');

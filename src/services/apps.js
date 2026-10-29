@@ -9,7 +9,6 @@ async function listProcesses() {
       Select-Object Id, ProcessName, WorkingSet64, Path, MainWindowTitle, @{n='Desc';e={ try { $_.MainModule.FileVersionInfo.FileDescription } catch { $null } }} |
       ConvertTo-Json -Compress
   `, { timeout: 60000 });
-  // Group by name so related processes are easy to scan.
   const groups = new Map();
   for (const p of asArray(list)) {
     const key = p.ProcessName.toLowerCase();
@@ -30,7 +29,7 @@ async function killProcesses(ids, name) {
   if (name && PROTECTED.test(name)) throw new Error(`« ${name} » est un processus système protégé.`);
   const pids = (ids || []).map(Number).filter((id) => Number.isInteger(id) && id > 4);
   if (!pids.length) throw new Error('Aucun processus valide.');
-  // Check that the processes actually exited; otherwise Windows may deny access.
+  // Windows may deny access to a process that has not exited yet.
   const left = await runPS(`
     $ids = @(${pids.join(',')})
     Stop-Process -Id $ids -Force -ErrorAction SilentlyContinue

@@ -1,4 +1,3 @@
-// Secure bridge between the renderer and main process.
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const call = async (channel, ...args) => {

@@ -1,4 +1,3 @@
-// Electron main process: main window, tray icon, and the IPC between the interface and the services.
 const { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage, dialog, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -339,7 +338,6 @@ function registerAppIpc() {
 
   handle('prefs:get', () => ({ ...prefs, startup: getStartup() }));
   handle('prefs:set', updatePrefs);
-  // Back to the defaults: the welcome screen shows again.
   handle('prefs:reset', () => {
     prefs = { ...Prefs.DEFAULTS, adminMode: prefs.adminMode };
     Prefs.save(prefs);

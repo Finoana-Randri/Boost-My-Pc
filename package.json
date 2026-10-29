@@ -22,6 +22,7 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@phosphor-icons/core": "^2.1.1",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8"
   },

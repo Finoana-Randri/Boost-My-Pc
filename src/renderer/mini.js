@@ -13,7 +13,6 @@ function fmtBytes(b) {
   return `${b.toFixed(b >= 100 ? 0 : 1).replace('.', ',')} ${u[i]}`;
 }
 
-// Icons
 $$('[data-i]').forEach((el) => (el.innerHTML = icon(el.dataset.i)));
 $('#open-settings').innerHTML = icon('settings');
 $('#open-main').innerHTML = icon('external');

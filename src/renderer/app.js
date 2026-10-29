@@ -4,12 +4,10 @@
 // ===================== Platform =====================
 const IS_LINUX = pcm.platform === 'linux';
 document.body.classList.add(IS_LINUX ? 'linux' : 'windows');
-// Detail view mode: list by default, cards if the user chose them
 try { if (localStorage.getItem('detailView') === 'cards') document.body.classList.add('view-cards'); } catch {}
 document.body.classList.toggle('lite', !!pcm.lite);
-// First launch: hide the interface until the welcome screen is dismissed.
 if (pcm.firstRun) document.body.classList.add('welcoming');
-// Pause decorative animations while the window is in the background: they would keep the GPU busy.
+// Animations pause in the background so the GPU stays idle.
 const setPaused = () => document.body.classList.toggle('paused', document.hidden || !document.hasFocus());
 window.addEventListener('blur', setPaused);
 window.addEventListener('focus', setPaused);
@@ -127,7 +125,6 @@ const alive = (token) => token === pageToken;
 document.addEventListener('click', (e) => {
   const g = e.target.closest('[data-go]');
   if (g) { e.preventDefault(); go(g.dataset.go); return; }
-  // Detail views: list by default, cards on request (remembered on this computer)
   const v = e.target.closest('[data-view]');
   if (v) {
     const cards = v.dataset.view === 'cards';
@@ -151,11 +148,8 @@ $$('.nav-item').forEach((n) => {
 });
 
 // ===================== Motion =====================
-// Interaction-driven animations: they run when something happens and rest otherwise,
-// so the app stays idle when nobody uses it. All are skipped in lightweight mode.
 const motionOff = () => document.body.classList.contains('lite') || matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// Highlight that slides between menu items instead of jumping.
 const navGlider = document.createElement('div');
 navGlider.className = 'nav-glider';
 $('#nav').prepend(navGlider);
@@ -169,7 +163,6 @@ function moveGlider(instant = false) {
 }
 window.addEventListener('resize', () => moveGlider(true));
 
-// Numbers count up from zero when a result appears ("4,8 Mo", "12 mises à jour"…).
 const COUNT_SELECTOR = '.big, .ov-card-title, .hx-big b, .rc-val, .sc-val';
 function countUp(el, ms = 750) {
   if (motionOff() || el.dataset.counted) return;
@@ -195,7 +188,6 @@ function countUp(el, ms = 750) {
 }
 function countUpIn(root = content) { $$(COUNT_SELECTOR, root).forEach((el) => countUp(el)); }
 
-// Click ripple on buttons, tabs and menu items.
 document.addEventListener('pointerdown', (e) => {
   const b = e.target.closest('.btn, .btn-main, .nav-item, .tab, .sc-link, .wl-next');
   if (!b || b.disabled || motionOff()) return;
@@ -208,7 +200,6 @@ document.addEventListener('pointerdown', (e) => {
   setTimeout(() => w.remove(), 650);
 });
 
-// Soft light that follows the cursor over cards.
 let spotRaf = 0;
 document.addEventListener('pointermove', (e) => {
   if (spotRaf || motionOff()) return;
@@ -222,9 +213,7 @@ document.addEventListener('pointermove', (e) => {
   });
 });
 
-// Called after each page is drawn.
-// Home screens animate while someone is looking: on opening and while the mouse moves,
-// then rest after a few seconds so the app stays idle.
+// Home screens animate for 10 s after the pointer moves, then rest so the app stays idle.
 let liveTimer = 0;
 function wakeIntro() {
   const el = $('.intro.ms');
@@ -247,8 +236,7 @@ function pageMotion(root) {
 function page(html) {
   content.innerHTML = `<div class="page">${html}</div>`;
   const el = $('.page');
-  // Detail views: the header (back button, title, tabs) stays put and only what follows
-  // scrolls, under a soft fade instead of a cut line.
+  // Only what follows the header scrolls.
   const head = el.querySelector(':scope > .dhead');
   content.classList.toggle('split', !!head);
   if (head) {
@@ -265,8 +253,7 @@ function page(html) {
   return el;
 }
 
-// Detail views: the action bar sits under the scrolling area, so it never covers the content.
-// A hidden marker stays where the bar was drawn; when that part is redrawn, the old bar goes away.
+// The action bar is moved below the scroll area; a hidden marker removes it when its section is redrawn.
 const barSlots = new WeakMap();
 new MutationObserver(() => {
   const foot = content.querySelector(':scope > .page.split > .dfoot');
@@ -289,14 +276,11 @@ function tabs(mod, list, active) {
   return `<div class="tabs glass">${list.map(([id, label]) => `<button class="tab ${id === active ? 'active' : ''}" data-go="${mod}/${id}">${esc(label)}</button>`).join('')}</div>`;
 }
 
-// Module home screen: icon, description, features, and action button.
-// Group shown above the module title.
 const MODULE_GROUP = {
   smart: 'Analyse complète', cleanup: 'Nettoyage', protection: 'Protection', performance: 'Vitesse',
   applications: 'Applications', clutter: 'Fichiers', lens: 'Fichiers', cloud: 'Fichiers', shredder: 'Fichiers',
 };
 
-// Date of the last finished scan per module, kept on this computer.
 function lastScanText(mod) {
   let t = 0;
   try { t = Number(localStorage.getItem(`lastScan:${mod}`)) || 0; } catch {}
@@ -309,28 +293,25 @@ function lastScanText(mod) {
   return `Analysé il y a ${plural(Math.round(h / 24), 'jour', 'jours')}`;
 }
 
-// Module home screen: illustration on the left (module icon with its features in orbit),
-// text and features on the right, and the round scan button below.
 function intro(mod, { title, lead, features = [], button = 'Analyser', extra = '' }) {
-  const sats = features.slice(0, 6);
+  const columns = features.length === 4 ? 2 : Math.min(3, features.length);
   return `<div class="intro ms">
-    <div class="ms-stage" aria-hidden="true">
-      <div class="ms-glow"></div>
-      <div class="ms-wave"></div><div class="ms-wave w2"></div>
-      <div class="ms-orbit">${sats.map(([ic], i) => `<div class="ms-sat" style="--a:${(360 / sats.length) * i - 90}deg;--d:${0.3 + i * 0.07}s"><span>${ficon(ic)}</span></div>`).join('')}</div>
-      <div class="hero-icon ms-icon">${micon(mod)}</div>
+    <div class="ms-hero" aria-hidden="true">
+      <div class="ms-aura"><i></i><i></i></div>
+      <div class="ms-lens lg" data-refract>${micon(mod)}</div>
     </div>
     <span class="ms-eyebrow">${esc(MODULE_GROUP[mod] || '')}</span>
     <h1>${esc(title || MODULES[mod].title)}</h1>
     <p class="lead">${lead}</p>
-    ${features.length ? `<div class="ms-chips">${features.map(([ic, t, s], i) => `<span class="ms-chip" title="${esc(s)}" style="--d:${0.35 + i * 0.05}s">${ficon(ic)}${esc(t)}</span>`).join('')}</div>` : ''}
+    ${features.length ? `<div class="ms-features" style="--cols:${columns}">${features.map(([ic, t, s], i) => `
+      <div class="ms-feature lg" style="--d:${0.2 + i * 0.05}s"><span class="ms-f-ico">${ficon(ic)}</span><div><b>${esc(t)}</b><span>${esc(s)}</span></div></div>`).join('')}
+    </div>` : ''}
     ${extra ? `<div class="ms-extra">${extra}</div>` : ''}
-    <button class="scan-btn" id="scan">${esc(button)}</button>
+    <button class="scan-btn lg" id="scan" data-refract><span>${esc(button)}</span></button>
     <span class="ms-last">${icon('clock')} ${lastScanText(mod)}</span>
   </div>`;
 }
 
-// Scan screen: animated ring and status text.
 function scanning(mod, status, detail = '', { pct = null, stop = false } = {}) {
   const size = 190, stroke = 10, r = (size - stroke) / 2, c = 2 * Math.PI * r;
   const arc = pct == null
@@ -360,12 +341,11 @@ function doneView(mod, title, sub, again) {
 }
 
 // ---------- Background scans ----------
-// A scan belongs to a page (key such as 'applications' or 'clutter/similar') and keeps running
-// when the user opens another page. Coming back shows its progress, then its result.
+// A scan keeps running when the user leaves its page; coming back shows its progress or result.
 const JOBS = {};
-const jobProgress = {}; // Progress channels listened to by running scans (kept across pages)
+const jobProgress = {};
 
-// Modal with up to three choices; resolves with the chosen value, or null if dismissed.
+// Resolves with the chosen value, or null when dismissed.
 function choiceBox(title, text, choices) {
   return new Promise((resolve) => {
     const [ok, alt, cancel] = choices;
@@ -389,14 +369,12 @@ function choiceBox(title, text, choices) {
   });
 }
 
-// Show a small activity dot on the menu items whose module has a scan running.
 function markBusy() {
   const busy = new Set(Object.keys(JOBS).map((k) => k.split('/')[0]));
   $$('.nav-item').forEach((n) => n.classList.toggle('busy', busy.has(n.dataset.page)));
 }
 
-// Start a scan. If another one is running, ask whether to stop it first.
-// `auto` scans (started by opening a page) never ask.
+// Asks before stopping another running scan, except for `auto` scans started by opening a page.
 async function startJob(key, { label, stop, auto = false, keepPartial = false }, work) {
   const others = Object.values(JOBS).filter((j) => j.key !== key);
   if (others.length && !auto) {
@@ -415,7 +393,6 @@ async function startJob(key, { label, stop, auto = false, keepPartial = false },
     if (pct != null) job.pct = pct;
     job.listeners.forEach((f) => f(job));
   };
-  // Listen to a progress channel for as long as the scan runs.
   job.on = (channel, fn) => { job.channels.push(channel); jobProgress[channel] = (p) => !job.cancelled && fn(p); };
   JOBS[key] = job;
   markBusy();
@@ -424,7 +401,6 @@ async function startJob(key, { label, stop, auto = false, keepPartial = false },
     .then((r) => (job.cancelled ? null : r), (e) => { if (!job.cancelled) toast(`${label} : ${e.message}`, true); return null; })
     .then((r) => {
       finishJob(job);
-      // The user is elsewhere: let them know the result is ready.
       if (r != null && currentRoute.split('/')[0] !== key.split('/')[0]) toast(`${label} : terminée. Le résultat vous attend dans « ${MODULES[key.split('/')[0]].title} ».`);
       if (r != null) jobFinished(job);
       return r;
@@ -437,7 +413,6 @@ let soundPrefs = { sounds: true, notifications: true };
 pcm.prefs.get().then((p) => { soundPrefs = { sounds: p.sounds !== false, notifications: p.notifications !== false }; }).catch(() => {});
 let audioCtx = null;
 
-// Short two-note chime synthesized on the fly (no audio file).
 function chime(kind = 'done') {
   if (!soundPrefs.sounds) return;
   try {
@@ -458,7 +433,6 @@ function chime(kind = 'done') {
   } catch {}
 }
 
-// A scan or action finished: chime, and a system notification when the window is not in front.
 function jobFinished(job) {
   try { localStorage.setItem(`lastScan:${job.key.split('/')[0]}`, String(Date.now())); } catch {}
   chime();
@@ -479,7 +453,7 @@ function stopJob(job) {
   finishJob(job);
 }
 
-// Scan screen bound to a running scan; `onDone(result)` runs if the page is still open.
+// `onDone(result)` runs only if the page is still open.
 function showJob(token, key, { mod, top = '', into = null }, onDone) {
   const job = JOBS[key];
   const html = scanning(mod, job.status, job.detail, { pct: job.pct, stop: true });
@@ -504,9 +478,7 @@ function showJob(token, key, { mod, top = '', into = null }, onDone) {
   });
 }
 
-// ---------- Card overview (CleanMyMac style) ----------
-// Each module with several sections opens, after its scan, on a grid of cards:
-// a centered headline, an "examine all" button, then one large card and smaller ones.
+// ---------- Card overview ----------
 const overviewCache = {};
 
 function overview(mod, { title, sub, all, cards }) {
@@ -527,7 +499,6 @@ function ovCard({ size = '', title, sub = '', art = '', actions = [] }) {
     <div class="ov-actions">${actions.map(btn).join('')}</div></div>`;
 }
 
-// Card artwork: icon tile, trio of icons, app icons, thumbnails
 const artTile = (name, mod) => `<div class="ov-tile">${mod ? micon(mod) : ficon(name)}</div>`;
 const artTrio = (names) => `<div class="ov-trio">${names.map((n, i) => `<span class="${i === 1 ? 'main' : ''}">${ficon(n)}</span>`).join('')}</div>`;
 const artApps = (paths, fallback = 'apps') => `<div class="ov-apps">${paths.slice(0, 4).map((p) => `<span>${fileIcon(p, fallback)}</span>`).join('')}</div>`;
@@ -542,7 +513,6 @@ async function loadThumbs(token, root = content) {
   }
 }
 
-// Header for a detail view: back to the overview, title, and quick navigation between sections
 function detailHead(mod, list, active, sub) {
   const title = (list.find(([id]) => id === active) || [])[1] || MODULES[mod].title;
   const cards = document.body.classList.contains('view-cards');
@@ -553,7 +523,6 @@ function detailHead(mod, list, active, sub) {
     <h1>${esc(title)}</h1>${tabs(mod, list, active)}</div>${sub ? `<p class="lead">${sub}</p>` : ''}`;
 }
 
-// Select files with checkboxes, then move them to the trash.
 function fileRows(items, { showType = true, checked = false } = {}) {
   return items.map((f) => `<div class="row">
     <input type="checkbox" data-path="${esc(f.path)}" data-size="${f.size}" ${checked ? 'checked' : ''}/>
@@ -595,8 +564,6 @@ function bindSelection(root, { onDone, onAction, confirmText } = {}) {
 }
 
 // ===================== Smart Care =====================
-// Tile layout: Cleanup (tall), Protection in the center with the scan log,
-// Performance, then Applications and Storage around the round main button.
 const SMART_STEPS = {
   cleanup: ['Nettoyage', 'g-cleanup', 'cleanup'],
   protection: ['Protection', 'g-protection', 'protection'],
@@ -606,8 +573,8 @@ const SMART_STEPS = {
 };
 const SMART_ORDER = Object.keys(SMART_STEPS);
 let smartResult = null;
-let smartDone = null; // Summary of the last run, shown until a new scan
-// Tile states of the current board, kept so that it can be redrawn when the user comes back.
+let smartDone = null;
+// Kept to redraw the board when the user comes back.
 let smartTiles = {};
 
 PAGES.smart = async (token) => {
@@ -639,8 +606,7 @@ function smartTile(id, cls = '') {
 
 const SMART_RING = 2 * Math.PI * 58;
 
-// Draw the board once, with the tiles already known; they are then updated in place
-// so that the transitions stay smooth.
+// Drawn once; smartSet() then updates the tiles in place.
 function smartBoard() {
   page(`<div class="sc-head"><h1 id="sc-title">Entretien intelligent</h1><p class="lead" id="sc-lead"></p></div>
     <div class="sc-grid enter">
@@ -707,7 +673,6 @@ async function smartScan(token) {
   if (job && alive(token)) smartWatch(token);
 }
 
-// Board bound to the running scan or run, whether it was just started or the user came back.
 function smartWatch(token) {
   const job = JOBS.smart;
   if (!$('.sc-grid')) smartBoard();
@@ -815,7 +780,7 @@ function smartShowDone(token, animated = false) {
   btn.classList.remove('busy');
   btn.classList.add('ready', 'finished');
   btn.disabled = false;
-  $('#sc-btn-label').innerHTML = icon('check');
+  $('#sc-btn-label').innerHTML = icon('check', 'bold');
   $('#sc-title').textContent = 'Entretien terminé';
   $('#sc-lead').textContent = smartDone.lead;
   $('#sc-hint').innerHTML = '<button class="link" id="sc-new">Nouvelle analyse</button>';
@@ -824,7 +789,6 @@ function smartShowDone(token, animated = false) {
   if (animated) celebrate(btn);
 }
 
-// Small burst of particles around an element when a task finishes.
 function celebrate(el) {
   if (document.body.classList.contains('lite') || !el) return;
   const box = el.getBoundingClientRect();
@@ -840,7 +804,7 @@ function celebrate(el) {
 }
 
 // ===================== Cleanup =====================
-let cleanResult = null; // Last scan, kept while the user visits other pages
+let cleanResult = null;
 
 PAGES.cleanup = async (token) => {
   if (JOBS.cleanup) return showJob(token, 'cleanup', { mod: 'cleanup' }, (r) => (r.freed != null ? cleanDone(r) : renderCleanResult(r, token)));
@@ -867,7 +831,6 @@ function cleanDone(res) {
   page(doneView('cleanup', `${fmtBytes(res.freed)} libérés`, `${plural(res.deleted, 'fichier supprimé', 'fichiers supprimés')}${res.failed ? ` · ${res.failed} ignoré(s) car en cours d'utilisation` : ''}${res.adminCancelled ? ' · éléments système non nettoyés (authentification annulée)' : ''}`, 'cleanup'));
 }
 
-// One icon per cleanup category.
 const CLEAN_ICONS = {
   temp: 'file', tmp: 'file', webcache: 'globe', thumbs: 'image', trash: 'box', recycle: 'box', appcache: 'apps',
   devjunk: 'wrench', crash: 'warn', wer: 'warn', dumps: 'warn', journal: 'clock', logs: 'clock', pkgcache: 'download',
@@ -969,7 +932,6 @@ function renderProtectionOverview(token) {
     cards: [
       ovCard({
         size: 'big',
-        // Only settings to turn back on (no file to delete): say so and offer to fix them.
         title: settingsOnly ? 'La protection en temps réel est désactivée' : threats.length ? plural(threats.length, 'menace détectée', 'menaces détectées') : 'Aucune menace',
         sub: settingsOnly ? 'Microsoft Defender ne surveille plus les fichiers. Réactivez-le pour rester protégé.' : threats.length ? 'Supprimez-les dès que vous pouvez pour profiter d\'une bonne protection.' : (quick?.note || 'Lancez une analyse normale ou approfondie pour vérifier tout le système.'),
         art: threats.length ? artTrio(['warn', 'bug', 'folder']) : artTrio(['lock', 'shieldCheck', 'eye']),
@@ -1044,7 +1006,6 @@ function renderThreats(token, top) {
       ${t.fix ? `<div class="pc-foot"><button class="btn primary" data-secfix="${esc(t.fix)}">Activer</button></div>` : ''}
       ${t.path && t.path !== 'crontab' ? `<button class="btn ghost pc-corner" data-reveal="${esc(t.path)}" title="Afficher">${icon('folder')}</button>` : ''}</label>`).join('')}</div>${files ? trashBar('Supprimer les menaces') : ''}` : ''}`);
   $('#new-scan').onclick = () => { malwareResult = null; go('protection/threats'); };
-  // Problems that are settings, not files (e.g. real-time protection turned off).
   $$('[data-secfix]').forEach((b) => (b.onclick = async (e) => {
     e.preventDefault();
     b.disabled = true; b.innerHTML = '<span class="spinner mini"></span>';
@@ -1294,8 +1255,6 @@ async function perfMaintenance(token, top) {
 }
 
 // ---------- System diagnostic ----------
-// Detects common system problems and fixes them (Windows: services, disk, firewall,
-// Defender, network, clock, system files; Linux: failed services, packages, journal, clock, DNS).
 let diagResult = null;
 const DIAG_ICONS = { services: 'process', units: 'process', disk: 'storage', space: 'storage', readonly: 'storage', firewall: 'shield', defender: 'shield',
   dns: 'wifi', time: 'clock', sysfiles: 'file', temp: 'file', reboot: 'refresh', events: 'warn', packages: 'box', journal: 'file' };
@@ -1328,7 +1287,7 @@ function diagSection(token) {
       ${fixable.length ? `<button class="btn primary" id="diag-all">${icon('wrench')} Tout corriger</button>` : ''}
       <button class="btn" id="diag-again">${icon('refresh')} Relancer</button></div>
     <div class="list glass diag-list">${rows.map((c) => `<div class="row diag-row ${c.status}">
-      <span class="diag-st">${icon(c.status === 'ok' ? 'check' : c.status === 'info' ? 'info' : 'warn')}</span>
+      <span class="diag-st">${icon(c.status === 'ok' ? 'check' : c.status === 'info' ? 'info' : 'warn', 'bold')}</span>
       <div class="r-ico tint">${ficon(DIAG_ICONS[c.id] || 'wrench')}</div>
       <div class="r-main"><div class="r-title">${esc(c.title)}</div><div class="r-sub" title="${esc(c.detail)}">${esc(c.detail)}</div></div>
       ${c.fix && c.status !== 'ok' ? `<button class="btn ${c.status === 'info' ? '' : 'primary'}" data-fix="${c.id}">${esc(c.fix.label)}${c.fix.admin ? ` ${icon('admin')}` : ''}</button>`
@@ -1359,7 +1318,6 @@ async function fixDiag(token, ids) {
     return (diagResult = await pcm.v2.diagScan());
   });
   if (!job) return;
-  // Say what the new check still finds, instead of leaving the same warning without a word.
   const left = checks.filter((c) => c.status !== 'info' && diagResult.checks.some((n) => n.id === c.id && n.status !== 'ok'));
   if (left.length) toast(`Non corrigé : ${left.map((c) => c.title).join(', ')}. Réessayez ou redémarrez le PC.`, true);
   else toast(checks.length > 1 ? 'Problèmes corrigés' : `${checks[0].title} : corrigé`);
@@ -1684,7 +1642,6 @@ function renderDrivers(token, r) {
   box.innerHTML = head + summary + list + actions + old;
   $('#drv-again') && ($('#drv-again').onclick = () => { driversResult = null; driversStatus = {}; driversSection(token); $('#drv-scan')?.click(); });
   $('#drv-install') && ($('#drv-install').onclick = () => installDrivers(token, $$('#drv-list input:checked').map((c) => c.dataset.id)));
-  // Follow the installation while this page is open (one listener per page visit).
   if (installing && job.viewToken !== token) {
     job.viewToken = token;
     const view = () => (alive(token) ? renderDrivers(token, r) : job.listeners.delete(view));
@@ -1902,7 +1859,7 @@ async function clutterLarge(token, top) {
     $('#lg-again').onclick = () => { largeStopped = null; go('clutter/large'); };
     return;
   }
-  // The search keeps running in the background; it restarts only if the criteria changed.
+  // Restarted only when the criteria change.
   if (JOBS['clutter/large']?.largeKey !== key) {
     const job = await startJob('clutter/large', { label: 'Recherche des gros fichiers', stop: () => { pcm.storage.cancel(); largeStopped = key; }, auto: true }, async (j) => {
       j.update('Recherche des gros fichiers…', '');
@@ -1951,7 +1908,7 @@ PAGES.lens = async (token) => {
   let root = PATHS.home;
   const start = async (r) => {
     root = r;
-    // Stop keeps what was already scanned: the map shows the partial result.
+    // Stopping keeps the partial map.
     const job = await startJob('lens', { label: 'Carte du disque', stop: () => pcm.v2.lensCancel(), keepPartial: true }, async (j) => {
       j.update('Cartographie du disque…', root);
       j.on('lens', (p) => j.update(`${p.dirs.toLocaleString('fr-FR')} dossiers · ${p.files.toLocaleString('fr-FR')} fichiers`, p.current));
@@ -1966,9 +1923,7 @@ PAGES.lens = async (token) => {
   $('#scan').onclick = () => start(root);
 };
 
-// Circle packing: place circles from largest to smallest, each one touching two already
-// placed circles, as close to the center as possible. The aspect ratio stretches
-// the cluster so it fills a wide area.
+// Front-chain circle packing, largest first; `aspect` stretches the cluster to fill a wide area.
 function packCircles(radii, aspect = 1) {
   const placed = [];
   const fits = (c) => placed.every((p) => Math.hypot(p.x - c.x, p.y - c.y) >= p.r + c.r - 1e-6);
@@ -2017,20 +1972,18 @@ function packInto(sizes, w, h, { round = false, pad = 0 } = {}) {
   return pack.map((p) => ({ x: ox + p.x * scale, y: oy + p.y * scale, r: p.r * scale }));
 }
 
-// Disk Map colors: hand-picked gradients that work on the purple background.
 const LENS_PALETTE = [
-  ['#7C5CFF', '#B59BFF'], // lavender
-  ['#FF4F9A', '#FF9CC9'], // pink
-  ['#18B9C4', '#7EECDD'], // aqua
-  ['#FF9F2E', '#FFD27A'], // amber
-  ['#3D7DFF', '#8FC1FF'], // sky blue
-  ['#B44CE0', '#E79BFF'], // orchid
-  ['#1FBF74', '#93F2BF'], // mint
-  ['#FF6A4D', '#FFB29E'], // coral
-  ['#5865F2', '#A3ACFF'], // periwinkle
-  ['#E83E8C', '#F7A1C4'], // raspberry
+  ['#7C5CFF', '#B59BFF'],
+  ['#FF4F9A', '#FF9CC9'],
+  ['#18B9C4', '#7EECDD'],
+  ['#FF9F2E', '#FFD27A'],
+  ['#3D7DFF', '#8FC1FF'],
+  ['#B44CE0', '#E79BFF'],
+  ['#1FBF74', '#93F2BF'],
+  ['#FF6A4D', '#FFB29E'],
+  ['#5865F2', '#A3ACFF'],
+  ['#E83E8C', '#F7A1C4'],
 ];
-// Color files by type.
 const LENS_TYPES = [
   ['Vidéos', /\.(mp4|mkv|mov|avi|webm|wmv|m4v|flv|mpe?g)$/i, LENS_PALETTE[1]],
   ['Images', /\.(jpe?g|png|gif|webp|heic|raw|psd|tiff?|bmp|svg)$/i, LENS_PALETTE[3]],
@@ -2076,7 +2029,6 @@ function renderLens(token) {
     const idx = order[n], item = kids[idx], c = colors[idx];
     const r = Math.max(0, p.r - 3);
     if (r < 5) return ''; // Too small to see; the item stays in the list.
-    // Show subfolders as small bubbles inside large folders (second level).
     let inner = '';
     if (item.dir && r > 78 && item.children?.length > 1) {
       const subs = item.children.filter((s) => s.size > 0 && !s.other).sort((a, b) => b.size - a.size).slice(0, 14);
@@ -2088,7 +2040,6 @@ function renderLens(token) {
       style="left:${p.x - r}px;top:${p.y - r}px;width:${r * 2}px;height:${r * 2}px;animation-delay:${Math.min(n * 0.035, 0.6)}s;${c ? `--c1:${c[0]};--c2:${c[1]}` : ''}">
       ${inner}${label ? `<div class="bb-label"><span class="bb-name">${esc(item.name)}</span><span class="bb-size">${fmtBytes(item.size)}</span></div>` : ''}</div>`;
   }).join('');
-  // Zoom into the clicked folder, then draw its content.
   const open = (c, el) => {
     if (!c?.dir || !c.children?.length) return;
     if (el && !document.body.classList.contains('lite')) {
@@ -2099,7 +2050,6 @@ function renderLens(token) {
   };
   $$('[data-tile]').forEach((el) => (el.onclick = () => open(kids[Number(el.dataset.tile)], el)));
   $$('[data-open]').forEach((el) => (el.onclick = () => open(kids[Number(el.dataset.open)], $(`[data-tile="${el.dataset.open}"]`))));
-  // Hovering a row highlights its bubble, and the other way around.
   $$('#lens-list .row').forEach((row, i) => {
     const b = $(`[data-tile="${i}"]`);
     row.onmouseenter = () => b?.classList.add('hl');
@@ -2110,7 +2060,6 @@ function renderLens(token) {
   $('#lens-new').onclick = () => { lensData = null; go('lens'); };
   bindSelection($('#lens-list'), {
     onDone: () => {
-      // Remove deleted items from the map and recalculate parent folder sizes.
       const removed = new Set($$('#lens-list input[data-path]:checked').map((c) => c.dataset.path));
       const freed = node.children.filter((c) => removed.has(c.path)).reduce((a, c) => a + c.size, 0);
       node.children = node.children.filter((c) => !removed.has(c.path));
@@ -2216,7 +2165,7 @@ const TOOLS = [
   ['recorder', 'mic', 'Enregistreur vocal', 'Enregistrer de l\'audio'],
   ['captions', 'captions', 'Sous-titres en direct', 'Transcrire l\'audio en temps réel'],
   ['calendar', 'calendar', 'Calendrier', 'Vos rendez-vous'],
-  ['terminal', 'task', 'Terminal', 'Ligne de commande'],
+  ['terminal', 'terminal', 'Terminal', 'Ligne de commande'],
   ['files', 'folder', 'Fichiers', 'Gestionnaire de fichiers'],
   ['taskmgr', 'task', IS_LINUX ? 'Moniteur système' : 'Gestionnaire des tâches', 'Processus et ressources'],
   ['devmgmt', 'chip', 'Gestionnaire de périphériques', 'Pilotes et matériel'],
@@ -2226,7 +2175,7 @@ const TOOLS = [
   ['software', 'download', 'Logithèque', 'Installer des applications'],
   ['translator', 'translate', 'Traducteur', 'Bing Traduction'],
   ['weather', 'weather', 'Météo', 'Prévisions locales'],
-  ['display', 'screenshot', 'Affichage', 'Paramètres d\'écran'],
+  ['display', 'monitor', 'Affichage', 'Paramètres d\'écran'],
   ['power', 'power', 'Alimentation', 'Mise en veille et batterie'],
 ];
 
@@ -2248,8 +2197,6 @@ PAGES.tools = async (token) => {
 };
 
 // ===================== Welcome screen =====================
-// Shown once, at the first launch (or after a voluntary reset in the settings): three short
-// animated steps, then a transition into the app.
 const WELCOME_ORBIT = ['cleanup', 'protection', 'performance', 'applications', 'clutter', 'lens'];
 const WELCOME_TRUST = { ok: 'check', src: 'download', local: 'lock' };
 const WELCOME_STEPS = [
@@ -2296,7 +2243,7 @@ function welcomeVisual(i) {
   }
   return `<div class="wv wv-shield" data-v="2"><div class="wv-halo green"></div><div class="wv-ring r1"></div><div class="wv-ring r2"></div>
     <div class="wv-badge g-protection">${micon('protection')}</div>
-    <div class="wv-check">${icon('check')}</div></div>`;
+    <div class="wv-check">${icon('check', 'bold')}</div></div>`;
 }
 
 function showWelcome() {
@@ -2318,7 +2265,7 @@ function showWelcome() {
         <div class="wl-nav">
           <button class="wl-back" id="wl-back" aria-label="Précédent">${icon('chevron')}</button>
           <div class="wl-dots">${WELCOME_STEPS.map((_, i) => `<button class="wl-dot" data-go-step="${i}" aria-label="Étape ${i + 1}"></button>`).join('')}</div>
-          <button class="wl-next" id="wl-next"><span></span>${icon('chevron')}</button>
+          <button class="wl-next" id="wl-next"><span></span>${icon('chevron', 'bold')}</button>
         </div>
       </div>
     </div>`;
@@ -2359,10 +2306,8 @@ function showWelcome() {
 }
 
 // ===================== PC health =====================
-// Real measurements (processor, memory, storage, battery, system), a score out of 100 with
-// recommendations, and live processor and memory curves while the tab is open.
-let healthResult = null; // Kept for a minute so that the tab opens instantly
-const healthSeries = { cpu: [], mem: [] }; // Recent live samples (percent)
+let healthResult = null; // cached for a minute
+const healthSeries = { cpu: [], mem: [] };
 
 const HEALTH_TITLES = {
   Excellent: 'Votre PC est en excellente forme',
@@ -2372,7 +2317,6 @@ const HEALTH_TITLES = {
 };
 const lvlOf = (pct, warn = 75, bad = 90) => (pct >= bad ? 'bad' : pct >= warn ? 'warn' : 'ok');
 
-// Half-circle gauge (0–100 %).
 function arcGauge(id, pct) {
   const len = Math.PI * 80;
   return `<svg class="hx-arc" viewBox="0 0 200 112" id="${id}">
@@ -2382,7 +2326,6 @@ function arcGauge(id, pct) {
   </svg>`;
 }
 
-// Area chart of recent samples.
 function sparkPath(values) {
   if (values.length < 2) return { line: '', area: '' };
   const n = values.length, step = 100 / (n - 1);
@@ -2500,7 +2443,7 @@ function renderHealth(token, h) {
       <aside class="hx-side glass">
         <div class="hx-side-head"><b>Recommandations</b>${h.tips.length ? `<span class="hx-count">${h.tips.length}</span>` : ''}</div>
         ${h.tips.length ? `<div class="hx-tips">${h.tips.map((t) => `<div class="hx-tip ${t.level}"><span class="hx-tip-ico">${icon(tipIcon[t.level] || 'warn')}</span><p>${esc(t.text)}</p>${t.route ? `<button class="btn" data-go="${t.route}">Corriger</button>` : ''}</div>`).join('')}</div>`
-          : `<div class="hx-allgood"><span>${icon('check')}</span><b>Tout est en ordre</b><p>Aucune action n'est nécessaire pour le moment.</p></div>`}
+          : `<div class="hx-allgood"><span>${icon('check', 'bold')}</span><b>Tout est en ordre</b><p>Aucune action n'est nécessaire pour le moment.</p></div>`}
         <div class="hx-side-head sys"><b>Système</b></div>
         <div class="hx-sys">${sysRows.map(([ic, t, v, l]) => `<div class="hx-sys-row"><span class="hx-sys-ico">${icon(ic)}</span><span>${t}</span><b class="${l}">${esc(v)}</b></div>`).join('')}</div>
       </aside>
@@ -2509,10 +2452,8 @@ function renderHealth(token, h) {
   $('#hl-refresh').onclick = () => { healthResult = null; $('#health').innerHTML = healthSkeleton(); loadHealth(token); };
   setSpark('hx-cpu-spark', healthSeries.cpu);
   setSpark('hx-mem-spark', healthSeries.mem);
-  // After the opening animation, live values change without transitions: animating them every
-  // few seconds would keep redrawing the frosted glass.
+  // Live values change without transitions: animating them would keep redrawing the glass.
   setTimeout(() => $('.hx')?.classList.add('hx-live'), 1500);
-  // Fill the ring and count the score up.
   const ring = $('#hx-ring'), scoreEl = $('#hx-score');
   const lite = document.body.classList.contains('lite');
   requestAnimationFrame(() => { ring.style.strokeDashoffset = C * (1 - h.score / 100); });
@@ -2528,7 +2469,6 @@ function renderHealth(token, h) {
   }
 }
 
-// Live processor and memory values while the tab is open (values updated in place).
 function liveHealth(token) {
   const len = Math.PI * 80;
   let busy = false;
@@ -2650,10 +2590,8 @@ PAGES.settings = async (token, tab = 'health') => {
 };
 
 // ===================== Updates =====================
-// The main process checks, downloads and verifies new versions on its own. The interface shows
-// where it stands: a button in the title bar, and the details on the About page.
 let updateState = { status: 'idle' };
-let updateWanted = false; // The user started this download: its progress shows in the title bar.
+let updateWanted = false; // started from the button: progress shows in the title bar
 
 const updatePercent = (s) => (s.total ? Math.floor((s.done / s.total) * 100) : 0);
 
@@ -2729,7 +2667,7 @@ async function settingsAbout(token, top) {
     <h2>Informations système</h2><div class="card glass" id="s-info"><div class="loading"><span class="spinner"></span></div></div>`);
   $('#s-author').onclick = (e) => { e.preventDefault(); window.open('https://github.com/Finoana-Randri'); };
   renderUpdateStatus(updateState);
-  // Nothing checked yet in this session: look now rather than waiting for the scheduled check.
+  // First visit in this session: check now.
   if (updateState.status === 'idle') runUpdate('check');
   const info = await pcm.system.info().catch(() => ({}));
   if (!alive(token)) return;
@@ -2749,8 +2687,7 @@ pcm.onAction((a) => {
 });
 
 // ===================== Startup =====================
-// Folder paths load instantly; system information (slow on Windows) loads in the background
-// so that Smart Care shows right away and the menu responds immediately.
+// System information is slow on Windows: it loads in the background.
 (async () => {
   try { PATHS = await pcm.v2.paths(); } catch {}
   go('smart');
@@ -2763,6 +2700,5 @@ pcm.onAction((a) => {
   document.body.classList.toggle('lite', !!CAPS.lite);
   $('#admin-badge').textContent = IS_LINUX ? 'root' : 'Administrateur';
   $('#admin-badge').classList.toggle('hidden', !CAPS.isAdmin);
-  // Redraw the pages that show this information if one of them is open.
   if (['tools', 'settings'].includes(currentRoute)) go(currentRoute);
 })();

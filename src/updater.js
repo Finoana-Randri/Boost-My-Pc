@@ -1,5 +1,5 @@
-// Updates from the latest GitHub release, like most desktop apps: checked in the background,
-// downloaded silently (size and SHA-256 checked), installed when the user restarts the app.
+// Updates from the latest GitHub release, downloaded in the background (size and SHA-256 checked)
+// and installed when the user restarts the app:
 //   Windows   silent setup, which reopens the app;
 //   AppImage  the new file replaces the old one;
 //   .deb      installed with apt, the password is asked through polkit.
