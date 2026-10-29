@@ -2,10 +2,13 @@
 const { app, BrowserWindow, Tray, Menu, nativeTheme, screen, Notification, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { notifySend } = require('./linux-desktop');
 
 const W = 380;
 const H = 620;
+// Windows 11 22H2 and later draw the acrylic material behind a frameless window.
+const ACRYLIC = process.platform === 'win32' && Number(os.release().split('.')[2]) >= 22621;
 
 function fmtBytes(b) {
   b = Number(b) || 0;
@@ -16,7 +19,7 @@ function fmtBytes(b) {
   return `${b.toFixed(b >= 100 ? 0 : 1).replace('.', ',')} ${u[i]}`;
 }
 
-function createMenubar({ iconPath, trayImage, T = (x) => x, showMain, sendToMain, services, getPrefs, onQuit }) {
+function createMenubar({ iconPath, trayImage, traySize = 22, decorate = () => {}, T = (x) => x, showMain, sendToMain, services, getPrefs, onQuit }) {
   const { system, cleaner, protection, platform } = services;
   let tray = null;
   let mini = null;
@@ -40,14 +43,17 @@ function createMenubar({ iconPath, trayImage, T = (x) => x, showMain, sendToMain
       alwaysOnTop: true,
       title: 'Boost My Pc — mini-panneau',
       icon: fs.existsSync(iconPath) ? iconPath : undefined,
-      backgroundColor: bg(),
+      backgroundColor: ACRYLIC ? '#00000000' : bg(),
+      ...(ACRYLIC ? { backgroundMaterial: 'acrylic' } : {}),
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
+        additionalArguments: ACRYLIC ? ['--bmp-acrylic'] : [],
       },
     });
+    decorate(mini);
     mini.loadFile(path.join(__dirname, 'renderer', 'mini.html'));
     mini.on('blur', () => {
       if (Date.now() - shownAt > 400 && !mini.webContents.isDevToolsOpened()) { mini.hide(); hiddenAt = Date.now(); }
@@ -101,11 +107,12 @@ function createMenubar({ iconPath, trayImage, T = (x) => x, showMain, sendToMain
   function createTray() {
     if (!fs.existsSync(iconPath)) return null;
     try {
-      tray = new Tray(trayImage(22));
+      tray = new Tray(trayImage(traySize));
     } catch { tray = null; return null; } // No tray on this desktop.
     tray.setToolTip('Boost My Pc');
     setMenu();
     tray.on('click', () => toggleMini('cursor'));
+    tray.on('double-click', () => { hideMini(); showMain(); });
     return tray;
   }
   // Some Linux desktops send only a menu event, so make the first item open the panel.
@@ -129,11 +136,13 @@ function createMenubar({ iconPath, trayImage, T = (x) => x, showMain, sendToMain
     if (summaryBusy) return summaryBusy;
     if (!force && Date.now() - summary.updatedAt < 10 * 60 * 1000) return summary;
     summaryBusy = (async () => {
-      const [scan, sec, upd] = await Promise.all([
+      const [scan, sec, upd, recycle] = await Promise.all([
         cleaner.scan('health').catch(() => null),
         protection.securityStatus().catch(() => null),
         summary.updates === null || force || Date.now() - summary.updatesAt > 60 * 60 * 1000
           ? protection.checkWindowsUpdates().catch(() => null) : Promise.resolve(undefined),
+        // The Windows recycle bin is not part of the quick scan.
+        cleaner.recycleBinSize ? cleaner.recycleBinSize().catch(() => null) : null,
       ]);
       if (scan) {
         const userItems = scan.items.filter((i) => !i.needsAdmin && i.id !== 'trash' && i.id !== 'recycle' && i.id !== 'recent');
@@ -142,6 +151,7 @@ function createMenubar({ iconPath, trayImage, T = (x) => x, showMain, sendToMain
         const trash = scan.items.find((i) => i.id === 'trash' || i.id === 'recycle');
         summary.trash = trash ? trash.size : null;
       }
+      if (recycle) summary.trash = recycle.size;
       if (sec) {
         const fw = sec.cards ? sec.cards.find((c) => c.id === 'firewall') : null;
         if (fw) { summary.firewallOk = fw.ok; summary.firewall = fw.status; }
@@ -200,7 +210,7 @@ function createMenubar({ iconPath, trayImage, T = (x) => x, showMain, sendToMain
   ipcMain.handle('ui:hideMini', () => { hideMini(); return { ok: true }; });
 
   app.on('before-quit', () => { quitting = true; });
-  nativeTheme.on('updated', () => mini?.setBackgroundColor(bg()));
+  if (!ACRYLIC) nativeTheme.on('updated', () => mini?.setBackgroundColor(bg()));
   createTray();
   createMini();
   setInterval(tick, 10 * 1000);

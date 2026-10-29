@@ -188,18 +188,6 @@ function countUp(el, ms = 750) {
 }
 function countUpIn(root = content) { $$(COUNT_SELECTOR, root).forEach((el) => countUp(el)); }
 
-document.addEventListener('pointerdown', (e) => {
-  const b = e.target.closest('.btn, .btn-main, .nav-item, .tab, .sc-link, .wl-next');
-  if (!b || b.disabled || motionOff()) return;
-  const r = b.getBoundingClientRect();
-  const s = Math.max(r.width, r.height) * 2.2;
-  const w = document.createElement('span');
-  w.className = 'ripple';
-  w.style.cssText = `width:${s}px;height:${s}px;left:${e.clientX - r.left - s / 2}px;top:${e.clientY - r.top - s / 2}px`;
-  b.appendChild(w);
-  setTimeout(() => w.remove(), 650);
-});
-
 let spotRaf = 0;
 document.addEventListener('pointermove', (e) => {
   if (spotRaf || motionOff()) return;
@@ -216,8 +204,6 @@ document.addEventListener('pointermove', (e) => {
 function pageMotion(root) {
   Motion.slideTabs(root);
   countUpIn(root);
-  const done = $('.done-hero', root);
-  if (done) setTimeout(() => done.isConnected && celebrate(done), 380);
 }
 
 // ===================== Shared components =====================
@@ -285,14 +271,17 @@ function intro(mod, { title, lead, features = [], button = 'Analyser', extra = '
   const columns = features.length === 4 ? 2 : Math.min(3, features.length);
   return `<div class="intro ms">
     <div class="ms-hero" aria-hidden="true">
-      <div class="ms-aura"><i></i><i></i></div>
-      <div class="ms-lens lg" data-refract>${micon(mod)}</div>
+      <div class="ms-glow"></div>
+      <div class="ms-lens lg" data-refract><div class="ms-aura"><i></i><i></i><i></i></div>${micon(mod)}</div>
     </div>
     <span class="ms-eyebrow">${esc(MODULE_GROUP[mod] || '')}</span>
     <h1>${esc(title || MODULES[mod].title)}</h1>
     <p class="lead">${lead}</p>
-    ${features.length ? `<div class="ms-features" style="--cols:${columns}">${features.map(([ic, t, s], i) => `
-      <div class="ms-feature lg" style="--d:${0.2 + i * 0.05}s"><span class="ms-f-ico">${ficon(ic)}</span><div><b>${esc(t)}</b><span>${esc(s)}</span></div></div>`).join('')}
+    ${features.length ? `<div class="ms-features" style="--cols:${columns}">${features.map(([ic, t, s, attrs], i) => {
+      // A fourth item turns the card into a button (a choice, such as the folder to analyse).
+      const tag = attrs ? 'button' : 'div';
+      return `<${tag} class="ms-feature lg${attrs ? ' choice' : ''}" style="--d:${0.2 + i * 0.05}s" ${attrs || ''}><span class="ms-f-ico">${ficon(ic)}</span><div><b>${esc(t)}</b><span>${esc(s)}</span></div></${tag}>`;
+    }).join('')}
     </div>` : ''}
     ${extra ? `<div class="ms-extra">${extra}</div>` : ''}
     <button class="scan-btn lg" id="scan" data-refract><span>${esc(button)}</span></button>
@@ -689,7 +678,7 @@ function smartWatch(token) {
     job.listeners.delete(view);
     if (!alive(token)) return;
     if (r == null) return go('smart');
-    if (job.phase === 'run') return smartShowDone(token, true);
+    if (job.phase === 'run') return smartShowDone(token);
     smartProgress(1);
     await new Promise((res) => setTimeout(res, 350));
     if (alive(token)) smartShowResult(token, true);
@@ -761,7 +750,7 @@ async function smartRun(token, values) {
   if (job && alive(token)) smartWatch(token);
 }
 
-function smartShowDone(token, animated = false) {
+function smartShowDone(token) {
   if (!$('.sc-grid')) smartBoard();
   smartProgress(1);
   const btn = $('#sc-btn');
@@ -774,21 +763,6 @@ function smartShowDone(token, animated = false) {
   $('#sc-hint').innerHTML = '<button class="link" id="sc-new">Nouvelle analyse</button>';
   $('#sc-new').onclick = () => smartScan(token);
   btn.onclick = () => smartScan(token);
-  if (animated) celebrate(btn);
-}
-
-function celebrate(el) {
-  if (document.body.classList.contains('lite') || !el) return;
-  const box = el.getBoundingClientRect();
-  const colors = ['#f133c5', '#7c5cff', '#4be3a0', '#ffc53d', '#4fc3ff'];
-  for (let i = 0; i < 22; i++) {
-    const d = document.createElement('i');
-    d.className = 'confetti';
-    const ang = (i / 22) * Math.PI * 2, dist = 80 + Math.random() * 70;
-    d.style.cssText = `left:${box.left + box.width / 2}px;top:${box.top + box.height / 2}px;background:${colors[i % colors.length]};--dx:${Math.cos(ang) * dist}px;--dy:${Math.sin(ang) * dist}px;animation-delay:${Math.random() * 80}ms`;
-    document.body.appendChild(d);
-    setTimeout(() => d.remove(), 1100);
-  }
 }
 
 // ===================== Cleanup =====================
@@ -1889,11 +1863,19 @@ PAGES.lens = async (token) => {
   if (lensData) return renderLens(token);
   page(intro('lens', {
     lead: 'Visualisez ce qui occupe votre disque sous forme de carte interactive. Cliquez sur un dossier pour l\'explorer, supprimez ce qui ne sert plus.',
-    extra: `<div class="list-head" style="justify-content:center;margin-bottom:22px"><button class="btn" data-root="${esc(PATHS.home)}">${icon('home')} Dossier personnel</button>
-      <button class="btn" data-root="${esc(PATHS.root)}">${icon('storage')} Disque entier</button><button class="btn" id="lens-pick">${icon('folder')} Autre dossier…</button></div>`,
+    features: [
+      ['home', 'Dossier personnel', PATHS.home, `data-root="${esc(PATHS.home)}"`],
+      ['storage', 'Disque entier', PATHS.root, `data-root="${esc(PATHS.root)}"`],
+      ['folder', 'Autre dossier…', 'Choisir le dossier à analyser', 'id="lens-pick"'],
+    ],
     button: 'Analyser',
   }));
   let root = PATHS.home;
+  const choose = (card, path) => {
+    root = path;
+    $$('.ms-feature.choice').forEach((c) => c.classList.toggle('on', c === card));
+  };
+  choose($('[data-root]'), root);
   const start = async (r) => {
     root = r;
     // Stopping keeps the partial map.
@@ -1906,8 +1888,13 @@ PAGES.lens = async (token) => {
     });
     if (job && alive(token)) showJob(token, 'lens', { mod: 'lens' }, () => renderLens(token));
   };
-  $$('[data-root]').forEach((b) => (b.onclick = () => start(b.dataset.root)));
-  $('#lens-pick').onclick = async () => { const p = await pcm.storage.pickFolder(); if (p) start(p); };
+  $$('[data-root]').forEach((b) => (b.onclick = () => choose(b, b.dataset.root)));
+  $('#lens-pick').onclick = async () => {
+    const p = await pcm.storage.pickFolder();
+    if (!p) return;
+    $('#lens-pick > div > span').textContent = p;
+    choose($('#lens-pick'), p);
+  };
   $('#scan').onclick = () => start(root);
 };
 
@@ -2337,24 +2324,43 @@ function healthSkeleton() {
     <div class="hx-body"><div class="hx-cards">${'<div class="hx-card glass shimmer"></div>'.repeat(4)}</div><aside class="hx-side glass shimmer"></aside></div></div>`;
 }
 
-async function loadHealth(token) {
-  if (!healthResult || Date.now() - healthResult.at > 60000) {
-    const r = await pcm.v2.health().catch((e) => ({ error: e.message }));
-    if (!alive(token)) return;
-    if (r.error) {
-      $('#health').innerHTML = `<div class="card glass empty">${icon('warn')}<div>Mesure impossible : ${esc(r.error)}</div><button class="btn" id="hx-retry">${icon('refresh')} Réessayer</button></div>`;
-      $('#hx-retry').onclick = () => { $('#health').innerHTML = healthSkeleton(); loadHealth(token); };
-      return;
-    }
+// One measurement at a time, kept even if the user leaves the tab before it ends.
+let healthPending = null;
+function measureHealth() {
+  healthPending ||= Promise.race([
+    pcm.v2.health(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Délai dépassé.')), 30000)),
+  ]).then((r) => {
     healthResult = r;
     if (!healthSeries.cpu.length) { healthSeries.cpu.push(r.cpu.usage); healthSeries.mem.push(r.memory.percent); }
-  }
-  if (!alive(token) || !$('#health')) return;
-  renderHealth(token, healthResult);
-  liveHealth(token);
+    return r;
+  }).finally(() => { healthPending = null; });
+  return healthPending;
 }
 
-function renderHealth(token, h) {
+// The last measurement shows at once; an older one is refreshed in place.
+async function loadHealth(token) {
+  const shown = !!healthResult;
+  if (shown) showHealth(token, healthResult);
+  if (shown && Date.now() - healthResult.at < 60000) return;
+  try {
+    await measureHealth();
+  } catch (e) {
+    if (shown || !alive(token) || !$('#health')) return;
+    $('#health').innerHTML = `<div class="card glass empty">${icon('warn')}<div>Mesure impossible : ${esc(e.message)}</div><button class="btn" id="hx-retry">${icon('refresh')} Réessayer</button></div>`;
+    $('#hx-retry').onclick = () => { $('#health').innerHTML = healthSkeleton(); loadHealth(token); };
+    return;
+  }
+  if (alive(token) && $('#health')) showHealth(token, healthResult, shown);
+}
+
+let liveToken = null;
+function showHealth(token, h, quiet = false) {
+  renderHealth(token, h, quiet);
+  if (liveToken !== token) { liveToken = token; liveHealth(token); }
+}
+
+function renderHealth(token, h, quiet = false) {
   const days = Math.floor(h.system.uptime / 86400), hours = Math.floor((h.system.uptime % 86400) / 3600);
   const mins = Math.floor((h.system.uptime % 3600) / 60);
   const up = days ? `${plural(days, 'jour', 'jours')}${hours ? ` ${hours} h` : ''}` : hours ? `${hours} h ${String(mins).padStart(2, '0')}` : `${mins} min`;
@@ -2422,7 +2428,7 @@ function renderHealth(token, h) {
         <div class="hx-card glass">
           <div class="hx-card-head"><span class="hx-ico g-cleanup">${ficon('battery')}</span><div><b>Batterie</b><span>${b ? (b.charging ? 'En charge' : 'Sur batterie') : 'Aucune batterie'}</span></div></div>
           ${b ? `<div class="hx-bat ${batLvl}">
-              <div class="hx-bat-body"><i style="width:${b.charge ?? 0}%"></i><span>${b.charge ?? '–'} %</span>${b.charging ? `<em>${ficon('bolt')}</em>` : ''}</div><div class="hx-bat-cap"></div></div>
+              <div class="hx-bat-body"><i style="width:${b.charge ?? 0}%"></i><span>${b.charge ?? '–'} %${b.charging ? micon('bolt', 'hx-bolt') : ''}</span></div><div class="hx-bat-cap"></div></div>
             <div class="hx-big small"><b class="${batLvl}">${b.health != null ? `${b.health} %` : '–'}</b><span>de la capacité d'origine</span></div>
             <div class="hx-meta"><span>${b.health == null ? 'Usure non communiquée' : b.health >= 80 ? 'Batterie en bon état' : b.health >= 60 ? 'Usure normale' : 'Batterie usée'}</span>${b.cycles ? `<span>${b.cycles} cycles</span>` : ''}</div>`
             : `<div class="hx-plug">${ficon('power')}<span>Ce PC fonctionne sur secteur.</span></div>`}
@@ -2443,9 +2449,10 @@ function renderHealth(token, h) {
   // Live values change without transitions: animating them would keep redrawing the glass.
   setTimeout(() => $('.hx')?.classList.add('hx-live'), 1500);
   const ring = $('#hx-ring'), scoreEl = $('#hx-score');
-  const lite = document.body.classList.contains('lite');
+  const still = quiet || document.body.classList.contains('lite');
+  if (quiet) ring.style.transition = 'none';
   requestAnimationFrame(() => { ring.style.strokeDashoffset = C * (1 - h.score / 100); });
-  if (lite) scoreEl.textContent = h.score;
+  if (still) scoreEl.textContent = h.score;
   else {
     const t0 = performance.now();
     const tick = (t) => {
@@ -2506,26 +2513,38 @@ PAGES.settings = async (token, tab = 'health') => {
   if (!alive(token)) return;
   const row = (ic, title, sub, ctrl) => `<div class="row"><div class="r-ico tint">${ficon(ic)}</div><div class="r-main"><div class="r-title">${title}</div><div class="r-sub" style="white-space:normal">${sub}</div></div>${ctrl}</div>`;
   const sw = (id, on) => `<label class="switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}/><span></span></label>`;
+  const group = (title, rows) => `<section class="pref-group"><h3>${title}</h3><div class="list glass">${rows.join('')}</div></section>`;
+  const system = IS_LINUX ? [
+    row('memory', 'Boost avancé', 'Vide aussi le cache de pages du noyau (mot de passe à chaque Boost)', sw('s-drop', p.boostDropCaches)),
+    row('admin', 'Droits administrateur', 'Les actions système demandent votre mot de passe via polkit', `<span class="pill ${admin ? 'ok' : 'info'}">${admin ? 'root' : 'À la demande'}</span>`),
+  ] : [
+    row('admin', 'Mode administrateur', admin ? 'Boost My Pc s\'exécute avec les droits administrateur' : 'Nécessaire pour certaines tâches système', admin ? '<span class="pill ok">Actif</span>' : '<button class="btn" id="s-admin" title="Redémarrer Boost My Pc avec les droits administrateur">Redémarrer</button>'),
+    row('shield', 'Démarrer en administrateur', '<span id="s-adm-sub">Évite de redemander l\'autorisation pendant l\'utilisation.</span>', `<select id="s-adm">
+        <option value="off">À la demande</option><option value="prompt">À l'ouverture</option><option value="task">Toujours</option></select>`),
+  ];
   page(`${top}
-    <div class="prefs-wrap"><div class="list glass prefs-grid">
-      ${row('globe', 'Langue', 'Langue de l\'interface', `<select id="s-lang" data-no-i18n>${Object.entries(i18n.LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>`)}
-      ${row('image', 'Thème', 'Apparence de l\'application', '<select id="s-theme"><option value="system">Système</option><option value="dark">Sombre</option><option value="light">Clair</option></select>')}
-      ${row('sparkle', 'Effets visuels', 'Verre dépoli et animations. « Automatique » les désactive si la carte graphique n\'est pas accélérée.', '<select id="s-fx"><option value="auto">Automatique</option><option value="on">Activés</option><option value="off">Désactivés</option></select>')}
-      ${row('bell', 'Son de fin', 'Petit son quand une analyse ou une action se termine', sw('s-sounds', p.sounds !== false))}
-      ${row('bell', 'Notifications système', 'Prévient quand une analyse se termine alors que Boost My Pc est en arrière-plan', sw('s-notif', p.notifications !== false))}
-      ${row('power', 'Lancer à l\'ouverture de session', 'Boost My Pc démarre réduit dans la zone de notification', sw('s-startup', p.startup))}
-      ${row('download', 'Mises à jour automatiques', 'Les nouvelles versions se téléchargent en arrière-plan et s\'installent quand vous redémarrez Boost My Pc', sw('s-autoupdate', p.autoUpdate !== false))}
-      ${row('apps', 'Réduire dans la zone de notification', 'La fermeture de la fenêtre laisse l\'application active', sw('s-tray', p.minimizeToTray))}
-      ${IS_LINUX ? `
-      ${row('warn', 'Alertes', 'Mémoire saturée, disque plein, corbeille volumineuse, mises à jour de sécurité', sw('s-alerts', p.alerts !== false))}
-      ${row('apps', 'Mini-panneau', 'Cliquez sur l\'icône de la barre supérieure, ou associez un raccourci clavier à <b>boost-my-pc --mini</b>', '')}
-      ${row('memory', 'Boost avancé', 'Vide aussi le cache de pages du noyau (mot de passe à chaque Boost)', sw('s-drop', p.boostDropCaches))}
-      ${row('admin', 'Droits administrateur', 'Les actions système demandent votre mot de passe via polkit', `<span class="pill ${admin ? 'ok' : 'info'}">${admin ? 'root' : 'À la demande'}</span>`)}`
-      : `${row('admin', 'Mode administrateur', admin ? 'Boost My Pc s\'exécute avec les droits administrateur' : 'Nécessaire pour certaines tâches système', admin ? '<span class="pill ok">Actif</span>' : '<button class="btn" id="s-admin" title="Redémarrer Boost My Pc avec les droits administrateur">Redémarrer</button>')}
-      ${row('shield', 'Démarrer en administrateur', '<span id="s-adm-sub">Évite de redemander l\'autorisation pendant l\'utilisation.</span>', `<select id="s-adm">
-        <option value="off">À la demande</option><option value="prompt">À l'ouverture</option><option value="task">Toujours</option></select>`)}`}
-      ${row('refresh', 'Réinitialiser l\'application', 'Rétablit les préférences par défaut et affiche à nouveau l\'écran de bienvenue', '<button class="btn" id="s-reset">Réinitialiser</button>')}
-    </div></div>`);
+    <div class="prefs">
+      ${group('Apparence', [
+        row('globe', 'Langue', 'Langue de l\'interface', `<select id="s-lang" data-no-i18n>${Object.entries(i18n.LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>`),
+        row('image', 'Thème', 'Apparence de l\'application', '<select id="s-theme"><option value="system">Système</option><option value="dark">Sombre</option><option value="light">Clair</option></select>'),
+        row('sparkle', 'Effets visuels', 'Verre et animations. « Automatique » les désactive si la carte graphique n\'est pas accélérée.', '<select id="s-fx"><option value="auto">Automatique</option><option value="on">Activés</option><option value="off">Désactivés</option></select>'),
+      ])}
+      ${group('Notifications', [
+        row('bell', 'Son de fin', 'Petit son quand une analyse ou une action se termine', sw('s-sounds', p.sounds !== false)),
+        row('bell', 'Notifications système', 'Prévient quand une analyse se termine alors que Boost My Pc est en arrière-plan', sw('s-notif', p.notifications !== false)),
+        row('warn', 'Alertes', 'Mémoire saturée, disque plein, corbeille volumineuse, mises à jour de sécurité', sw('s-alerts', p.alerts !== false)),
+      ])}
+      ${group('Démarrage et mises à jour', [
+        row('power', 'Lancer à l\'ouverture de session', 'Boost My Pc démarre réduit dans la zone de notification', sw('s-startup', p.startup)),
+        row('apps', 'Réduire dans la zone de notification', 'La fermeture de la fenêtre laisse l\'application active', sw('s-tray', p.minimizeToTray)),
+        row('download', 'Mises à jour automatiques', 'Les nouvelles versions se téléchargent en arrière-plan et s\'installent quand vous redémarrez Boost My Pc', sw('s-autoupdate', p.autoUpdate !== false)),
+        ...(IS_LINUX ? [row('apps', 'Mini-panneau', 'Cliquez sur l\'icône de la barre supérieure, ou associez un raccourci clavier à <b>boost-my-pc --mini</b>', '')] : []),
+      ])}
+      ${group('Système', [
+        ...system,
+        row('refresh', 'Réinitialiser l\'application', 'Rétablit les préférences par défaut et affiche à nouveau l\'écran de bienvenue', '<button class="btn" id="s-reset">Réinitialiser</button>'),
+      ])}
+    </div>`);
   $('#s-lang').value = i18n.lang;
   $('#s-lang').onchange = async (e) => { await pcm.prefs.set({ lang: e.target.value }); location.reload(); };
   $('#s-theme').value = p.theme;
@@ -2689,4 +2708,6 @@ pcm.onAction((a) => {
   $('#admin-badge').textContent = IS_LINUX ? 'root' : 'Administrateur';
   $('#admin-badge').classList.toggle('hidden', !CAPS.isAdmin);
   if (['tools', 'settings'].includes(currentRoute)) go(currentRoute);
+  // Measured ahead, so the Health tab opens on a result.
+  setTimeout(() => measureHealth().catch(() => {}), 6000);
 })();

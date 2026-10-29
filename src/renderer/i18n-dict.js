@@ -1209,6 +1209,11 @@ Fichier téléchargé incomplet ou corrompu. | Downloaded file is incomplete or 
 L'installation n'a pas pu démarrer. | The installation couldn't start. | Tsy nanomboka ny fametrahana.
 tâche effectuée. | task done. | asa vita.
 tâches effectuées. | tasks done. | asa vita.
+Verre et animations. « Automatique » les désactive si la carte graphique n'est pas accélérée. | Glass and animations. "Automatic" turns them off if the graphics card isn't accelerated. | Fitaratra manjavozavo sy fihetsika. Atsahatry ny « Ho azy » izy ireo raha tsy haingana ny karatra sary.
+Apparence | Appearance | Endrika
+Notifications | Notifications | Fampandrenesana
+Démarrage et mises à jour | Startup and updates | Fanombohana sy fanavaozana
+Choisir le dossier à analyser | Choose the folder to analyse | Safidio ny lahatahiry hodinihina
 `;
 
 const I18N_DICT = { en: {}, mg: {} };

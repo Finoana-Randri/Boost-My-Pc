@@ -185,36 +185,18 @@ function trayImage(size) {
   return img;
 }
 
-function createWindowsTray() {
-  try {
-    tray = new Tray(trayImage(16));
-  } catch {
-    tray = null;
-    return;
-  }
-  tray.setToolTip('Boost My Pc');
-  setTrayMenu();
-  tray.on('click', showWindow);
-}
-
 function setTrayMenu() {
-  if (menubar) {
-    menubar.setMenu();
-    menubar.reloadMini?.();
-    return;
-  }
-  tray?.setContextMenu(Menu.buildFromTemplate([
-    { label: T('Ouvrir Boost My Pc'), click: showWindow },
-    { label: 'Boost', click: () => { showWindow(); sendToWindow('action', 'boost'); } },
-    { type: 'separator' },
-    { label: T('Quitter'), click: quit },
-  ]));
+  menubar?.setMenu();
+  menubar?.reloadMini();
 }
 
-function createLinuxMenubar() {
+// Notification-area icon and its widget (the mini panel).
+function createMenubarTray() {
   menubar = createMenubar({
     iconPath: ICON,
     trayImage,
+    traySize: isLinux ? 22 : 16,
+    decorate: isLinux ? undefined : roundWindows11Corners,
     T,
     showMain: showWindow,
     sendToMain: (msg) => {
@@ -524,8 +506,7 @@ function start() {
     if (process.argv.includes('--create-admin-task') && admin.isElevated()) {
       admin.setMode('task').then((mode) => updatePrefs({ adminMode: mode })).catch(() => {});
     }
-    if (isLinux) createLinuxMenubar();
-    else createWindowsTray();
+    createMenubarTray();
     createWindow();
     // A few seconds later, so the window shows first.
     if (isLinux) setTimeout(() => { try { integrateAppImage(); } catch {} }, 4000);

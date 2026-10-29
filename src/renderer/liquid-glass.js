@@ -1,8 +1,8 @@
-// Refraction for elements with data-refract: an SVG displacement filter shaped like their rounded
-// box pulls the backdrop inwards near the edges, like the rim of a lens. CSS applies it through
-// --lg-refract.
+// Refraction for glass surfaces: an SVG displacement filter shaped like their rounded box pulls
+// the backdrop inwards near the edges, like the rim of a lens. CSS applies it through --lg-refract.
 (function () {
   const NS = 'http://www.w3.org/2000/svg';
+  const SURFACES = '[data-refract], .sidebar, .action-bar, .tabs, .toast, .modal-box, .sc-tile, .sc-btn, .ov-card, .hx-card, .btn:not(.ghost), .btn-main, .back, .sc-link';
   const defs = document.createElementNS(NS, 'svg');
   defs.setAttribute('aria-hidden', 'true');
   defs.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
@@ -17,7 +17,7 @@
     canvas.height = height;
     const ctx = canvas.getContext('2d');
     const image = ctx.createImageData(width, height);
-    const band = Math.min(width, height) * 0.3;
+    const band = Math.min(Math.min(width, height) * 0.3, 26);
     const halfW = width / 2 - radius, halfH = height / 2 - radius;
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -51,7 +51,7 @@
     const key = `${width}x${height}x${radius}`;
     if (filters.has(key)) return filters.get(key);
     const id = `lg-${filters.size}`;
-    const scale = Math.min(64, Math.min(width, height) * 0.4);
+    const scale = Math.min(width, height) > 200 ? 36 : Math.min(64, Math.min(width, height) * 0.4);
     defs.insertAdjacentHTML('beforeend', `<filter id="${id}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
       <feImage href="${displacementMap(width, height, radius)}" x="0" y="0" width="${width}" height="${height}" result="map"/>
       <feDisplacementMap in="SourceGraphic" in2="map" scale="${scale}" xChannelSelector="R" yChannelSelector="G"/></filter>`);
@@ -69,8 +69,8 @@
   const sizes = new ResizeObserver((entries) => entries.forEach((e) => refract(e.target)));
   const each = (node, fn) => {
     if (node.nodeType !== 1) return;
-    if (node.matches('[data-refract]')) fn(node);
-    node.querySelectorAll('[data-refract]').forEach(fn);
+    if (node.matches(SURFACES)) fn(node);
+    node.querySelectorAll(SURFACES).forEach(fn);
   };
   new MutationObserver((changes) => changes.forEach((c) => {
     c.removedNodes.forEach((n) => each(n, (el) => sizes.unobserve(el)));

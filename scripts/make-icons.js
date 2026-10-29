@@ -3,7 +3,7 @@
 // Each name of the interface points to one Phosphor icon, drawn in four weights:
 //   icon()   regular  buttons, text and lists
 //   ficon()  duotone  cards, rows and feature tiles
-//   micon()  fill     module tiles (sidebar, home screens)
+//   micon()  fill     module tiles (sidebar, home screens) and small solid marks
 //   bold     regular icons drawn heavier on demand: icon('check', 'bold')
 const fs = require('fs');
 const path = require('path');
@@ -97,7 +97,7 @@ const NAMES = {
 // On cards a bare mark looks lost: these use the circled version.
 const DUOTONE_NAMES = { check: 'check-circle', x: 'x-circle', info: 'info' };
 
-const MODULES = ['smart', 'cleanup', 'protection', 'performance', 'applications', 'clutter', 'lens', 'cloud', 'shredder', 'tools', 'settings'];
+const FILLED = ['smart', 'cleanup', 'protection', 'performance', 'applications', 'clutter', 'lens', 'cloud', 'shredder', 'tools', 'settings', 'bolt'];
 const BOLD = ['check', 'chevron', 'back', 'x', 'warn'];
 
 // Phosphor has no shredder: drawn here on the same 256 grid and 16 px stroke.
@@ -136,7 +136,7 @@ const ICONS_BOLD = ${table(BOLD, 'bold')};
 
 const FICONS = ${table(all, 'duotone')};
 
-const MICONS = ${table(MODULES, 'fill')};
+const MICONS = ${table(FILLED, 'fill')};
 
 const svg = (body, cls) => \`<svg class="svg-ico \${cls}" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">\${body || ''}</svg>\`;
 

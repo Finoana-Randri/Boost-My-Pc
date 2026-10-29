@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('pcm', {
   // Linux: the window has no system frame, so the interface draws its own corners and buttons.
   frameless: process.argv.includes('--bmp-frameless'),
   round: process.argv.includes('--bmp-round'),
+  acrylic: process.argv.includes('--bmp-acrylic'),
   win: {
     control: (action) => ipcRenderer.send('win:control', action),
     resize: (edge) => ipcRenderer.send('win:resize', edge),

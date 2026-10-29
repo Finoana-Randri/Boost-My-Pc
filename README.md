@@ -56,7 +56,7 @@ One scan checks five areas; one click applies safe actions.
 | **Cloud Cleanup** | Finds large and old files in OneDrive, Dropbox, Google Drive, Nextcloud, and other synced folders. Includes **Free up local space** for OneDrive. |
 | **Shredder** | Permanently deletes files by overwriting them with random data (1, 3, or 7 passes). Supports drag and drop. |
 | **PC health** | In **Settings**, a score out of 100 based on real measurements: processor usage and temperature (when available), memory, storage space and disk health, battery wear, and system status, with recommendations. |
-| **Mini panel** | On Linux, click the top-bar icon to open a compact panel with system status, Boost, trash, and updates. Run `boost-my-pc --mini` to open it from a keyboard shortcut. |
+| **Widget** | Click the notification-area icon (top-bar icon on Linux) to open a compact glass panel with system status, Boost, trash, and updates; double-click it on Windows to open the app. On Windows 11 the panel uses the system acrylic material. Run `boost-my-pc --mini` to open it from a keyboard shortcut. |
 
 ### Background scans
 
@@ -159,7 +159,7 @@ src/prefs.js                User preferences
 src/admin.js                Administrator rights on Windows (UAC, scheduled task)
 src/linux-window.js         Linux window: rounded shape, window buttons, resizing
 src/linux-desktop.js        Linux menu entry for the AppImage, notify-send fallback
-src/menubar.js              Top-bar icon, mini panel, alerts
+src/menubar.js              Notification-area icon, widget (mini panel), alerts
 src/updater.js              In-app update from the latest GitHub release
 src/services/               Windows (PowerShell), Linux (src/services/linux), and shared services
 src/services/v2/            v2 modules: Smart Care, maintenance, privacy, permissions,

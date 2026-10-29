@@ -212,4 +212,4 @@ async function clean(ids, onProgress) {
   return { freed, deleted, failed };
 }
 
-module.exports = { scan, clean, isAdmin };
+module.exports = { scan, clean, isAdmin, recycleBinSize };
