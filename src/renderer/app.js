@@ -213,20 +213,8 @@ document.addEventListener('pointermove', (e) => {
   });
 });
 
-// Home screens animate for 10 s after the pointer moves, then rest so the app stays idle.
-let liveTimer = 0;
-function wakeIntro() {
-  const el = $('.intro.ms');
-  if (!el || motionOff()) return;
-  el.classList.add('live');
-  clearTimeout(liveTimer);
-  liveTimer = setTimeout(() => el.classList.remove('live'), 10000);
-}
-let wakeAt = 0;
-content.addEventListener('pointermove', () => { if (Date.now() - wakeAt > 500) { wakeAt = Date.now(); wakeIntro(); } });
-
 function pageMotion(root) {
-  wakeIntro();
+  Motion.slideTabs(root);
   countUpIn(root);
   const done = $('.done-hero', root);
   if (done) setTimeout(() => done.isConnected && celebrate(done), 380);

@@ -1,13 +1,21 @@
-/* ===================== Liquid glass material ===================== */
-/* A clear layer: light frost, a bright rim where light catches the edge, a sheen on top.
-   Surfaces marked data-refract also bend what lies behind them (see liquid-glass.js). */
+/* ===================== Tokens ===================== */
+/* Spring curves sampled from damping ratio and response (0.4 s):
+   --spring: damping 1, no overshoot; --spring-bounce: damping 0.8, for what the user moved or pressed. */
 :root {
+  --spring: linear(0, 0.0195, 0.0679, 0.1336, 0.2081, 0.2857, 0.3625, 0.436, 0.5047, 0.5677, 0.6246, 0.6756, 0.7208, 0.7606, 0.7953, 0.8255, 0.8516, 0.8741, 0.8935, 0.91, 0.9241, 0.9361, 0.9463, 0.9549, 0.9622, 0.9683, 0.9735, 0.9779, 0.9815, 0.9846, 0.9872, 0.9893, 0.9911, 0.9926, 0.9939, 0.9949, 0.9958, 0.9965, 0.9971, 0.9976, 1);
+  --spring-bounce: linear(0, 0.0181, 0.0649, 0.131, 0.2087, 0.2923, 0.3772, 0.4602, 0.5389, 0.6118, 0.678, 0.7371, 0.789, 0.8339, 0.8721, 0.9043, 0.9309, 0.9526, 0.9699, 0.9835, 0.994, 1.0017, 1.0073, 1.0111, 1.0135, 1.0148, 1.0152, 1.0149, 1.0143, 1.0133, 1.0121, 1.0109, 1.0096, 1.0083, 1.0071, 1.006, 1.005, 1.0041, 1.0033, 1.0026, 1);
+  --t-spring: .54s;
+  --t-quick: .38s;
+  --t-bounce: .51s;
+
   --lg-fill: rgba(255, 255, 255, .05);
   --lg-fill-hi: rgba(255, 255, 255, .15);
   --lg-rim: rgba(255, 255, 255, .8);
   --lg-rim-low: rgba(255, 255, 255, .24);
   --lg-sheen: rgba(255, 255, 255, .16);
   --lg-shadow: 0 16px 40px rgba(8, 0, 24, .36), 0 2px 6px rgba(8, 0, 24, .18);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 0 1px rgba(255, 255, 255, .06);
+  --sheen: linear-gradient(170deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, 0) 42%);
 }
 @media (prefers-color-scheme: light) {
   :root {
@@ -17,9 +25,14 @@
     --lg-rim-low: rgba(255, 255, 255, .75);
     --lg-sheen: rgba(255, 255, 255, .55);
     --lg-shadow: 0 16px 40px rgba(80, 30, 140, .14), 0 2px 6px rgba(80, 30, 140, .08);
+    --edge: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(255, 255, 255, .5);
+    --sheen: linear-gradient(170deg, rgba(255, 255, 255, .45), rgba(255, 255, 255, 0) 42%);
   }
 }
 
+/* ===================== Liquid glass material ===================== */
+/* Light frost, a bright rim where light catches the edge, a sheen on top. Surfaces marked
+   data-refract also bend what lies behind them (liquid-glass.js). */
 .lg {
   position: relative;
   isolation: isolate;
@@ -38,45 +51,130 @@
 }
 .lg::after { background: radial-gradient(90% 55% at 30% 0%, var(--lg-sheen), transparent 70%); }
 
-/* Frosted panels elsewhere in the app catch the same light on their top edge. */
-.glass { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), var(--shadow); }
-@media (prefers-color-scheme: light) { .glass { box-shadow: inset 0 1px 0 #fff, var(--shadow); } }
+/* Panels: the same light on their edge and a faint sheen from the top. */
+.glass { background-image: var(--sheen); box-shadow: var(--edge), var(--shadow); border-color: transparent; }
 
-@keyframes lgIn { from { opacity: 0; transform: scale(.92); filter: blur(6px); } }
+@keyframes lgIn { from { opacity: 0; scale: .94; filter: blur(6px); } }
+@keyframes rise { from { opacity: 0; translate: 0 12px; } }
+
+h1 { letter-spacing: -.022em; }
+
+/* ===================== Sidebar ===================== */
+.sidebar.glass {
+  border-radius: 22px;
+  background-color: color-mix(in srgb, var(--glass) 70%, rgba(20, 8, 40, .35));
+  backdrop-filter: blur(30px) saturate(170%);
+}
+@media (prefers-color-scheme: light) { .sidebar.glass { background-color: rgba(255, 255, 255, .5); } }
+.nav-group { text-transform: none; letter-spacing: 0; font-size: 11.5px; font-weight: 800; color: var(--text-3); margin: 14px 12px 4px; }
+.nav-item { border-radius: 11px; transition: background .2s, color .2s; }
+.nav-item:hover { background: rgba(255, 255, 255, .055); }
+.nav-item:active { scale: .98; transition: scale .1s ease-out; }
+.nav-item .nav-ico { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 1px 3px rgba(0, 0, 0, .18); transition: none; }
+.nav-item:hover .nav-ico, .nav-item.active .nav-ico { transform: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 1px 3px rgba(0, 0, 0, .18); }
+.nav-item.active { color: var(--text); }
+.nav-glider {
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .15), rgba(255, 255, 255, .08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 0 0 1px rgba(255, 255, 255, .06), 0 4px 12px rgba(8, 0, 24, .22);
+  transition: transform var(--t-bounce) var(--spring-bounce), height var(--t-quick) var(--spring), opacity .3s;
+}
+.nav-glider::before { content: none; }
+@media (prefers-color-scheme: light) {
+  .nav-item:hover { background: rgba(255, 255, 255, .45); }
+  .nav-glider { background: rgba(255, 255, 255, .85); box-shadow: inset 0 0 0 1px #fff, 0 4px 14px rgba(80, 30, 140, .12); }
+}
+
+/* ===================== Controls ===================== */
+/* Feedback on press is immediate; the release springs back. */
+.btn, .btn-main, .tab, .sc-link, .back {
+  transition: background .2s, color .2s, box-shadow .2s, transform var(--t-bounce) var(--spring-bounce);
+}
+.btn:active, .btn-main:active, .tab:active, .sc-link:active, .back:active { transform: scale(.96); transition: transform .1s ease-out; }
+.btn {
+  border-color: transparent;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .02));
+  box-shadow: var(--edge), 0 2px 8px rgba(8, 0, 24, .14);
+}
+.btn.ghost { background-image: none; box-shadow: none; }
+.btn.primary, .btn-main {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--a2) 92%, #fff), var(--a1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), inset 0 -6px 12px rgba(30, 0, 50, .14), 0 6px 18px color-mix(in srgb, var(--a1) 40%, transparent);
+}
+.btn-main:hover { transform: translateY(-1px); filter: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -6px 12px rgba(30, 0, 50, .14), 0 10px 24px color-mix(in srgb, var(--a1) 48%, transparent); }
+.back { box-shadow: var(--edge); }
+select { border-color: transparent; background-color: var(--glass); box-shadow: var(--edge), 0 2px 8px rgba(8, 0, 24, .14); transition: background-color .2s; }
+
+/* Segmented tabs: a glass thumb slides under the selected tab (motion.js). */
+.tabs { position: relative; isolation: isolate; }
+.tab { position: relative; z-index: 1; }
+.tab.active { background: transparent; box-shadow: none; animation: none; color: #fff; }
+.tab-thumb {
+  position: absolute; left: 0; top: 4px; bottom: 4px; z-index: 0; border-radius: 999px; pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--a2) 90%, #fff), var(--a1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 4px 12px color-mix(in srgb, var(--a1) 35%, transparent);
+  transition: transform var(--t-bounce) var(--spring-bounce), width var(--t-spring) var(--spring);
+}
+
+/* Switch: the knob springs across and stretches while pressed. */
+.switch { width: 48px; height: 28px; }
+.switch span { border-radius: 14px; box-shadow: inset 0 1px 2px rgba(0, 0, 0, .18); transition: background .25s; }
+.switch span::before {
+  width: 24px; height: 24px; left: 2px; top: 2px; border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .25), inset 0 -1px 1px rgba(0, 0, 0, .06);
+  transition: transform var(--t-bounce) var(--spring-bounce), width var(--t-quick) var(--spring);
+}
+.switch input:checked + span { background: linear-gradient(180deg, color-mix(in srgb, var(--a2) 90%, #fff), var(--a1)); }
+.switch input:checked + span::before { transform: translateX(20px); }
+.switch span:active::before { width: 30px; }
+.switch input:checked + span:active::before { transform: translateX(14px); }
+
+/* Floating bars and messages */
+.action-bar { border-color: transparent; background-image: var(--sheen); box-shadow: var(--edge), var(--lg-shadow); animation: rise var(--t-spring) var(--spring) both; }
+.toast { background-image: var(--sheen); box-shadow: var(--edge), var(--lg-shadow); backdrop-filter: blur(24px) saturate(170%); animation: toastIn var(--t-bounce) var(--spring-bounce) both; }
+.modal { background: rgba(10, 0, 25, .38); animation: fade .25s ease both; }
+.modal-box { border-radius: 26px; animation: sheetIn var(--t-spring) var(--spring) both; }
+@keyframes sheetIn { from { opacity: 0; transform: translateY(14px) scale(.96); } }
+
+/* Pages, lists and cards arrive with the same spring. */
+.page { animation: pageIn var(--t-spring) var(--spring) both; }
+.list > .row { animation: rowIn var(--t-spring) var(--spring) backwards; }
+.ov-card, .pick-card, .hx-card, .feature { transition: transform var(--t-bounce) var(--spring-bounce), box-shadow .3s, background-color .3s; }
 
 /* ===================== Module home screen ===================== */
 .intro.ms { display: flex; flex-direction: column; align-items: center; justify-content: safe center; text-align: center; padding: 4px 0 8px; }
 
-/* The module icon under a glass lens, with two colored lights behind it for the lens to bend. */
-.ms-hero { position: relative; width: 240px; height: 196px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+/* The module icon under a glass lens. The lens leans towards the pointer and the two lights
+   behind it drift the other way (--px and --py, set by motion.js). */
+.ms-hero { position: relative; width: 240px; height: 196px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; perspective: 700px; }
 .ms-aura { position: absolute; inset: 0; }
 .ms-aura::before { content: ""; position: absolute; inset: -30px; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--a2) 30%, transparent), transparent); }
-.ms-aura i { position: absolute; border-radius: 50%; will-change: transform; animation: auraIn .9s ease-out both; }
+.ms-aura i { position: absolute; border-radius: 50%; animation: auraIn .9s var(--spring) both; }
 .ms-aura i:nth-child(1) {
   width: 96px; height: 96px; left: 52px; top: 26px;
   background: radial-gradient(circle at 40% 40%, var(--a2), color-mix(in srgb, var(--a2) 70%, transparent) 55%, transparent 72%);
+  translate: calc(var(--px, 0) * -10px) calc(var(--py, 0) * -8px);
 }
 .ms-aura i:nth-child(2) {
   width: 108px; height: 108px; right: 50px; bottom: 26px;
   background: radial-gradient(circle at 55% 55%, var(--a1), color-mix(in srgb, var(--a1) 70%, transparent) 55%, transparent 72%);
+  translate: calc(var(--px, 0) * 9px) calc(var(--py, 0) * 7px);
 }
-.intro.ms.live .ms-aura i:nth-child(1) { animation: auraIn .9s ease-out both, auraA 7s ease-in-out .9s infinite alternate; }
-.intro.ms.live .ms-aura i:nth-child(2) { animation: auraIn .9s ease-out both, auraB 8s ease-in-out .9s infinite alternate; }
-@keyframes auraIn { from { opacity: 0; transform: scale(.6); } }
-@keyframes auraA { to { transform: translate(18px, 14px) scale(1.06); } }
-@keyframes auraB { to { transform: translate(-16px, -12px) scale(.95); } }
+@keyframes auraIn { from { opacity: 0; scale: .6; } }
 
 .ms-lens {
   width: 152px; height: 152px; border-radius: 46px; display: flex; align-items: center; justify-content: center; color: #fff;
   --lg-blur: 4px;
   --lg-fill: rgba(255, 255, 255, .03);
-  animation: lgIn .8s cubic-bezier(.2, 1.2, .4, 1) .1s both;
+  transform: rotateX(calc(var(--py, 0) * -9deg)) rotateY(calc(var(--px, 0) * 9deg));
+  animation: lgIn .8s var(--spring) .05s both;
 }
-.ms-lens .m-ico { width: 74px; height: 74px; filter: drop-shadow(0 6px 16px rgba(20, 0, 40, .35)); }
+.ms-lens::after { background: radial-gradient(90% 55% at calc(30% + var(--px, 0) * 22%) calc(var(--py, 0) * 18%), var(--lg-sheen), transparent 70%); }
+.ms-lens .m-ico { width: 74px; height: 74px; filter: drop-shadow(0 6px 16px rgba(20, 0, 40, .35)); translate: calc(var(--px, 0) * 4px) calc(var(--py, 0) * 3px); }
 
-.ms-eyebrow { font-size: 11.5px; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; color: color-mix(in srgb, var(--a2) 75%, var(--text)); animation: fade .5s .1s ease both; }
-.intro.ms h1 { font-size: 38px; line-height: 1.06; letter-spacing: -.025em; margin: 6px 0 8px; animation: fade .5s .15s ease both; }
-.intro.ms .lead { max-width: 560px; margin: 0 0 20px; animation: fade .5s .2s ease both; }
+.ms-eyebrow { font-size: 13px; font-weight: 800; color: color-mix(in srgb, var(--a2) 70%, var(--text)); animation: rise var(--t-spring) var(--spring) .08s both; }
+.intro.ms h1 { font-size: 38px; line-height: 1.06; margin: 4px 0 8px; animation: rise var(--t-spring) var(--spring) .12s both; }
+.intro.ms .lead { max-width: 560px; margin: 0 0 20px; animation: rise var(--t-spring) var(--spring) .16s both; }
 
 /* What the scan checks: one glass card per point, with its explanation. */
 .ms-features {
@@ -85,13 +183,13 @@
 }
 .ms-feature {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 20px; --lg-blur: 20px;
-  animation: lgIn .55s cubic-bezier(.2, .9, .3, 1) var(--d) both; transition: transform .4s cubic-bezier(.2, 1.3, .4, 1);
+  animation: lgIn .6s var(--spring) var(--d) both; transition: transform var(--t-bounce) var(--spring-bounce);
 }
 .ms-feature:hover { transform: translateY(-2px); }
 .ms-f-ico {
   width: 38px; height: 38px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff;
   background: linear-gradient(145deg, var(--a2), var(--a1));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -6px 12px rgba(0, 0, 0, .12), 0 6px 14px color-mix(in srgb, var(--a1) 38%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -6px 12px rgba(0, 0, 0, .12), 0 4px 10px color-mix(in srgb, var(--a1) 30%, transparent);
 }
 .ms-f-ico .f-ico-svg { width: 22px; height: 22px; filter: none; }
 .ms-feature > div { min-width: 0; }
@@ -114,18 +212,17 @@
   --lg-fill-hi: color-mix(in srgb, var(--a2) 92%, transparent);
   --lg-sheen: rgba(255, 255, 255, .5);
   --lg-shadow: 0 18px 46px color-mix(in srgb, var(--a1) 58%, transparent), 0 0 0 9px color-mix(in srgb, var(--a2) 12%, transparent);
-  transition: transform .45s cubic-bezier(.2, 1.3, .4, 1);
-  animation: lgIn .7s cubic-bezier(.2, 1.2, .4, 1) .25s both;
+  transition: transform var(--t-bounce) var(--spring-bounce);
+  animation: lgIn .7s var(--spring) .22s both;
 }
 .scan-btn > span { text-shadow: 0 1px 10px rgba(30, 0, 50, .3); }
-/* Light gathered at the bottom of the drop. */
 .scan-btn::after { background: radial-gradient(90% 55% at 30% 0%, var(--lg-sheen), transparent 70%), radial-gradient(70% 40% at 50% 100%, color-mix(in srgb, var(--a2) 70%, #fff), transparent 75%); }
 .scan-btn:hover { transform: scale(1.05); }
-.scan-btn:active { transform: scale(.96); transition-duration: .1s; }
+.scan-btn:active { transform: scale(.95); transition: transform .1s ease-out; }
 .scan-btn:disabled { cursor: default; opacity: .7; transform: none; }
 .scan-btn:focus-visible { outline: 2px solid var(--a2); outline-offset: 6px; }
 
-.ms-last { display: inline-flex; align-items: center; gap: 6px; margin-top: 18px; font-size: 12px; font-weight: 700; color: var(--text-3); animation: fade .5s .4s ease both; }
+.ms-last { display: inline-flex; align-items: center; gap: 6px; margin-top: 18px; font-size: 12px; font-weight: 700; color: var(--text-3); animation: rise var(--t-spring) var(--spring) .3s both; }
 .ms-last .svg-ico { width: 13px; height: 13px; }
 
 /* Smaller windows: the same screen, tighter. */
@@ -169,15 +266,69 @@
   .dbody > .intro.ms .scan-btn { width: 90px; height: 90px; }
 }
 
-/* Calm states: no movement in the background, no refraction when effects are off. */
-.intro.ms:not(.live) .ms-aura i { animation-play-state: paused; }
+/* ===================== Smart Care board ===================== */
+.sc-head h1 { animation: rise var(--t-spring) var(--spring) both; }
+.sc-head .lead { animation: rise var(--t-spring) var(--spring) .06s both; }
+.sc-tile {
+  background-image: var(--sheen);
+  box-shadow: var(--edge), var(--shadow);
+  transition: transform var(--t-bounce) var(--spring-bounce), box-shadow .4s, background-color .5s;
+}
+.sc-tile:hover { transform: translateY(-3px); background-image: radial-gradient(260px circle at var(--mx) var(--my), rgba(255, 255, 255, .08), transparent 65%), var(--sheen); }
+.sc-grid.enter > .sc-tile { animation: lgIn .7s var(--spring) backwards; }
+.sc-center { animation: lgIn .7s var(--spring) .3s backwards; }
+.sc-name { letter-spacing: 0; }
+.sc-val { letter-spacing: -.02em; }
+.sc-tile[data-state="ok"] .sc-val, .sc-tile[data-state="done"] .sc-val, .sc-tile[data-state="warn"] .sc-val, .sc-tile[data-state="bad"] .sc-val { animation: rise var(--t-spring) var(--spring) backwards; }
+
+/* Artwork: a glass tile in the corner that leans when the card is hovered. */
+.sc-art { transition: filter .5s, opacity .5s, transform var(--t-bounce) var(--spring-bounce); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 -14px 28px rgba(0, 0, 0, .18), 0 18px 36px color-mix(in srgb, var(--t1) 38%, transparent); }
+
+/* Scanning: a calm tint and a slow shimmer instead of a glow. */
+.sc-tile[data-state="active"] { animation: none; background-color: color-mix(in srgb, var(--t1) 14%, var(--glass)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--t2) 45%, transparent), var(--edge), var(--shadow); }
+.sc-tile[data-state="active"] .sc-art { animation: bob 2.4s ease-in-out infinite; }
+.sc-hero[data-state="active"] .sc-art { animation: bobHero 2.4s ease-in-out infinite; }
+.sc-tile[data-state="active"]::after { background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .09) 50%, transparent 65%); background-size: 250% 100%; animation-duration: 2.4s; }
+@keyframes bob { 50% { transform: rotate(-9deg) translateY(-5px); } }
+@keyframes bobHero { 50% { transform: rotate(9deg) translateY(-5px); } }
+
+.sc-log li { background-color: rgba(255, 255, 255, .05); background-image: var(--sheen); box-shadow: var(--edge); }
+.sc-log li[data-state="active"] { background-color: rgba(255, 255, 255, .1); }
+.sc-link { border-color: transparent; background-image: linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .03)); box-shadow: var(--edge); }
+@media (prefers-color-scheme: light) { .sc-log li { background-color: rgba(255, 255, 255, .4); } }
+
+/* Main button: the same drop of glass as on the home screens, with its progress ring. */
+.sc-btn {
+  isolation: isolate;
+  background: linear-gradient(170deg, color-mix(in srgb, var(--a2) 92%, #fff) 0%, color-mix(in srgb, var(--a2) 85%, transparent) 40%, color-mix(in srgb, var(--a1) 80%, transparent) 100%);
+  backdrop-filter: blur(6px) saturate(180%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .6), inset 0 -16px 26px -10px color-mix(in srgb, var(--a2) 60%, #fff),
+    0 0 0 9px color-mix(in srgb, var(--a2) 12%, transparent), 0 18px 46px color-mix(in srgb, var(--a1) 55%, transparent);
+  transition: transform var(--t-bounce) var(--spring-bounce), box-shadow .3s;
+}
+.sc-btn::before {
+  inset: 0; z-index: -1;
+  background: radial-gradient(90% 55% at 30% 0%, rgba(255, 255, 255, .45), transparent 70%);
+  -webkit-mask: none; mask: none;
+}
+.sc-btn.ready:hover { transform: scale(1.05); box-shadow: inset 0 1px 1px rgba(255, 255, 255, .6), inset 0 -16px 26px -10px color-mix(in srgb, var(--a2) 60%, #fff), 0 0 0 10px color-mix(in srgb, var(--a2) 16%, transparent), 0 22px 54px color-mix(in srgb, var(--a1) 62%, transparent); }
+.sc-btn:active { transform: scale(.95); transition: transform .1s ease-out; }
+.sc-btn.busy::after, .sc-btn.ready:not(.finished)::after { border-width: 1.5px; animation-timing-function: var(--spring); }
+.sc-btn span .svg-ico { animation: lgIn .5s var(--spring-bounce); }
+.sc-btn > svg circle { stroke-width: 3.5; }
+.sc-btn .sc-track { stroke: rgba(255, 255, 255, .16); }
+.sc-btn .sc-arc { stroke: rgba(255, 255, 255, .9); transition: stroke-dashoffset .8s var(--spring); }
+
+/* ===================== Calm and fallback states ===================== */
 body.paused .ms-aura i { animation-play-state: paused !important; }
 @media (prefers-reduced-motion: reduce) {
-  .lg, .ms-aura i, .ms-feature, .scan-btn { animation: none !important; }
+  .lg, .ms-aura i, .ms-feature, .scan-btn, .tab-thumb, .nav-glider { animation: none !important; transition: none !important; }
+  .ms-hero { --px: 0 !important; --py: 0 !important; }
 }
 body.lite .lg { backdrop-filter: none; background: var(--glass-strong); }
-body.lite .scan-btn, body.lite .ms-lens { background: linear-gradient(145deg, var(--a2), var(--a1)); }
+body.lite .scan-btn, body.lite .ms-lens, body.lite .sc-btn { background: linear-gradient(145deg, var(--a2), var(--a1)); backdrop-filter: none; }
+body.lite .tab-thumb, body.lite .nav-glider, body.lite .switch span::before { transition: none; }
 @media (prefers-reduced-transparency: reduce) {
   .lg { backdrop-filter: none; background: var(--glass-strong); }
-  .scan-btn, .ms-lens { background: linear-gradient(145deg, var(--a2), var(--a1)); }
+  .scan-btn, .ms-lens, .sc-btn { background: linear-gradient(145deg, var(--a2), var(--a1)); backdrop-filter: none; }
 }

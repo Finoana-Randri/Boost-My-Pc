@@ -1207,6 +1207,8 @@ Réessayer | Try again | Andramo indray
 Aucune mise à jour prête. | No update ready. | Tsy misy fanavaozana vonona.
 Fichier téléchargé incomplet ou corrompu. | Downloaded file is incomplete or corrupted. | Tsy feno na simba ny rakitra nalaina.
 L'installation n'a pas pu démarrer. | The installation couldn't start. | Tsy nanomboka ny fametrahana.
+tâche effectuée. | task done. | asa vita.
+tâches effectuées. | tasks done. | asa vita.
 `;
 
 const I18N_DICT = { en: {}, mg: {} };
