@@ -47,15 +47,15 @@ h1 { font-weight: 700; }
    panels, secondary text and shadows keep their contrast. Light mode keeps its own values. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #2d2155;
-    --blob-op: .6;
-    --blob-3: #5a36c4;
-    --glass: rgba(255, 255, 255, .085);
-    --glass-strong: rgba(255, 255, 255, .15);
+    --bg: #291e4d;
+    --blob-op: .54;
+    --blob-3: #5131b0;
+    --glass: rgba(255, 255, 255, .077);
+    --glass-strong: rgba(255, 255, 255, .135);
     --text-2: rgba(255, 255, 255, .8);
     --text-3: rgba(255, 255, 255, .6);
-    --lg-fill: rgba(255, 255, 255, .09);
-    --lg-fill-hi: rgba(255, 255, 255, .2);
+    --lg-fill: rgba(255, 255, 255, .081);
+    --lg-fill-hi: rgba(255, 255, 255, .18);
     --lg-shadow: 0 16px 40px rgba(10, 0, 30, .22), 0 2px 6px rgba(10, 0, 30, .12);
     --shadow: 0 10px 34px rgba(10, 0, 30, .2);
   }
@@ -108,7 +108,7 @@ h1 { letter-spacing: -.022em; }
 /* ===================== Sidebar ===================== */
 .sidebar.glass {
   border-radius: 22px;
-  background-color: color-mix(in srgb, var(--glass) 70%, rgba(58, 36, 104, .28));
+  background-color: color-mix(in srgb, var(--glass) 70%, rgba(52, 32, 94, .28));
   backdrop-filter: blur(22px) saturate(180%);
 }
 @media (prefers-color-scheme: light) { .sidebar.glass { background-color: rgba(255, 255, 255, .36); } }
@@ -136,7 +136,7 @@ h1 { letter-spacing: -.022em; }
    main one. Light catches the top-left rim, the lower edge glows, and the backdrop bends at the
    border. Defined on body so that the tint follows the current module. */
 body {
-  --glass-clear: radial-gradient(120% 90% at 30% -10%, rgba(255, 255, 255, .2), transparent 60%), linear-gradient(rgba(255, 255, 255, .1), rgba(255, 255, 255, .1));
+  --glass-clear: radial-gradient(120% 90% at 30% -10%, rgba(255, 255, 255, .2), transparent 60%), linear-gradient(rgba(255, 255, 255, .09), rgba(255, 255, 255, .09));
   --rim-clear: inset 1.5px 1.5px 1px -1px rgba(255, 255, 255, .7), inset -1.5px -1.5px 1px -1px rgba(255, 255, 255, .28),
     inset 0 0 0 1px rgba(255, 255, 255, .08), inset 0 -8px 12px -8px rgba(255, 255, 255, .22);
   --glass-tint: radial-gradient(120% 80% at 30% -10%, rgba(255, 255, 255, .45), transparent 55%),
