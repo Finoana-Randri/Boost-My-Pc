@@ -47,7 +47,7 @@ fun hasUsageAccess(context: Context): Boolean {
 
 /**
  * Size of every installed app (code, data with cache, cache alone) and the last day it was opened.
- * Needs usage access; without it the list is empty.
+ * Data includes the app's folder in Android/data. Needs usage access; without it the list is empty.
  */
 fun loadApps(context: Context): List<AppInfo> {
     if (!hasUsageAccess(context)) return emptyList()
@@ -59,9 +59,8 @@ fun loadApps(context: Context): List<AppInfo> {
         .mapValues { it.value.lastTimeUsed }
     val user = Process.myUserHandle()
     return pm.getInstalledApplications(PackageManager.GET_META_DATA).mapNotNull { app ->
-        val system = app.flags and ApplicationInfo.FLAG_SYSTEM != 0 && app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP == 0
-        val launchable = pm.getLaunchIntentForPackage(app.packageName) != null
-        if (system && !launchable) return@mapNotNull null
+        // Preinstalled apps stay preinstalled after an update; all are counted, as Android does.
+        val system = app.flags and ApplicationInfo.FLAG_SYSTEM != 0
         val s = runCatching { stats.queryStatsForPackage(app.storageUuid ?: StorageManager.UUID_DEFAULT, app.packageName, user) }.getOrNull()
             ?: return@mapNotNull null
         val installed = runCatching { pm.getPackageInfo(app.packageName, 0).firstInstallTime }.getOrDefault(0L)

@@ -59,6 +59,7 @@ private val CATEGORY_COLORS = mapOf(
     Category.OTHER to Color(0xFF9C93B8),
 )
 private val APPS_COLOR = Color(0xFF4FA8FF)
+private val PREINSTALLED_COLOR = Color(0xFFA9CFFF)
 private val SYSTEM_COLOR = Color(0xFF6B5F8F)
 
 @Composable
@@ -74,7 +75,10 @@ fun HomeScreen(
 ) {
     val v = state.volume
     val r = state.result
+    val mine = state.apps.orEmpty().filter { !it.system }
+    val mineTotal = mine.sumOf { it.total }
     val appsTotal = state.apps?.sumOf { it.total } ?: 0L
+    val preTotal = appsTotal - mineTotal
     val filesTotal = r?.total ?: 0L
     val known = appsTotal + filesTotal
     val system = (v.used - known).coerceAtLeast(0)
@@ -85,7 +89,10 @@ fun HomeScreen(
 
             Column(Modifier.padding(top = 12.dp).fillMaxWidth().glass(RoundedCornerShape(28.dp)).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 val segments = if (r != null) buildList {
-                    if (appsTotal > 0) add(Segment(appsTotal.toFloat() / v.total, APPS_COLOR))
+                    if (appsTotal > 0) {
+                        add(Segment(mineTotal.toFloat() / v.total, APPS_COLOR))
+                        add(Segment(preTotal.toFloat() / v.total, PREINSTALLED_COLOR))
+                    }
                     Category.entries.forEach { c -> add(Segment((r.categories[c] ?: 0L).toFloat() / v.total, CATEGORY_COLORS.getValue(c))) }
                     add(Segment(system.toFloat() / v.total, SYSTEM_COLOR))
                 } else listOf(Segment(v.used.toFloat() / v.total, Tint.SMART.to))
@@ -100,7 +107,10 @@ fun HomeScreen(
                 if (r != null) {
                     Spacer(Modifier.height(18.dp))
                     val legend = buildList {
-                        if (appsTotal > 0) add(Triple("Applications", appsTotal, APPS_COLOR))
+                        if (appsTotal > 0) {
+                            add(Triple("Vos applications", mineTotal, APPS_COLOR))
+                            add(Triple("Applications préinstallées", preTotal, PREINSTALLED_COLOR))
+                        }
                         Category.entries.forEach { c -> add(Triple(c.label, r.categories[c] ?: 0L, CATEGORY_COLORS.getValue(c))) }
                         add(Triple(if (appsTotal > 0) "Système" else "Système et applications", system, SYSTEM_COLOR))
                     }.filter { it.second > 0 }.sortedByDescending { it.second }
@@ -136,10 +146,9 @@ fun HomeScreen(
                     }
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val apps = state.apps.orEmpty()
-                        val idle = apps.count { !it.system && System.currentTimeMillis() - it.lastUsed > 90L * 86_400_000 }
-                        Card(Icons.Rounded.Apps, Tint.APPS, "Applications", if (apps.isEmpty()) "—" else formatSize(appsTotal),
-                            if (apps.isEmpty()) "Autorisez l'accès aux données d'utilisation" else "${plural(apps.size, "app", "apps")} · $idle inutilisées depuis 3 mois", Modifier.weight(1f)) { onOpen(Dest.APPS, null) }
+                        val idle = mine.count { System.currentTimeMillis() - it.lastUsed > 90L * 86_400_000 }
+                        Card(Icons.Rounded.Apps, Tint.APPS, "Vos applications", if (mine.isEmpty()) "—" else formatSize(mineTotal),
+                            if (mine.isEmpty()) "Autorisez l'accès aux données d'utilisation" else "${plural(mine.size, "app", "apps")} · $idle inutilisées depuis 3 mois", Modifier.weight(1f)) { onOpen(Dest.APPS, null) }
                         Card(Icons.Rounded.DonutLarge, Tint.LENS, "Carte du stockage", formatSize(r.total), plural(r.fileCount, "fichier", "fichiers") + " dans le stockage interne", Modifier.weight(1f)) { onOpen(Dest.MAP, null) }
                     }
                     SectionTitle("Plus gros dossiers")

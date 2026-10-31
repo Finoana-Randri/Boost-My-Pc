@@ -49,14 +49,19 @@ private enum class Sort(val label: String) { SIZE("Les plus lourdes"), IDLE("Inu
 fun AppsScreen(state: UiState, usage: Boolean, onGrantUsage: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
     var sort by rememberSaveable { mutableStateOf(Sort.SIZE) }
-    var showSystem by rememberSaveable { mutableStateOf(false) }
-    val apps = state.apps.orEmpty().filter { showSystem || !it.system }
+    var preinstalled by rememberSaveable { mutableStateOf(false) }
+    val apps = state.apps.orEmpty().filter { it.system == preinstalled }
     val list = when (sort) {
         Sort.SIZE -> apps.sortedByDescending { it.total }
         Sort.IDLE -> apps.sortedWith(compareBy<AppInfo> { it.lastUsed }.thenByDescending { it.total })
         Sort.CACHE -> apps.sortedByDescending { it.cache }
     }
-    Screen("Applications", if (apps.isEmpty()) null else "${plural(apps.size, "application", "applications")} · ${formatSize(apps.sumOf { it.total })}. Touchez une application pour vider son cache ou ses données.", Tint.APPS, onBack) {
+    val subtitle = when {
+        apps.isEmpty() -> null
+        preinstalled -> "${plural(apps.size, "application préinstallée", "applications préinstallées")} · ${formatSize(apps.sumOf { it.total })}. Elles ne se désinstallent pas, mais vous pouvez vider leur cache ou leurs données."
+        else -> "${plural(apps.size, "application installée", "applications installées")} par vous · ${formatSize(apps.sumOf { it.total })}. Touchez une application pour vider son cache ou ses données."
+    }
+    Screen("Applications", subtitle, Tint.APPS, onBack) {
         if (!usage) {
             Column(Modifier.padding(16.dp)) {
                 ListRow("Accès aux données d'utilisation", "Android ne donne la taille des applications qu'avec cette autorisation.", null, leading = { IconTile(Icons.Rounded.Apps, Tint.APPS, 38.dp) }, onClick = onGrantUsage)
@@ -68,8 +73,11 @@ fun AppsScreen(state: UiState, usage: Boolean, onGrantUsage: () -> Unit, onBack:
             return@Screen
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp)) {
+            Chip("Vos applications", !preinstalled) { preinstalled = false }
+            Chip("Préinstallées", preinstalled) { preinstalled = true }
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp)) {
             Sort.entries.forEach { s -> Chip(s.label, sort == s) { sort = s } }
-            Chip("Applications système", showSystem) { showSystem = !showSystem }
         }
         LazyColumn(contentPadding = PaddingValues(16.dp)) {
             itemsIndexed(list, key = { _, a -> a.pkg }) { i, a ->
