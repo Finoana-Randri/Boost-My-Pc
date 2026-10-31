@@ -132,6 +132,28 @@ If `npm run dist:win` fails with *Cannot create symbolic link* while extracting 
 node_modules/7zip-bin/win/x64/7za.exe x "%LOCALAPPDATA%/electron-builder/Cache/winCodeSign/<number>.7z" -o"%LOCALAPPDATA%/electron-builder/Cache/winCodeSign/winCodeSign-2.6.2" -xr!darwin
 ```
 
+## Android
+
+`android/` contains the Android version (Kotlin and Jetpack Compose, Android 8 and later), with the same design. It shows what fills the phone and frees space:
+
+| Screen | What it does |
+|---|---|
+| **Overview** | Free and used space, split into apps, photos, videos, audio, documents, archives, APK installers, other files, and system |
+| **Junk files** | Thumbnails, temporary files and logs, empty folders, APK installers, and large archives (including split `.zip.001` parts) |
+| **Large files** | Files over 50 MB, filtered by type |
+| **Apps** | Size of each app (code, data, cache) and when it was last opened; opens the system page to clear its cache or data, or uninstalls it |
+| **Storage map** | Every folder of the internal storage with its size, down to each file |
+
+Nothing is deleted without confirmation. The app asks for **All files access** (to measure every folder) and **Usage access** (for app sizes and last use).
+
+```bash
+cd android
+./gradlew assembleRelease          # app/build/outputs/apk/release/app-release.apk
+adb install -r app/build/outputs/apk/release/app-release.apk
+```
+
+Building needs JDK 17 and the Android SDK (platform 35); set its path in `android/local.properties` (`sdk.dir=…`). On Xiaomi phones, turn on **Install via USB** in the developer options to install with `adb`, or copy the APK to the phone and open it.
+
 ## Performance
 
 Boost My Pc automatically switches to lightweight mode on systems without graphics acceleration, such as virtual machines. You can change this in **Settings → Visual Effects** (Automatic, On, or Off). The app follows the system's light or dark theme. Small windows and screens are supported down to 880 × 530 without scrollbars (the menu collapses to icons). A short sound and a system notification signal the end of a scan running in the background; both can be turned off in **Settings → Preferences**. Decorative animations play when a page opens and pause while the window is in the background, so the app uses almost no processor time when idle.
@@ -173,6 +195,7 @@ assets/                     App and tray icons
 build/                      Installer resources (icons, wizard banners, .deb scripts, Linux launcher)
 scripts/                    Tests and Docker builds
 docs/                       Logo and screenshots
+android/                    Android version (Kotlin, Jetpack Compose)
 ```
 
 ## License

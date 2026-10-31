@@ -379,16 +379,16 @@ button.ms-feature { border: 0; font: inherit; color: inherit; text-align: left; 
 .sc-tile[data-state="bad"], .sc-log li[data-state="bad"] { --st: linear-gradient(135deg, #c2185b, #ff6a88); --glyph: var(--glyph-warn); }
 .sc-tile:is([data-state="ok"], [data-state="done"], [data-state="warn"], [data-state="bad"]) .sc-val::before,
 .sc-log li:is([data-state="ok"], [data-state="done"], [data-state="warn"], [data-state="bad"], [data-state="scanned"]) .sc-dot {
-  content: ""; display: inline-block; flex-shrink: 0; width: 24px; height: 24px; border: 0; border-radius: 7.5px;
+  content: ""; display: inline-block; flex-shrink: 0; width: 19px; height: 19px; border: 0; border-radius: 50%;
   background: var(--glyph) center / 66% no-repeat, linear-gradient(180deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, 0) 55%), var(--st);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), inset 0 0 0 1px rgba(255, 255, 255, .14), 0 2px 6px -1px rgba(0, 0, 0, .28);
   animation: beadIn var(--t-bounce) var(--spring-bounce) backwards;
 }
-.sc-tile .sc-val::before { margin: 0 10px 0 0; vertical-align: -3px; }
-.sc-tile.wide .sc-val::before { width: 22px; height: 22px; border-radius: 7px; vertical-align: -2px; }
-.sc-log li .sc-dot { width: 18px; height: 18px; border-radius: 5.5px; }
+.sc-tile .sc-val::before { margin: 0 9px 0 0; vertical-align: -2px; }
+.sc-tile.wide .sc-val::before { width: 18px; height: 18px; vertical-align: -2px; }
+.sc-log li .sc-dot { width: 16px; height: 16px; }
 .sc-log li[data-state="scanned"] .sc-dot { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
-.sc-log li[data-state="wait"] .sc-dot { background: transparent; border-radius: 5.5px; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text) 22%, transparent); }
+.sc-log li[data-state="wait"] .sc-dot { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text) 22%, transparent); }
 @media (prefers-color-scheme: light) { .sc-log li[data-state="scanned"] { --st: linear-gradient(135deg, #9a8fb0, #b9b0cc); } }
 @keyframes beadIn { from { transform: scale(.4); opacity: 0; } }
 /* Artwork: a glass tile in the corner that leans when the card is hovered. */
