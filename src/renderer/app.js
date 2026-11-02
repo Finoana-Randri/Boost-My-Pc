@@ -144,7 +144,7 @@ document.addEventListener('click', (e) => {
 });
 $$('.nav-item').forEach((n) => {
   const ico = n.querySelector('[data-icon]');
-  ico.innerHTML = micon(n.dataset.page);
+  ico.innerHTML = navicon(n.dataset.page);
   n.title = n.textContent.trim(); // Shown when the menu is reduced to icons
   n.onclick = () => go(n.dataset.page);
 });

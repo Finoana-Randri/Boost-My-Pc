@@ -114,6 +114,20 @@ const CUSTOM = {
   },
 };
 
+// Sidebar: the drawings of version 2.5 on a 24 px grid; Disk Map uses its Phosphor icon.
+const NAV = {
+  smart: '<path opacity=".85" d="M3.3 18.6 12.9 9a1.5 1.5 0 0 1 2.1 2.1l-9.6 9.6a1.5 1.5 0 0 1-2.1-2.1z"/><path fill="#000" opacity=".22" d="M11.6 10.3 13.7 12.4 15 11.1a1.5 1.5 0 0 0-2.1-2.1z"/><path d="M17.4 1.6c.35 2.7 1.85 4.2 4.55 4.55-2.7.35-4.2 1.85-4.55 4.55-.35-2.7-1.85-4.2-4.55-4.55 2.7-.35 4.2-1.85 4.55-4.55z"/><path opacity=".7" d="M7.6 2.4c.18 1.4.95 2.17 2.35 2.35-1.4.18-2.17.95-2.35 2.35-.18-1.4-.95-2.17-2.35-2.35 1.4-.18 2.17-.95 2.35-2.35z"/><path opacity=".55" d="M19.6 13.6c.15 1.15.8 1.8 1.95 1.95-1.15.15-1.8.8-1.95 1.95-.15-1.15-.8-1.8-1.95-1.95 1.15-.15 1.8-.8 1.95-1.95z"/>',
+  cleanup: '<path opacity=".6" d="M19.4 2.9a1.2 1.2 0 0 1 1.7 1.7l-6.3 6.3-1.7-1.7z"/><path opacity=".85" d="M11.4 9.7l2.9 2.9c.7.7.7 1.8 0 2.5l-.7.7-5.4-5.4.7-.7c.7-.7 1.8-.7 2.5 0z"/><path d="M7.5 11.2l5.3 5.3c-1.7 3.5-4.9 5.4-9.1 5.7a.7.7 0 0 1-.75-.75c.3-4.2 2.2-7.4 4.55-10.25z"/><path opacity=".7" d="M5.2 2.8l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z"/>',
+  protection: '<path d="M12 2.2l8 3.2v6.2c0 5-3.4 9.2-8 10.6-4.6-1.4-8-5.6-8-10.6V5.4z"/><path fill="#000" opacity=".14" d="M12 2.2l8 3.2v6.2c0 5-3.4 9.2-8 10.6z"/><path fill="none" stroke="#000" stroke-opacity=".32" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M8.3 12.2l2.6 2.6 4.9-5.1"/>',
+  performance: '<path d="M12 4.2a9.3 9.3 0 0 1 9.3 9.3c0 1.3-.3 2.6-.8 3.8a1.6 1.6 0 0 1-1.5 1H5a1.6 1.6 0 0 1-1.5-1 9.3 9.3 0 0 1 8.5-13.1z"/><path fill="#000" opacity=".3" d="M13.2 14.6a1.9 1.9 0 1 1-2.6-2.6l6.1-4.1z"/><circle fill="#000" opacity=".18" cx="6.6" cy="12.6" r="1"/><circle fill="#000" opacity=".18" cx="8.5" cy="8.4" r="1"/><circle fill="#000" opacity=".18" cx="12" cy="7" r="1"/>',
+  applications: '<rect x="3" y="3" width="8" height="8" rx="2.4"/><rect opacity=".72" x="13" y="3" width="8" height="8" rx="2.4"/><rect opacity=".72" x="3" y="13" width="8" height="8" rx="2.4"/><rect opacity=".45" x="13" y="13" width="8" height="8" rx="2.4"/>',
+  clutter: '<path opacity=".45" d="M2.6 16.2l9.4 4.9 9.4-4.9-2.4-1.2-7 3.6-7-3.6z"/><path opacity=".72" d="M2.6 12l9.4 4.9 9.4-4.9-2.4-1.2-7 3.6-7-3.6z"/><path d="M12 2.6l9.4 4.9-9.4 4.9-9.4-4.9z"/>',
+  cloud: '<path d="M7.2 19.5a5.2 5.2 0 0 1-.9-10.3 6.8 6.8 0 0 1 13 2.1 4.1 4.1 0 0 1-1.3 8.2z"/><path fill="#000" opacity=".16" d="M7.2 19.5a5.2 5.2 0 0 1-3.6-1.5c4.7.6 10.8-.4 16.9-3.3a4.1 4.1 0 0 1-1.6 4.8z"/>',
+  shredder: '<path opacity=".7" d="M7 2.5h10v7.5H7z"/><rect x="2.5" y="9" width="19" height="7" rx="2"/><rect fill="#000" opacity=".2" x="5" y="12" width="14" height="1.6" rx=".8"/><g opacity=".7"><rect x="6.2" y="17" width="1.8" height="4.5" rx=".9"/><rect x="9.6" y="17" width="1.8" height="3.2" rx=".9"/><rect x="13" y="17" width="1.8" height="4.8" rx=".9"/><rect x="16.4" y="17" width="1.8" height="3.6" rx=".9"/></g>',
+  tools: '<path opacity=".8" d="M8.6 7V5.4A1.9 1.9 0 0 1 10.5 3.5h3a1.9 1.9 0 0 1 1.9 1.9V7h-1.8V5.5h-3.2V7z"/><rect x="2.5" y="7" width="19" height="13.5" rx="2.6"/><rect fill="#000" opacity=".16" x="2.5" y="12.2" width="19" height="2"/><rect fill="#000" opacity=".28" x="10.2" y="11" width="3.6" height="4.4" rx="1"/>',
+  settings: '<path fill-rule="evenodd" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/>',
+};
+
 function draw(name, weight) {
   const custom = CUSTOM[NAMES[name]];
   if (custom) return custom[weight];
@@ -152,6 +166,13 @@ function ficon(name, cls = '') {
 
 function micon(name, cls = '') {
   return svg(MICONS[name] || MICONS.smart, \`m-ico \${cls}\`);
+}
+
+const NAV_ICONS = ${JSON.stringify(NAV, null, 2)};
+
+function navicon(name, cls = '') {
+  if (!NAV_ICONS[name]) return micon(name, cls);
+  return \`<svg class="svg-ico m-ico \${cls}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">\${NAV_ICONS[name]}</svg>\`;
 }
 `;
 
