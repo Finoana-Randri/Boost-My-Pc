@@ -36,7 +36,8 @@ function createMenubar({ iconPath, trayImage, traySize = 22, decorate = () => {}
       frame: false,
       resizable: false,
       movable: false,
-      minimizable: false,
+      // Kept minimizable: restoring is how the panel takes the focus on Windows (see showMini).
+      minimizable: true,
       maximizable: false,
       fullscreenable: false,
       skipTaskbar: true,
@@ -93,13 +94,28 @@ function createMenubar({ iconPath, trayImage, traySize = 22, decorate = () => {}
     const { x, y } = position(anchor);
     mini.setPosition(x, y, false);
     shownAt = Date.now();
-    const reveal = () => { mini.show(); mini.focus(); mini.webContents.send('mini:shown'); };
+    const reveal = () => {
+      mini.setAlwaysOnTop(true, 'pop-up-menu');
+      if (mini.isMinimized()) mini.restore();
+      mini.show();
+      mini.focus();
+      // Windows keeps the focus on the app in front when the request doesn't come from a click on
+      // the icon (shortcut, notification, app open behind). Restoring a window may activate it.
+      if (process.platform === 'win32' && !mini.isFocused()) {
+        // Restored right away, Windows ignores it; a moment later it works.
+        mini.minimize();
+        setTimeout(() => { if (mini?.isMinimized()) { mini.restore(); mini.focus(); } }, 80);
+      }
+      mini.webContents.send('mini:shown');
+    };
     if (mini.webContents.isLoading()) mini.webContents.once('did-finish-load', reveal); else reveal();
   }
+  // A minimized panel counts as closed.
+  const miniOpen = () => !!mini && mini.isVisible() && !mini.isMinimized();
   function hideMini() { if (mini?.isVisible()) { mini.hide(); hiddenAt = Date.now(); } }
   function toggleMini(anchor) {
     // Clicking the icon first blurs and hides an open panel. Don't reopen it immediately.
-    if (mini?.isVisible()) hideMini();
+    if (miniOpen()) hideMini();
     else if (Date.now() - hiddenAt > 350) showMini(anchor);
   }
 

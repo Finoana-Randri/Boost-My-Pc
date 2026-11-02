@@ -47,15 +47,15 @@ h1 { font-weight: 700; }
    panels, secondary text and shadows keep their contrast. Light mode keeps its own values. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #291e4d;
-    --blob-op: .54;
-    --blob-3: #5131b0;
-    --glass: rgba(255, 255, 255, .077);
-    --glass-strong: rgba(255, 255, 255, .135);
+    --bg: #241a44;
+    --blob-op: .49;
+    --blob-3: #482b9e;
+    --glass: rgba(255, 255, 255, .07);
+    --glass-strong: rgba(255, 255, 255, .125);
     --text-2: rgba(255, 255, 255, .8);
     --text-3: rgba(255, 255, 255, .6);
-    --lg-fill: rgba(255, 255, 255, .081);
-    --lg-fill-hi: rgba(255, 255, 255, .18);
+    --lg-fill: rgba(255, 255, 255, .074);
+    --lg-fill-hi: rgba(255, 255, 255, .165);
     --lg-shadow: 0 16px 40px rgba(10, 0, 30, .22), 0 2px 6px rgba(10, 0, 30, .12);
     --shadow: 0 10px 34px rgba(10, 0, 30, .2);
   }
@@ -108,7 +108,7 @@ h1 { letter-spacing: -.022em; }
 /* ===================== Sidebar ===================== */
 .sidebar.glass {
   border-radius: 22px;
-  background-color: color-mix(in srgb, var(--glass) 70%, rgba(52, 32, 94, .28));
+  background-color: color-mix(in srgb, var(--glass) 70%, rgba(46, 28, 84, .3));
   backdrop-filter: blur(22px) saturate(180%);
 }
 @media (prefers-color-scheme: light) { .sidebar.glass { background-color: rgba(255, 255, 255, .36); } }
@@ -136,7 +136,7 @@ h1 { letter-spacing: -.022em; }
    main one. Light catches the top-left rim, the lower edge glows, and the backdrop bends at the
    border. Defined on body so that the tint follows the current module. */
 body {
-  --glass-clear: radial-gradient(120% 90% at 30% -10%, rgba(255, 255, 255, .2), transparent 60%), linear-gradient(rgba(255, 255, 255, .09), rgba(255, 255, 255, .09));
+  --glass-clear: radial-gradient(120% 90% at 30% -10%, rgba(255, 255, 255, .2), transparent 60%), linear-gradient(rgba(255, 255, 255, .082), rgba(255, 255, 255, .082));
   --rim-clear: inset 1.5px 1.5px 1px -1px rgba(255, 255, 255, .7), inset -1.5px -1.5px 1px -1px rgba(255, 255, 255, .28),
     inset 0 0 0 1px rgba(255, 255, 255, .08), inset 0 -8px 12px -8px rgba(255, 255, 255, .22);
   --glass-tint: radial-gradient(120% 80% at 30% -10%, rgba(255, 255, 255, .45), transparent 55%),
@@ -372,21 +372,21 @@ button.ms-feature { border: 0; font: inherit; color: inherit; text-align: left; 
 
 /* Status: the same lit color tile as the sidebar icons, with a white symbol. Green with a check when
    all is well, orange or red with a mark when something needs attention. */
-.sc-tile, .sc-log li { --glyph-ok: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6.5 12.6l3.7 3.7 7.3-8.3' fill='none' stroke='white' stroke-width='3.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); --glyph-warn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 6.2v7' stroke='white' stroke-width='3.3' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.6' r='2' fill='white'/%3E%3C/svg%3E"); }
+.sc-tile, .sc-log li { --glyph-ok: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6.2 12.3l3.6 3.6 7.6-8.1' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); --glyph-warn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 6v7' stroke='white' stroke-width='3.3' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='17.4' r='2' fill='white'/%3E%3C/svg%3E"); }
 .sc-tile[data-state="ok"], .sc-tile[data-state="done"], .sc-log li[data-state="ok"], .sc-log li[data-state="done"] { --st: linear-gradient(135deg, #0f9b6c, #4be3a0); --glyph: var(--glyph-ok); }
 .sc-log li[data-state="scanned"] { --st: linear-gradient(135deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .26)); --glyph: var(--glyph-ok); }
 .sc-tile[data-state="warn"], .sc-log li[data-state="warn"] { --st: linear-gradient(135deg, #e8590c, #ffb238); --glyph: var(--glyph-warn); }
 .sc-tile[data-state="bad"], .sc-log li[data-state="bad"] { --st: linear-gradient(135deg, #c2185b, #ff6a88); --glyph: var(--glyph-warn); }
 .sc-tile:is([data-state="ok"], [data-state="done"], [data-state="warn"], [data-state="bad"]) .sc-val::before,
 .sc-log li:is([data-state="ok"], [data-state="done"], [data-state="warn"], [data-state="bad"], [data-state="scanned"]) .sc-dot {
-  content: ""; display: inline-block; flex-shrink: 0; width: 15px; height: 15px; border: 0; border-radius: 50%;
-  background: var(--glyph) center / 74% no-repeat, linear-gradient(180deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, 0) 55%), var(--st);
+  content: ""; display: inline-block; flex-shrink: 0; width: 14px; height: 14px; border: 0; border-radius: 50%;
+  background: var(--glyph) center / 10px 10px no-repeat, linear-gradient(180deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, 0) 55%), var(--st);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), inset 0 0 0 1px rgba(255, 255, 255, .14), 0 2px 6px -1px rgba(0, 0, 0, .28);
   animation: beadIn var(--t-bounce) var(--spring-bounce) backwards;
 }
 .sc-tile .sc-val::before { margin: 0 8px 0 0; vertical-align: -1px; }
-.sc-tile.wide .sc-val::before { width: 14px; height: 14px; vertical-align: -1px; }
-.sc-log li .sc-dot { width: 13px; height: 13px; }
+.sc-tile.wide .sc-val::before { vertical-align: -1px; }
+.sc-log li .sc-dot { width: 12px; height: 12px; background-size: 8px 8px, auto, auto; }
 .sc-log li[data-state="scanned"] .sc-dot { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
 .sc-log li[data-state="wait"] .sc-dot { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text) 22%, transparent); }
 @media (prefers-color-scheme: light) { .sc-log li[data-state="scanned"] { --st: linear-gradient(135deg, #9a8fb0, #b9b0cc); } }
