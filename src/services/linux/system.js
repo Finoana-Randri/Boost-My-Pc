@@ -112,17 +112,30 @@ async function getSystemInfo() {
 
 // Linux manages memory itself. Boost syncs disks and can optionally clear the page cache.
 async function boostMemory({ dropCaches = false } = {}) {
-  const before = memInfo().available;
+  const before = memInfo();
   await sh('sync').catch(() => {});
+  let purged = false;
   if (dropCaches) {
     const { privileged } = require('./sh');
     await privileged('sync; echo 3 > /proc/sys/vm/drop_caches');
+    purged = true;
   } else if (isRoot()) {
     fs.writeFileSync('/proc/sys/vm/drop_caches', '1');
+    purged = true;
   }
   await new Promise((r) => setTimeout(r, 600));
-  const after = memInfo().available;
-  return { processes: 0, freed: Math.max(0, after - before) };
+  const after = memInfo();
+  const usage = (m) => ({ used: m.used, total: m.total, pct: m.percent });
+  return {
+    freed: Math.max(0, after.available - before.available),
+    cache: purged ? Math.max(0, before.cached - after.cached) : 0,
+    processes: 0,
+    admin: isRoot() || dropCaches,
+    purged,
+    before: usage(before),
+    after: usage(after),
+    top: [],
+  };
 }
 
 module.exports = { getStats, getDisks, getSystemInfo, boostMemory };

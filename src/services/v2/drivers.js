@@ -1,9 +1,6 @@
 // Driver updates from official sources only:
 // - Windows: Windows Update (Windows Update Agent API), the channel through which manufacturers publish signed drivers.
 // - Linux: fwupd and the Linux Vendor Firmware Service (LVFS) for device firmware.
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const { execFile } = require('child_process');
 
 const isLinux = process.platform === 'linux';
@@ -39,72 +36,8 @@ async function windowsList() {
   return { source: 'Windows Update', updates, old: asArray(r?.old), checked: r?.checked || 0 };
 }
 
-// Install the selected updates. Windows Update requires administrator rights: when the app is not
-// elevated, one UAC prompt covers the whole batch. Progress is written as JSON lines to a log file.
-async function windowsInstall(ids, onProgress, isAdmin) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmp-drivers-'));
-  const log = path.join(dir, 'progress.log');
-  const script = path.join(dir, 'install.ps1');
-  const idList = ids.map((id) => `'${String(id).replace(/[^0-9a-fA-F-]/g, '')}'`).join(',');
-  fs.writeFileSync(script, `
-$ErrorActionPreference = 'Continue'
-$log = '${log.replace(/'/g, "''")}'
-function Say($o) { Add-Content -Path $log -Value ($o | ConvertTo-Json -Compress) -Encoding UTF8 }
-$s = New-Object -ComObject Microsoft.Update.Session
-$res = $s.CreateUpdateSearcher().Search("IsInstalled=0 and Type='Driver'")
-$ids = @(${idList})
-$i = 0
-foreach ($id in $ids) {
-  $u = $res.Updates | Where-Object { $_.Identity.UpdateID -eq $id } | Select-Object -First 1
-  if (-not $u) { Say @{ id = $id; index = $i; phase = 'done'; ok = $false; error = 'Mise à jour introuvable' }; $i++; continue }
-  try {
-    $col = New-Object -ComObject Microsoft.Update.UpdateColl
-    if (-not $u.EulaAccepted) { $u.AcceptEula() }
-    [void]$col.Add($u)
-    Say @{ id = $id; index = $i; phase = 'download' }
-    $d = $s.CreateUpdateDownloader(); $d.Updates = $col; [void]$d.Download()
-    Say @{ id = $id; index = $i; phase = 'install' }
-    $inst = $s.CreateUpdateInstaller(); $inst.Updates = $col; $r = $inst.Install()
-    Say @{ id = $id; index = $i; phase = 'done'; ok = ($r.ResultCode -eq 2 -or $r.ResultCode -eq 3); code = $r.ResultCode; reboot = [bool]$r.RebootRequired }
-  } catch { Say @{ id = $id; index = $i; phase = 'done'; ok = $false; error = $_.Exception.Message } }
-  $i++
-}
-Say @{ phase = 'end' }
-`, 'utf8');
-  const results = new Map();
-  let seen = 0;
-  const readLog = () => {
-    let lines = [];
-    try { lines = fs.readFileSync(log, 'utf8').replace(/^﻿/, '').split(/\r?\n/).filter(Boolean); } catch {}
-    for (const line of lines.slice(seen)) {
-      let m; try { m = JSON.parse(line); } catch { continue; }
-      if (m.phase === 'done') results.set(m.id, m);
-      if (m.phase !== 'end') onProgress?.({ ...m, total: ids.length });
-    }
-    seen = Math.max(seen, lines.length);
-  };
-  const timer = setInterval(readLog, 700);
-  const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script];
-  try {
-    await new Promise((resolve, reject) => {
-      if (isAdmin) {
-        execFile('powershell.exe', args, { windowsHide: true, timeout: 2 * 3600 * 1000 }, (err) => (err && !fs.existsSync(log) ? reject(err) : resolve()));
-      } else {
-        // Ask for elevation once; -Wait returns when the elevated installer has finished.
-        const elevate = `Start-Process -FilePath powershell.exe -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList ${args.map((a) => `'${a.replace(/'/g, "''")}'`).join(',')}`;
-        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', elevate], { windowsHide: true, timeout: 2 * 3600 * 1000 }, (err) => {
-          if (err && !fs.existsSync(log)) return reject(new Error(/canceled|annul/i.test(String(err.message)) ? 'Autorisation administrateur refusée.' : 'L\'installation n\'a pas pu démarrer (autorisation administrateur refusée ?).'));
-          resolve();
-        });
-      }
-    });
-  } finally {
-    clearInterval(timer);
-    readLog();
-    fs.rm(dir, { recursive: true, force: true }, () => {});
-  }
-  return ids.map((id) => results.get(id) || { id, ok: false, error: 'Pas de résultat' });
-}
+// Installed through Windows Update like the system updates (see winupdate.js).
+const windowsInstall = (ids, onProgress, isAdmin) => require('./winupdate').install(ids, onProgress, isAdmin);
 
 // ---------- Linux (fwupd / LVFS) ----------
 function run(cmd, args, timeout = 120000) {

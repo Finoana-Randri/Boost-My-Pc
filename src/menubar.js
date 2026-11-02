@@ -19,7 +19,7 @@ function fmtBytes(b) {
   return `${b.toFixed(b >= 100 ? 0 : 1).replace('.', ',')} ${u[i]}`;
 }
 
-function createMenubar({ iconPath, trayImage, traySize = 22, decorate = () => {}, T = (x) => x, showMain, sendToMain, services, getPrefs, onQuit }) {
+function createMenubar({ iconPath, trayImage, traySize = 22, decorate = () => {}, T = (x) => x, showMain, hideMain = () => {}, sendToMain, services, getPrefs, onQuit }) {
   const { system, cleaner, protection, platform } = services;
   let tray = null;
   let mini = null;
@@ -91,6 +91,8 @@ function createMenubar({ iconPath, trayImage, traySize = 22, decorate = () => {}
 
   function showMini(anchor = 'cursor') {
     if (!mini) createMini();
+    // The panel replaces the main window rather than floating over it.
+    hideMain();
     const { x, y } = position(anchor);
     mini.setPosition(x, y, false);
     shownAt = Date.now();

@@ -158,7 +158,8 @@ async function boost() {
     const mem = await pcm.system.boost();
     const ids = state.summary?.junkIds?.filter((id) => id === 'tmp' || id === 'temp') || [];
     const cleaned = ids.length ? await pcm.clean.run(ids) : { freed: 0 };
-    showResult(`Boost terminé : ${fmtBytes(mem.freed + cleaned.freed)} libérés`);
+    const gain = mem.freed + (mem.cache || 0) + cleaned.freed;
+    showResult(mem.before ? `Boost : ${fmtBytes(gain)} libérés · mémoire ${mem.before.pct} % → ${mem.after.pct} %` : `Boost terminé : ${fmtBytes(gain)} libérés`);
     refreshFast(); refreshSummary(true);
   } catch (e) { showResult(`Boost : ${e.message}`); }
   finally { boosting = false; $('#boost').classList.remove('busy'); }
@@ -169,7 +170,8 @@ $('#act-free').onclick = async (e) => {
   const b = e.currentTarget;
   b.disabled = true; b.textContent = '…';
   const r = await pcm.system.boost().catch(() => null);
-  b.textContent = !r ? 'Erreur' : r.freed > 1024 ** 2 ? `+${fmtBytes(r.freed)}` : 'Optimisé';
+  const gain = r ? r.freed + (r.cache || 0) : 0;
+  b.textContent = !r ? 'Erreur' : gain > 1024 ** 2 ? `+${fmtBytes(gain)}` : 'Optimisé';
   b.classList.add('done');
   setTimeout(() => { b.textContent = 'Libérer'; b.disabled = false; b.classList.remove('done'); }, 2500);
   refreshFast();

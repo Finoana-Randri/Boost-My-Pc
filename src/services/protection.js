@@ -70,7 +70,7 @@ async function checkWindowsUpdates() {
     $searcher = $s.CreateUpdateSearcher()
     $res = $searcher.Search("IsInstalled=0 and IsHidden=0")
     $list = foreach ($u in $res.Updates) {
-      [pscustomobject]@{ title = $u.Title; size = [int64]$u.MaxDownloadSize; reboot = [bool]$u.RebootRequired
+      [pscustomobject]@{ id = $u.Identity.UpdateID; title = $u.Title; size = [int64]$u.MaxDownloadSize; reboot = [bool]$u.RebootRequired
         category = ($u.Categories | Select-Object -First 1 -ExpandProperty Name); kb = ($u.KBArticleIDs -join ',') }
     }
     $pendingReboot = Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired'

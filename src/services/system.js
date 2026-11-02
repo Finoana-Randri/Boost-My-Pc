@@ -1,7 +1,7 @@
 // Live system information and memory Boost.
 const os = require('os');
 const { execFile } = require('child_process');
-const { runPS, runPSJson, asArray } = require('./ps');
+const { runPSJson, asArray } = require('./ps');
 
 let lastCpu = null;
 function cpuUsage() {
@@ -103,19 +103,74 @@ async function getSystemInfo() {
 }
 
 // Trim the working set of each process we can access.
+// Memory Boost:
+// 1. every process gives back the memory it is not using (its working set is trimmed);
+// 2. as administrator, modified pages are written out and the standby list (cached files) is
+//    emptied, as RAMMap does, so that the memory shows up as free;
+// 3. memory is measured before and after with the Windows performance counters.
+const BOOST_PS = `
+Add-Type -TypeDefinition @'
+using System; using System.Runtime.InteropServices; using System.Diagnostics;
+public static class BmpMem {
+  [DllImport("psapi.dll")] public static extern bool EmptyWorkingSet(IntPtr process);
+  [DllImport("ntdll.dll")] static extern int NtSetSystemInformation(int infoClass, ref int info, int length);
+  [StructLayout(LayoutKind.Sequential, Pack = 1)] struct Privilege { public int Count; public long Luid; public int Attributes; }
+  [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, int access, out IntPtr token);
+  [DllImport("advapi32.dll", SetLastError = true)] static extern bool LookupPrivilegeValue(string host, string name, out long luid);
+  [DllImport("advapi32.dll", SetLastError = true)] static extern bool AdjustTokenPrivileges(IntPtr token, bool disableAll, ref Privilege state, int length, IntPtr previous, IntPtr returned);
+  public static bool Enable(string name) {
+    IntPtr token;
+    if (!OpenProcessToken(Process.GetCurrentProcess().Handle, 0x28, out token)) return false;
+    Privilege p; p.Count = 1; p.Attributes = 2;
+    if (!LookupPrivilegeValue(null, name, out p.Luid)) return false;
+    return AdjustTokenPrivileges(token, false, ref p, 0, IntPtr.Zero, IntPtr.Zero) && Marshal.GetLastWin32Error() == 0;
+  }
+  // SystemMemoryListInformation: 3 writes the modified pages, 4 empties the standby list.
+  public static bool MemoryList(int command) { return NtSetSystemInformation(80, ref command, 4) == 0; }
+}
+'@
+function Mem { $m = Get-CimInstance Win32_PerfRawData_PerfOS_Memory; [pscustomobject]@{ avail = [int64]$m.AvailableBytes; free = [int64]$m.FreeAndZeroPageListBytes } }
+$total = [int64](Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory
+$before = Mem
+$sizes = @{}
+foreach ($p in Get-Process) { $sizes[$p.Id] = $p.WorkingSet64 }
+$n = 0
+foreach ($p in Get-Process) { try { if ([BmpMem]::EmptyWorkingSet($p.Handle)) { $n++ } } catch {} }
+$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$purged = $false
+if ($admin -and [BmpMem]::Enable('SeProfileSingleProcessPrivilege')) {
+  [void][BmpMem]::MemoryList(3)
+  $purged = [BmpMem]::MemoryList(4)
+}
+Start-Sleep -Milliseconds 600
+$after = Mem
+$top = @(Get-Process | Where-Object { $sizes.ContainsKey($_.Id) } | ForEach-Object {
+  [pscustomobject]@{ name = $(if ($_.Description) { ($_.Description -split ':')[0].Trim() } else { $_.ProcessName }); saved = [int64]($sizes[$_.Id] - $_.WorkingSet64) } } |
+  Where-Object { $_.saved -gt 0 } | Group-Object name | ForEach-Object { [pscustomobject]@{ name = $_.Name; saved = [int64]($_.Group | Measure-Object saved -Sum).Sum } } |
+  Sort-Object saved -Descending | Select-Object -First 5)
+[pscustomobject]@{ total = $total; before = $before; after = $after; trimmed = $n; admin = $admin; purged = $purged; top = $top } | ConvertTo-Json -Compress -Depth 4
+`;
+
 async function boostMemory() {
-  const before = os.freemem();
-  const count = await runPS(`
-    Add-Type -Namespace PCM -Name Mem -MemberDefinition '[DllImport("psapi.dll")] public static extern bool EmptyWorkingSet(System.IntPtr hProcess);'
-    $n = 0
-    foreach ($p in Get-Process) {
-      try { if ([PCM.Mem]::EmptyWorkingSet($p.Handle)) { $n++ } } catch {}
-    }
-    $n
-  `, { timeout: 120000 });
-  await new Promise((r) => setTimeout(r, 800));
-  const after = os.freemem();
-  return { processes: Number(count) || 0, freed: Math.max(0, after - before) };
+  const r = await runPSJson(BOOST_PS, { timeout: 120000 });
+  const total = Number(r?.total) || os.totalmem();
+  const used = (m) => total - (Number(m?.avail) || 0);
+  const before = used(r?.before);
+  const after = used(r?.after);
+  const freed = Math.max(0, before - after);
+  // The standby list holds files kept in memory: emptying it shows as free memory, not as memory
+  // given back by the apps.
+  const cache = Math.max(0, (Number(r?.after?.free) || 0) - (Number(r?.before?.free) || 0) - freed);
+  return {
+    freed,
+    cache,
+    processes: Number(r?.trimmed) || 0,
+    admin: !!r?.admin,
+    purged: !!r?.purged,
+    before: { used: before, total, pct: Math.round((before / total) * 100) },
+    after: { used: after, total, pct: Math.round((after / total) * 100) },
+    top: asArray(r?.top).map((t) => ({ name: t.name, saved: Number(t.saved) || 0 })),
+  };
 }
 
 module.exports = { getStats, getDisks, getSystemInfo, boostMemory };

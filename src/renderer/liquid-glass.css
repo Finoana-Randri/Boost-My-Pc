@@ -548,3 +548,53 @@ body.lite .tab-thumb, body.lite .nav-glider, body.lite .switch span::before { tr
   .lg { backdrop-filter: none; background: var(--glass-strong); }
   .scan-btn, .ms-lens, .sc-btn { background: linear-gradient(145deg, var(--a2), var(--a1)); backdrop-filter: none; }
 }
+
+/* Title bar: "My Pc" takes the module color, like the links of the page. */
+.titlebar-accent { color: color-mix(in srgb, var(--a2) 70%, var(--text)); transition: color .4s; }
+
+/* Windows Update: progress of the download and the installation. */
+.wu-card { display: flex; align-items: center; gap: 16px; margin: 10px 0 4px; padding: 16px 18px; }
+.wu-card b { font-size: 15px; }
+.wu-ring {
+  --p: 0; width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--bg) 80%, transparent) 76%, transparent 78% 100%),
+    conic-gradient(var(--a2) calc(var(--p) * 1%), var(--track) 0);
+  transition: --p .4s;
+}
+.wu-ring b { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wu-ring small { font-size: 11px; font-weight: 600; margin-left: 1px; }
+.wu-bar { height: 6px; border-radius: 99px; background: var(--track); overflow: hidden; margin: 8px 0 6px; }
+.wu-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--a1), var(--a2)); transition: width .5s var(--spring); }
+.wu-now { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wu-pill:empty { display: none; }
+
+/* Boost: the result sheet. */
+.boost-box { width: 440px; }
+.boost-sheet.closing { animation: fade .2s ease reverse both; }
+.boost-hero { display: flex; align-items: center; gap: 16px; }
+.boost-hero h3 { margin: 0 0 3px; font-size: 21px; }
+.boost-hero p { margin: 0; color: var(--text-2); }
+.boost-orb {
+  width: 56px; height: 56px; border-radius: 18px; flex-shrink: 0; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(160deg, var(--a2), var(--a1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 0 0 1px rgba(255, 255, 255, .14), 0 10px 24px -8px color-mix(in srgb, var(--a1) 70%, transparent);
+}
+.boost-orb .svg-ico { width: 26px; height: 26px; }
+.boost-orb.busy .svg-ico { animation: boostLift 1.1s var(--spring) infinite alternate; }
+@keyframes boostLift { to { transform: translateY(-4px) rotate(-8deg); } }
+.bm { margin: 20px 0 14px; display: flex; flex-direction: column; gap: 9px; }
+.bm-row { display: grid; grid-template-columns: 52px 1fr 44px; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+.bm-row b { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+.bm-bar { height: 8px; border-radius: 99px; background: var(--track); overflow: hidden; }
+.bm-bar i { display: block; height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--text) 35%, transparent); }
+.bm-bar.after i { background: linear-gradient(90deg, var(--a1), var(--a2)); animation: bmGrow .9s var(--spring) both; }
+@keyframes bmGrow { from { width: 0; } }
+.boost-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.boost-stats span { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 99px; font-size: 12.5px; font-weight: 600; background: var(--glass-clear); box-shadow: var(--rim-clear); }
+.boost-stats span.muted { background: none; box-shadow: none; padding-left: 0; font-weight: 500; }
+.boost-stats .svg-ico { width: 15px; height: 15px; }
+.boost-top { display: flex; flex-direction: column; margin-bottom: 18px; border-radius: 14px; overflow: hidden; box-shadow: var(--edge); }
+.boost-top div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 14px; font-size: 13px; background: rgba(255, 255, 255, .03); }
+.boost-top div + div { border-top: 1px solid var(--line); }
+.boost-top span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
+.boost-top b { color: var(--ok); white-space: nowrap; font-variant-numeric: tabular-nums; }

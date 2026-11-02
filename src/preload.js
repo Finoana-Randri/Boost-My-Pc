@@ -91,6 +91,7 @@ contextBridge.exposeInMainWorld('pcm', {
     diagFix: (ids) => call('v2:diag:fix', ids),
     drivers: () => call('v2:drivers:list'),
     driversInstall: (ids) => call('v2:drivers:install', ids),
+    winUpdatesInstall: (ids) => call('v2:winupdate:install', ids),
     maintList: () => call('v2:maint:list'),
     maintRun: (ids) => call('v2:maint:run', ids),
     privacyScan: () => call('v2:privacy:scan'),

@@ -49,14 +49,15 @@ One scan checks five areas; one click applies safe actions.
 | **Smart Care** | Checks for junk files, threats, maintenance tasks, updates, and large forgotten files in one scan. Results appear as tiles around a round button that shows progress; **Run** applies safe actions, and **Stop** ends the scan. |
 | **Cleanup** | Cleans system and browser caches, temporary files, logs, crash reports, package caches, development caches (npm, pip, Yarn, Gradle, Cargo), and the trash. |
 | **Protection** | Runs quick, standard, or deep scans (ClamAV with heuristic scanning on Linux; Microsoft Defender on Windows); manages privacy data (history, cookies, sessions — never passwords or bookmarks); checks app permissions and lets you remove them (Flatpak on Linux; camera, microphone and location on Windows); shows firewall and antivirus status and turns them back on when they are off. |
-| **Performance** | Diagnoses and fixes system problems (Windows: essential services, disk errors, firewall, Defender, DNS, clock, system files with DISM/SFC; Linux: failed services, broken packages, journal size, clock, DNS) with one authorization for all fixes. Runs maintenance tasks (DNS, fonts, SSD TRIM, logs, orphaned packages, and more), manages startup apps, finds resource-heavy processes, and diagnoses network issues. |
-| **Applications** | Uninstalls apps (apt, dnf, pacman, zypper, Flatpak, Snap on Linux; Windows apps and Microsoft Store apps), finds leftovers from removed apps, and checks for updates, including **driver updates** from official sources only (Windows Update on Windows, fwupd/LVFS on Linux) with the current and new version of each driver and per-driver install progress. |
+| **Performance** | Diagnoses and fixes system problems as soon as **Maintenance** opens (Windows: essential services, disk errors, firewall, Defender, DNS, clock, devices in error, Windows image health and system files with DISM/SFC; Linux: failed services, broken packages, journal size, clock, DNS) with one authorization for all fixes. Runs maintenance tasks (DNS, fonts, SSD TRIM, logs, orphaned packages, and more), manages startup apps, finds resource-heavy processes, and diagnoses network issues. |
+| **Applications** | Uninstalls apps (apt, dnf, pacman, zypper, Flatpak, Snap on Linux; Windows apps and Microsoft Store apps), finds leftovers from removed apps, and checks for updates. On Windows, system updates are **downloaded and installed in the app** through Windows Update, with the percentage, the amount downloaded and the state of each update. **Driver updates** come from official sources only (Windows Update on Windows, fwupd/LVFS on Linux), with the current and new version of each driver. |
 | **Storage** | Finds exact duplicates, similar images (perceptual hash), large and old files, and downloads. |
 | **Disk Map** | Shows folders and files as bubbles sized by disk usage. Click a folder to zoom in, and remove items you no longer need. The scan runs in a separate process, so a slow or unresponsive folder can't block it. |
 | **Cloud Cleanup** | Finds large and old files in OneDrive, Dropbox, Google Drive, Nextcloud, and other synced folders. Includes **Free up local space** for OneDrive. |
 | **Shredder** | Permanently deletes files by overwriting them with random data (1, 3, or 7 passes). Supports drag and drop. |
 | **PC health** | In **Settings**, a score out of 100 based on real measurements: processor usage and temperature (when available), memory, storage space and disk health, battery wear, and system status, with recommendations. |
-| **Widget** | Click the notification-area icon (top-bar icon on Linux) to open a compact glass panel with system status, Boost, trash, and updates; double-click it on Windows to open the app. On Windows 11 the panel uses the system acrylic material. Run `boost-my-pc --mini` to open it from a keyboard shortcut. |
+| **Boost** | Frees memory: every app gives back the memory it is not using and, as administrator on Windows, the standby cache is emptied. A summary shows memory in use before and after, the memory freed, and the apps that shrank the most. |
+| **Widget** | Click the notification-area icon (top-bar icon on Linux) to open a compact glass panel with system status, Boost, trash, and updates; it takes the place of the main window, and double-clicking the icon on Windows opens the app. On Windows 11 the panel uses the system acrylic material. Run `boost-my-pc --mini` to open it from a keyboard shortcut. |
 
 ### Background scans
 
@@ -185,7 +186,8 @@ src/menubar.js              Notification-area icon, widget (mini panel), alerts
 src/updater.js              In-app update from the latest GitHub release
 src/services/               Windows (PowerShell), Linux (src/services/linux), and shared services
 src/services/v2/            v2 modules: Smart Care, maintenance, privacy, permissions,
-                            leftovers, threats, shredder, Disk Map, similar images, cloud
+                            leftovers, threats, shredder, Disk Map, similar images, cloud,
+                            Windows Update installer (winupdate.js)
 src/renderer/               App interface and mini panel
 src/renderer/i18n*.js       Interface languages (translator and dictionary)
 src/renderer/icons.js       Interface icons, generated by scripts/make-icons.js

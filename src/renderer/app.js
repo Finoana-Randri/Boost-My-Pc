@@ -1192,8 +1192,7 @@ function renderPerfOverview(token) {
   $('#ov-run') && ($('#ov-run').onclick = () => runMaintenance(token, rec.map((t) => t.id), tasks, ''));
   $('#ov-boost').onclick = async (e) => {
     e.currentTarget.disabled = true;
-    const r = await safe(() => pcm.system.boost(), 'Libérer');
-    if (r) toast(`Mémoire libérée : ${fmtBytes(r.freed)}`);
+    await runBoost();
     const s = await pcm.system.stats().catch(() => null);
     if (s && alive(token)) { overviewCache.performance.stats = s; renderPerfOverview(token); }
   };
@@ -1241,7 +1240,7 @@ async function perfMaintenance(token, top) {
 // ---------- System diagnostic ----------
 let diagResult = null;
 const DIAG_ICONS = { services: 'process', units: 'process', disk: 'storage', space: 'storage', readonly: 'storage', firewall: 'shield', defender: 'shield',
-  dns: 'wifi', time: 'clock', sysfiles: 'file', temp: 'file', reboot: 'refresh', events: 'warn', packages: 'box', journal: 'file' };
+  dns: 'wifi', time: 'clock', sysfiles: 'file', devices: 'process', temp: 'file', reboot: 'refresh', events: 'warn', packages: 'box', journal: 'file' };
 
 function diagSection(token) {
   const box = $('#diag');
@@ -1249,14 +1248,13 @@ function diagSection(token) {
   const job = JOBS['performance/diagnose'];
   if (job) {
     box.innerHTML = `<div class="card glass diag-head busy"><span class="diag-orb"><span class="spinner"></span></span><div class="diag-txt"><b>${esc(job.status)}</b><span>${esc(job.detail || 'Services, disque, réseau, horloge et protection')}</span></div></div>`;
-    job.promise.then(() => alive(token) && diagSection(token));
+    job.promise.then((r) => { if (alive(token)) (r ? diagSection : diagFailed)(token); });
     return;
   }
-  if (!diagResult) {
-    box.innerHTML = `<div class="card glass diag-head"><span class="diag-orb">${ficon('wrench')}</span>
-      <div class="diag-txt"><b>Diagnostic du système</b><span>Recherche les problèmes de ${IS_LINUX ? 'services, paquets, disque, horloge et réseau' : 'services, disque, pare-feu, Defender, réseau, horloge et fichiers système'}, puis les corrige.</span></div>
-      <button class="btn primary" id="diag-go">${icon('search')} Rechercher les problèmes</button></div>`;
-    $('#diag-go').onclick = () => runDiag(token);
+  // Results older than 10 minutes are refreshed: what needs fixing shows up as soon as the page opens.
+  if (!diagResult || Date.now() - diagResult.at > 10 * 60000) {
+    box.innerHTML = `<div class="card glass diag-head busy"><span class="diag-orb"><span class="spinner"></span></span><div class="diag-txt"><b>Recherche des problèmes du système…</b><span>${IS_LINUX ? 'Services, paquets, disque, horloge et réseau' : 'Services, disque, pare-feu, Defender, périphériques, réseau, horloge et fichiers système'}</span></div></div>`;
+    runDiag(token, true);
     return;
   }
   const checks = diagResult.checks;
@@ -1281,12 +1279,18 @@ function diagSection(token) {
   $$('[data-fix]', box).forEach((b) => (b.onclick = () => fixDiag(token, [b.dataset.fix])));
 }
 
-async function runDiag(token) {
-  const job = await startJob('performance/diagnose', { label: 'Diagnostic du système' }, async (j) => {
+async function runDiag(token, auto = false) {
+  const job = await startJob('performance/diagnose', { label: 'Diagnostic du système', auto }, async (j) => {
     j.update('Diagnostic du système…', IS_LINUX ? 'Services, paquets, disque, horloge et réseau' : 'Services, disque, pare-feu, réseau, horloge');
     return (diagResult = await pcm.v2.diagScan());
   });
   if (job && alive(token)) diagSection(token);
+}
+
+function diagFailed(token) {
+  if (!$('#diag')) return;
+  $('#diag').innerHTML = `<div class="card glass diag-head warn"><span class="diag-orb">${icon('warn')}</span><div class="diag-txt"><b>Le diagnostic n'a pas pu se terminer</b><span>Réessayez dans un instant.</span></div><button class="btn" id="diag-again">${icon('refresh')} Réessayer</button></div>`;
+  $('#diag-again').onclick = () => runDiag(token);
 }
 
 async function fixDiag(token, ids) {
@@ -1518,35 +1522,137 @@ async function appsLeftovers(token, top) {
   if (items.length) bindSelection($('#lo'), { onDone: () => { delete overviewCache.applications; go('applications/leftovers'); } });
 }
 
+// The last search, so that coming back to the page (or the progress of an installation) doesn't search again.
+let updatesCache = null;
+
 async function appsUpdates(token, top) {
-  let r = overviewCache.applications?.updates;
+  let r = overviewCache.applications?.updates || updatesCache;
   if (!r) {
     page(`${top}${scanning('applications', 'Recherche des mises à jour…', 'Cela peut prendre une minute')}`);
     r = await safe(() => pcm.protect.updates(), UPDATES_NAME);
     if (!alive(token)) return;
     if (!r) return page(`${top}<div class="card glass empty">Impossible de vérifier les mises à jour.</div>`);
   }
+  updatesCache = r;
   const groups = {};
   // Driver updates have their own section below.
-  for (const u of r.updates) if (!/^(drivers|pilotes)$/i.test(u.category || '')) (groups[u.category || 'Système'] ||= []).push(u);
+  const system = r.updates.filter((u) => !/^(drivers|pilotes)$/i.test(u.category || ''));
+  for (const u of system) (groups[u.category || 'Système'] ||= []).push(u);
+  // On Windows the updates are downloaded and installed here, with their progress.
+  const local = !IS_LINUX && system.every((u) => u.id);
+  const picking = local && !winUpd;
   page(`${top}<div class="card glass" style="display:flex;align-items:center;gap:16px;margin-bottom:6px">
-      <div class="status-ico ${r.updates.length ? 'warn' : 'ok'}">${icon(r.updates.length ? 'update' : 'check')}</div>
-      <div style="flex:1"><div class="big">${r.updates.length ? plural(r.updates.length, 'mise à jour disponible', 'mises à jour disponibles') : 'Tout est à jour'}</div>
-      <div class="muted small">${r.pendingReboot ? 'Un redémarrage est nécessaire pour terminer une mise à jour.' : esc(IS_LINUX ? `Gestionnaire : ${r.manager || '–'}` : 'Windows Update')}</div></div></div>
-    ${Object.entries(groups).map(([cat, list]) => `<h2>${esc(cat)} <span class="muted small">(${list.length})</span></h2><div class="cards c3">${list.slice(0, 120).map((u) => `<div class="pick-card glass static">
-      <div class="pc-ico g-applications">${ficon(/sécurité/i.test(cat) ? 'shield' : 'update')}</div>
-      <div class="pc-title">${esc(u.title)}</div><div class="pc-sub">${u.from ? `${esc(u.from)} → ` : ''}${esc(u.version || u.kb || '')}</div>
-      ${u.size ? `<div class="pc-foot"><b>${fmtBytes(u.size)}</b></div>` : ''}</div>`).join('')}</div>`).join('')}
+      <div class="status-ico ${system.length ? 'warn' : 'ok'}">${icon(system.length ? 'update' : 'check')}</div>
+      <div style="flex:1"><div class="big">${system.length ? plural(system.length, 'mise à jour disponible', 'mises à jour disponibles') : 'Tout est à jour'}</div>
+      <div class="muted small">${r.pendingReboot ? 'Un redémarrage est nécessaire pour terminer une mise à jour.' : esc(IS_LINUX ? `Gestionnaire : ${r.manager || '–'}` : 'Windows Update')}</div></div>
+      ${local && system.length ? `<button class="btn" data-tool="windowsUpdate">${icon('external')} Windows Update</button>` : ''}</div>
+    <div id="wu-progress"></div>
+    ${Object.entries(groups).map(([cat, list]) => `<h2>${esc(cat)} <span class="muted small">(${list.length})</span></h2><div class="cards c3 ${local ? 'wu-list' : ''}">${list.slice(0, 120).map((u) => `<label class="pick-card glass ${picking ? '' : 'static'}" ${local ? `data-wu="${esc(u.id)}"` : ''}>
+      ${picking ? `<input type="checkbox" data-id="${esc(u.id)}" checked/>` : ''}
+      <div class="pc-ico g-applications">${ficon(/sécurité|security|definition|définition/i.test(`${cat} ${u.title}`) ? 'shield' : 'update')}</div>
+      <div class="pc-title">${esc(u.title)}</div><div class="pc-sub">${u.from ? `${esc(u.from)} → ` : ''}${esc(u.version || (u.kb ? `KB${u.kb}` : ''))}</div>
+      <div class="pc-foot">${u.size ? `<b>${fmtBytes(u.size)}</b>` : '<span></span>'}<span class="wu-pill"></span></div></label>`).join('')}</div>`).join('')}
     <h2>Pilotes</h2><div id="drv"></div>
-    ${r.updates.length ? `<div class="action-bar">${IS_LINUX ? '<button class="btn-main" id="upd-go">Tout mettre à jour</button>' : '<button class="btn-main" data-tool="windowsUpdate">Ouvrir Windows Update</button>'}</div>` : ''}`);
+    ${system.length && (IS_LINUX || picking) ? `<div class="action-bar">${IS_LINUX ? '<button class="btn-main" id="upd-go">Tout mettre à jour</button>' : `<span class="summary" id="wu-sel"></span><button class="btn-main" id="wu-go">${icon('download')} Télécharger et installer</button>`}</div>` : ''}`);
   $('#upd-go') && ($('#upd-go').onclick = async () => {
     if (!(await confirmBox('Installer les mises à jour ?', 'Les paquets du système, Snap et Flatpak vont être mis à jour. Votre mot de passe sera demandé.', 'Mettre à jour'))) return;
     page(`${top}${scanning('applications', 'Installation des mises à jour…', 'Ne fermez pas l\'application')}`);
     if (await safe(() => pcm.protect.installUpdates(), 'Mise à jour')) toast('Mises à jour installées');
     delete overviewCache.applications;
+    updatesCache = null;
     if (alive(token)) go('applications/updates');
   });
+  if (picking && $('#wu-go')) {
+    const sel = () => [...new Set($$('.wu-list input:checked').map((c) => c.dataset.id))];
+    const upd = () => {
+      const ids = new Set(sel());
+      const size = system.filter((u) => ids.has(u.id)).reduce((a, u) => a + (u.size || 0), 0);
+      $('#wu-sel').textContent = ids.size ? `${plural(ids.size, 'mise à jour', 'mises à jour')}${size ? ` · jusqu'à ${fmtBytes(size)}` : ''}` : 'Sélectionnez des mises à jour';
+      $('#wu-go').disabled = !ids.size;
+    };
+    $$('.wu-list').forEach((c) => c.addEventListener('change', upd));
+    upd();
+    $('#wu-go').onclick = () => installWinUpdates(token, sel(), system);
+  }
+  paintWinUpd();
   driversSection(token);
+}
+
+// ---------- Windows Update ----------
+// Progress of the last installation: phase ('download' | 'install'), percentage, bytes, current update,
+// and the state of each update. Kept while the user moves between pages.
+let winUpd = null;
+const WU_STATE = { wait: ['info', 'En attente'], download: ['info', 'Téléchargement'], install: ['info', 'Installation'], ok: ['ok', 'Installée'], fail: ['bad', 'Échec'] };
+
+function paintWinUpd() {
+  const box = $('#wu-progress');
+  if (!box || !winUpd) return;
+  const w = winUpd;
+  const items = Object.values(w.items);
+  if (w.finished) {
+    const ok = items.filter((i) => i.state === 'ok').length;
+    const fail = items.filter((i) => i.state === 'fail');
+    const reboot = items.some((i) => i.reboot);
+    box.innerHTML = `<div class="card glass wu-card"><div class="status-ico ${fail.length ? 'warn' : 'ok'}">${icon(fail.length ? 'warn' : 'check')}</div>
+      <div style="flex:1"><b>${plural(ok, 'mise à jour installée', 'mises à jour installées')}${fail.length ? ` · ${fail.length} échec(s)` : ''}</b>
+      <div class="muted small">${reboot ? 'Redémarrez le PC pour terminer l\'installation.' : fail.length ? esc(fail[0].error || '') : 'Installation terminée.'}</div></div>
+      <button class="btn" id="wu-again">${icon('refresh')} Rechercher à nouveau</button></div>`;
+    $('#wu-again').onclick = () => { winUpd = null; updatesCache = null; delete overviewCache.applications; go('applications/updates'); };
+  } else {
+    const pct = Math.max(0, Math.min(100, Math.round(w.pct || 0)));
+    const title = w.titles[w.id] || '';
+    const done = items.filter((i) => i.state === 'ok' || i.state === 'fail').length;
+    box.innerHTML = `<div class="card glass wu-card busy">
+      <div class="wu-ring" style="--p:${pct}"><b>${pct}<small>%</small></b></div>
+      <div style="flex:1;min-width:0"><b>${w.phase === 'install' ? 'Installation des mises à jour…' : 'Téléchargement des mises à jour…'}</b>
+        <div class="muted small">${w.phase === 'download' && w.total ? `${fmtBytes(w.bytes)} sur ${fmtBytes(w.total)} · ` : ''}${plural(done, 'terminée', 'terminées')} sur ${items.length}</div>
+        <div class="wu-bar"><i style="width:${pct}%"></i></div>
+        <div class="muted small wu-now">${esc(title)}</div></div></div>`;
+  }
+  for (const [id, st] of Object.entries(w.items)) {
+    const pill = $(`[data-wu="${CSS.escape(id)}"] .wu-pill`);
+    const [cls, label] = WU_STATE[st.state] || WU_STATE.wait;
+    if (pill) pill.innerHTML = `<span class="pill ${cls}" title="${esc(st.error || '')}">${st.state === 'download' || st.state === 'install' ? '<span class="spinner mini"></span>' : ''}${label}</span>`;
+  }
+}
+
+async function installWinUpdates(token, ids, all) {
+  if (!ids.length) return toast('Sélectionnez des mises à jour');
+  if (!(await confirmBox('Installer les mises à jour ?', `${plural(ids.length, 'mise à jour sera téléchargée', 'mises à jour seront téléchargées')} depuis Windows Update puis installée${ids.length > 1 ? 's' : ''}. Windows peut demander une autorisation administrateur une fois, et un redémarrage peut être nécessaire.`, 'Installer'))) return;
+  winUpd = {
+    phase: 'download', pct: 0, bytes: 0, total: 0, id: null, finished: false,
+    items: Object.fromEntries(ids.map((id) => [id, { state: 'wait' }])),
+    titles: Object.fromEntries(all.filter((u) => ids.includes(u.id)).map((u) => [u.id, u.title])),
+  };
+  if (alive(token)) go('applications/updates');
+  const job = await startJob('applications/winupdate', { label: 'Mises à jour Windows' }, async (j) => {
+    j.update('Téléchargement des mises à jour…', '', 0);
+    j.on('winupdate', (p) => {
+      const w = winUpd;
+      if (p.phase === 'done') w.items[p.id] = { state: p.ok ? 'ok' : 'fail', error: p.ok ? '' : p.error || `Code ${p.code ?? '?'}`, reboot: p.reboot };
+      else {
+        if (p.phase !== w.phase) { w.pct = 0; w.phase = p.phase; }
+        if (p.pct != null) w.pct = p.pct;
+        if (p.total) { w.bytes = p.bytes || 0; w.total = p.total; }
+        if (p.id && w.items[p.id] && w.items[p.id].state !== 'fail') { w.id = p.id; w.items[p.id] = { state: p.phase }; }
+      }
+      j.update(`${w.phase === 'install' ? 'Installation' : 'Téléchargement'} des mises à jour… ${Math.round(w.pct)} %`, '', ((w.phase === 'install' ? 50 : 0) + w.pct / 2) / 100);
+      paintWinUpd();
+    });
+    const res = await pcm.v2.winUpdatesInstall(ids);
+    for (const x of res) winUpd.items[x.id] = { state: x.ok ? 'ok' : 'fail', error: x.ok ? '' : x.error || `Code ${x.code ?? '?'}`, reboot: x.reboot };
+    winUpd.finished = true;
+    delete overviewCache.applications;
+    return res;
+  });
+  if (!job) { winUpd = null; return; }
+  paintWinUpd();
+  job.promise.then((r) => {
+    if (!r) winUpd = null;
+    if (currentRoute === 'applications/updates') go('applications/updates');
+    // Installed updates leave the list at the next search.
+    updatesCache = null;
+  });
 }
 
 // ---------- Drivers ----------
@@ -1643,7 +1749,7 @@ async function installDrivers(token, ids) {
     j.on('drivers', (p) => {
       if (!p.id) return;
       driversStatus[p.id] = p.phase === 'done' ? { state: p.ok ? 'ok' : 'fail', error: p.ok ? '' : p.error || `Code ${p.code ?? '?'}`, reboot: p.reboot } : { state: p.phase };
-      j.update(null, `${p.index + 1} sur ${p.total}`);
+      if (p.pct != null) j.update(`${p.phase === 'install' ? 'Installation' : 'Téléchargement'} des pilotes… ${Math.round(p.pct)} %`, '');
     });
     const res = await pcm.v2.driversInstall(ids);
     for (const x of res) driversStatus[x.id] = { state: x.ok ? 'ok' : 'fail', error: x.ok ? '' : x.error || `Code ${x.code ?? '?'}`, reboot: x.reboot };
@@ -2181,17 +2287,42 @@ PAGES.tools = async (token) => {
       <button class="btn primary tools-boost" id="boost" title="Libère la mémoire des applications inactives">${icon('rocket')} Boost</button></div>
     <div class="cards c3 tools-grid">${TOOLS.filter(([id]) => CAPS.tools.includes(id)).map(([id, ic, t, s]) => `<button class="row glass" style="border-radius:18px;cursor:pointer;text-align:left" data-tool="${id}" title="${esc(t)} : ${esc(s)}">
       <div class="r-ico tint">${ficon(ic)}</div><div class="r-main"><div class="r-title">${esc(t)}</div><div class="r-sub">${esc(s)}</div></div></button>`).join('')}</div>`);
-  $('#boost').onclick = async (e) => {
-    const b = e.currentTarget;
-    b.disabled = true;
-    b.innerHTML = `<span class="spinner"></span> Boost…`;
-    const r = await safe(() => pcm.system.boost(), 'Boost');
-    if (r) toast(`Boost terminé : ${fmtBytes(r.freed)} de mémoire libérée`);
-    if (!alive(token)) return;
-    b.disabled = false;
-    b.innerHTML = `${icon('rocket')} Boost`;
-  };
+  $('#boost').onclick = () => runBoost();
 };
+
+// ---------- Boost ----------
+// A sheet shows the Boost while it runs, then what it gave back: memory in use before and after,
+// the memory returned by the apps, the cache emptied and the apps that shrank the most.
+let boosting = null;
+function runBoost() {
+  if (boosting) return boosting;
+  const box = document.createElement('div');
+  box.className = 'modal boost-sheet';
+  box.innerHTML = `<div class="modal-box glass boost-box"><div class="boost-hero"><div class="boost-orb busy">${icon('rocket')}</div>
+    <div><h3>Boost en cours…</h3><p>Les applications rendent la mémoire qu'elles n'utilisent pas.</p></div></div></div>`;
+  document.body.append(box);
+  const close = () => { box.classList.add('closing'); setTimeout(() => box.remove(), 220); };
+  boosting = safe(() => pcm.system.boost(), 'Boost').then((r) => {
+    boosting = null;
+    if (!r) { close(); return r; }
+    const bar = (label, m, cls) => `<div class="bm-row"><span>${label}</span><div class="bm-bar ${cls}"><i style="width:${m.pct}%"></i></div><b>${m.pct} %</b></div>`;
+    const gain = r.freed + r.cache;
+    box.querySelector('.boost-box').innerHTML = `<div class="boost-hero"><div class="boost-orb">${icon('check', 'bold')}</div>
+        <div><h3>${gain > 50 * 1024 ** 2 ? `${fmtBytes(gain)} libérés` : 'Mémoire déjà optimisée'}</h3>
+        <p>${fmtBytes(r.after.used)} utilisés sur ${fmtBytes(r.after.total)}</p></div></div>
+      <div class="bm">${bar('Avant', r.before, '')}${bar('Après', r.after, 'after')}</div>
+      <div class="boost-stats">
+        ${r.processes ? `<span>${icon('apps')} ${plural(r.processes, 'application allégée', 'applications allégées')}</span>` : ''}
+        ${r.purged ? `<span>${icon('broom')} ${fmtBytes(r.cache)} de cache vidé</span>` : IS_LINUX ? '' : `<span class="muted">${icon('admin')} En administrateur, le Boost vide aussi le cache de Windows</span>`}
+      </div>
+      ${r.top?.length ? `<div class="boost-top">${r.top.map((t) => `<div><span>${esc(t.name)}</span><b>− ${fmtBytes(t.saved)}</b></div>`).join('')}</div>` : ''}
+      <div class="modal-actions"><button class="btn primary" id="boost-ok">OK</button></div>`;
+    box.querySelector('#boost-ok').onclick = close;
+    box.onclick = (e) => { if (e.target === box) close(); };
+    return r;
+  });
+  return boosting;
+}
 
 // ===================== Welcome screen =====================
 const WELCOME_ORBIT = ['cleanup', 'protection', 'performance', 'applications', 'clutter', 'lens'];
@@ -2713,7 +2844,7 @@ async function settingsAbout(token, top) {
 
 // ===================== External actions (tray and mini panel) =====================
 pcm.onAction((a) => {
-  if (a === 'boost') { safe(() => pcm.system.boost()).then((r) => r && toast(`Boost terminé : ${fmtBytes(r.freed)} libérés`)); }
+  if (a === 'boost') runBoost();
   else if (typeof a === 'string' && a.startsWith('go:')) go(a.slice(3));
 });
 

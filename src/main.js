@@ -199,6 +199,7 @@ function createMenubarTray() {
     decorate: isLinux ? undefined : roundWindows11Corners,
     T,
     showMain: showWindow,
+    hideMain: () => { if (windowAlive() && win.isVisible()) win.hide(); },
     sendToMain: (msg) => {
       if (!windowAlive()) return;
       if (win.webContents.isLoading()) win.webContents.once('did-finish-load', () => sendToWindow('action', msg));
@@ -457,6 +458,7 @@ function registerModulesIpc() {
   handle('v2:health', () => health.check());
   handle('v2:drivers:list', () => drivers.list());
   handle('v2:drivers:install', async (ids) => drivers.install(ids || [], progress('drivers'), await cleaner.isAdmin().catch(() => false)));
+  handle('v2:winupdate:install', async (ids) => require('./services/v2/winupdate').install(ids || [], progress('winupdate'), await cleaner.isAdmin().catch(() => false)));
   handle('v2:maint:list', () => maintenance.list());
   handle('v2:maint:run', (ids) => maintenance.run(ids || [], { boost }));
   handle('v2:privacy:scan', () => privacy.scan());
